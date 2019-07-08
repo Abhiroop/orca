@@ -1,0 +1,194 @@
+MODULE IMPLEMENTATION Fault_Sim;
+
+	FROM AtpgTypes IMPORT INPT,Logic_Value,Possible_Fault;
+
+	FROM Circuit IMPORT Circuit,Nodeptr,Reset_Circuit_Fault,
+			    Forward_Implication,Get_Unassigned_PI,Assign_PI,
+			    Write_PI_Assignments;
+
+	FROM TruthTable IMPORT Truth_Table,Get_PDC_Value,Input_Values,
+			       Init_Input_Values,Invert;
+
+	FROM iscas IMPORT MAX_NO_OF_GATES;
+
+	FROM Fault IMPORT Fault_Rec_Set,Drop_Fault;
+
+	FROM Config IMPORT Config_Rec,Be_Verbose;
+
+	IMPORT Report;
+	
+	IMPORT sema;
+
+	OBJECT Address_Queue2 = NEW GenericQueue(integer);
+
+
+	FUNCTION LOG(message: string);
+
+	# Write the LOG-message on the standard output
+
+	BEGIN
+		WriteLine();
+		Write("MODULE Fault_Sim...");
+		Write(message);
+	END; # FUNCTION LOG
+
+
+	FUNCTION Is_Critical_Input(circuit:Circuit;truthtable:Truth_Table;
+				   address:integer;input_no:integer):boolean;
+
+	# This function answers the question whether or not the inpu input_no
+	# of the gate with the specified address is critical.
+	# With critical is meant that if the current input value at input_no is
+	# inverted then the output of the gate indicated by the given address
+	# also changes
+	# This can simply be checked by inverting the current input value at
+	# the specified input. If the resulting output of the gate changes
+	# (from ZERO to ONE or ONE to ZERO) then the input is critical and true
+	# is returned else false is returned.
+
+	gatep,blink: Nodeptr;
+	temp,output2:Logic_Value;
+	input_value: Input_Values;
+	
+
+	BEGIN
+		gatep:=circuit.gateptr[address];
+		Init_Input_Values(input_value);
+		IF circuit[gatep].gatetype=INPT THEN
+			IF input_no=1 THEN
+				input_value[1]:=circuit.PI_value[address];
+			ELSE
+				LOG("Is_Critical_Input()...wrong input number");
+			FI;
+		ELSE
+			FOR i IN 1..circuit[gatep].fanin DO
+				blink:=circuit[gatep].backward_link[i];
+				input_value[i]:=circuit[blink].output;
+			OD;
+		FI;
+		# We already have the current output value of the gate with
+		# the specified address, determine what output will follow if
+		# input 'input_no' is inverted.
+		blink:=circuit[gatep].backward_link[input_no];
+		temp:=circuit[blink].output;
+		Invert(temp,input_value[input_no]);
+		IF Get_PDC_Value(circuit[gatep].gatetype,truthtable,input_value,
+			         circuit[gatep].fanin,output2) THEN
+			# The resulting output is different from DONT_CARE
+			IF output2/=circuit[gatep].output THEN
+				# Yes, the input is critical
+				RETURN true;
+			FI;
+		FI;
+		# NO, the input is not critical
+		RETURN false;
+	END; # FUNCTION Is_Critical_Input
+
+	FUNCTION Trace_Critical_Path(circuit:Circuit;truthtable:Truth_Table;
+				     queue:SHARED Address_Queue2;
+				     faultrecset:SHARED Fault_Rec_Set;
+				     report:SHARED Report;config:Config_Rec;
+				     print:SHARED sema);
+
+	# The queue contains the address(es) of gates that have a critical
+	# output. These gates are tested for the fault opposite to the current
+	# output value. This particular fault will be dropped from the
+	# faultrecset.
+	# The critical inputs of the considered gates are traced back and so
+	# new gates that have critical outputs are found and are enqueued.
+	# The backtrace stops when a reconvergent fanout is detected.
+
+	address,inaddr: integer;
+	fault_detected: Possible_Fault;
+	ptr,blink: Nodeptr;
+	mark: ARRAY [integer 1..MAX_NO_OF_GATES] OF boolean;
+
+	BEGIN
+		# Initialize markers
+		FOR i IN 1..MAX_NO_OF_GATES DO
+			mark[i]:=false;
+		OD;
+		# The queue contains the addresses of gates which outputs are
+		# critical.
+		WHILE queue$DeQueue(address) DO
+			ptr:=circuit.gateptr[address];
+			CASE circuit[ptr].output OF
+				ZERO => fault_detected:=Stuck_At_1;
+			     |	ONE  => fault_detected:=Stuck_At_0;
+			ESAC;
+			Drop_Fault(faultrecset,circuit[ptr].address,
+				   fault_detected,report,config,print);
+			# Now look at its backward links
+			FOR i IN 1..circuit[ptr].fanin DO
+			   IF Is_Critical_Input(circuit,truthtable,address,i)
+			   THEN
+				blink:=circuit[ptr].backward_link[i];
+				inaddr:=circuit[blink].address;
+				IF queue$Is_Element(inaddr) THEN
+					queue$Delete(inaddr);
+					mark[inaddr]:=true;
+				ELSE
+					IF NOT mark[inaddr] THEN
+						queue$EnQueue(inaddr);
+					FI;
+				FI;
+			   FI;
+			OD;
+		OD;
+	END; # FUNCTION Trace_Critical_Path
+
+
+
+        FUNCTION Fault_Sim(circuit:Circuit;truthtable:Truth_Table;
+			   faultrecset:SHARED Fault_Rec_Set;
+			   report:SHARED Report;config:Config_Rec;
+			   print:SHARED sema);
+
+        # Perform fault simulation and remove all faults from the faultrecset
+        # that are detected by the current input pattern.
+        # The fault simulation technique used, TestDetect, is discussed in
+        # the report 'State of the art in automatic test pattern generation'
+        # An important precondition is that the circuit must already have the
+        # testvector assigned.
+	# NOTE: All inputs that have a DONT_CARE assigned will be assigned a
+	#	value of ZERO in order to get a higher test coverage and
+	#	because leaving inputs at DONT_CARE causes reconvergent fanout
+	#	to be undetected (with the method used here). Thus unspecified
+	#	values (DONT_CARE) may not occur.
+
+	address: integer;
+	ptr: Nodeptr;
+	adrqueue:Address_Queue2;
+
+	BEGIN
+		# The circuit must be simulated without a fault
+		Reset_Circuit_Fault(circuit);
+		# Assign all currently unassigned PIs a logical value of ZERO
+		WHILE Get_Unassigned_PI(circuit,address) DO
+			# Unassigned PI found
+			Assign_PI(circuit,address,ZERO);
+		OD;
+		IF Be_Verbose(config) THEN
+			print$Pass();
+			Write("CPU ",MYCPU()," simulates : ");
+			Write_PI_Assignments(circuit);
+			print$Free();
+		FI;
+		# Calculate the resulting circuit state
+		Forward_Implication(circuit,truthtable);
+		# TestDetect starts at the POs that have a value assigned
+		FOR i IN 1..circuit.PO_count DO
+			ptr:=circuit.PO_ptr[i];
+			IF circuit[ptr].output/=DONT_CARE THEN
+				adrqueue$EnQueue(circuit[ptr].address);
+				# Trace critical path and drop faults
+				Trace_Critical_Path(circuit,truthtable,
+						 adrqueue,faultrecset,
+						 report,config,print);
+			FI;
+		OD;
+	END; # FUNCTION Fault_Sim
+	
+
+END; # MODULE IMPLEMENTATION Fault_Sim
+

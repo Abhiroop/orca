@@ -1,0 +1,38 @@
+MODULE IMPLEMENTATION trc_main;
+
+
+FROM trace IMPORT event_type,				# types
+		  new_thread, set_level;		# procs
+
+MODULE int_event = NEW trace_gen(integer);
+
+
+FROM InOut IMPORT ReadChar;
+
+
+PROCESS OrcaMain();
+
+count     : integer;
+answer    : char;
+counter   : event_type;
+old_level : integer;
+
+BEGIN
+    new_thread(0, "OrcaMain");
+    counter   := int_event.new_event(100, "counter", "count %d");
+    count     := 0;
+    old_level := set_level(200);
+    WHILE (true) DO
+	Write("Continue? [yn]");
+	ReadChar(answer);
+	IF answer = 'y' THEN
+	    int_event.event(counter, count);
+	    count +:= 1;
+	ELSIF answer = 'n' THEN
+	    EXIT;
+	FI;
+	ReadChar(answer);
+    OD;
+END;
+
+END;

@@ -1,0 +1,376 @@
+OBJECT IMPLEMENTATION VarObject;
+
+FROM Common IMPORT	IntArrayType, RealArrayType, IntMrecType,
+			RealMrecType, IntMrecArray, RealMrecArray,
+			IntRecordType, NTYPInfType, PosArrayType,
+			ParTypType, InfoType;
+
+##
+## All data forming the 'real' VarObject.
+##
+TOTAL : integer;
+LREC  : boolean;
+TIME  : real;
+VAR   : VarType;
+
+
+##
+## Update-counters to avoid external barriers.
+##
+ADDED, MOVED, SETUP, SWITCHED : integer;
+
+
+FUNCTION DoIt(Size      : integer;
+	      POS, EPOS : OUT PosArrayType[1 .. Size];
+	      IQ        : OUT RealArrayType[1 .. Size];
+	      PARTYP    : OUT ParTypType[1 .. Size]);
+BEGIN
+	FOR i IN 1 .. Size DO
+	    POS[i].X       := 0.0;
+	    POS[i].Y       := 0.0;
+	    POS[i].Z       := 0.0;
+	    EPOS[i].X      := 0.0;
+	    EPOS[i].Y      := 0.0;
+	    EPOS[i].Z      := 0.0;
+	    IQ[i]          := 0.0;
+	    PARTYP[i].NPAR := 0;
+	    PARTYP[i].NTYP := 0;
+	OD;
+END;
+
+
+OPERATION Init(Size : integer);
+
+BEGIN
+	FOR cpu IN 0 .. NCPUS() - 1 DO
+	    DoIt(Size, VAR[cpu].POS, VAR[cpu].EPOS,
+		       VAR[cpu].IQ,  VAR[cpu].PARTYP);
+	OD;
+	SETUP := 0;
+END;
+
+
+OPERATION SetUp(CPU, GNION, NION, NrCPUs : integer;
+		POS                      : PosArrayType;
+		IQ                       : RealArrayType;
+		PARTYP                   : ParTypType);
+
+	EPOS : PosArrayType[1 .. NION];
+BEGIN
+	FOR i IN 1 .. NION DO
+	    EPOS[i].X := 0.0;
+	    EPOS[i].Y := 0.0;
+	    EPOS[i].Z := 0.0;
+	OD;
+
+	VAR[CPU].NION   := NION;
+	VAR[CPU].IREC   := 0;
+	VAR[CPU].POS    := POS;
+	VAR[CPU].EPOS   := EPOS;
+	VAR[CPU].IQ     := IQ;
+	VAR[CPU].PARTYP := PARTYP;
+
+	TOTAL    := GNION;
+	TIME     := 1.0D+30;
+	LREC     := false;
+        ADDED    := 0;
+	MOVED    := 0;
+	SWITCHED := 0;
+
+	SETUP   +:= 1;
+	IF SETUP = NrCPUs THEN
+	    SETUP := 0;
+	FI;
+END;
+
+
+OPERATION ValX(CPU, i : integer) : real;
+
+BEGIN
+	RETURN VAR[CPU].POS[i].X;
+END;
+
+
+OPERATION ValY(CPU, i : integer) : real;
+
+BEGIN
+	RETURN VAR[CPU].POS[i].Y;
+END;
+
+
+OPERATION ValZ(CPU, i : integer) : real;
+
+BEGIN
+	RETURN VAR[CPU].POS[i].Z;
+END;
+
+
+OPERATION ValIQ(CPU, i : integer) : real;
+
+BEGIN
+	RETURN VAR[CPU].IQ[i];
+END;
+
+
+OPERATION ValNTYP(CPU, i : integer) : integer;
+
+BEGIN
+	RETURN VAR[CPU].PARTYP[i].NTYP;
+END;
+
+
+OPERATION ValNPAR(CPU, i : integer) : integer;
+
+BEGIN
+	RETURN VAR[CPU].PARTYP[i].NPAR;
+END;
+
+
+OPERATION ValNION(CPU : integer) : integer;
+
+BEGIN
+	RETURN VAR[CPU].NION;
+END;
+
+
+OPERATION GetTime(NrCPUs : integer) : real;
+
+BEGIN
+	### Integrated synchronization-point.
+
+	GUARD ADDED = NrCPUs DO
+	    RETURN TIME;
+	OD;
+END;
+
+
+OPERATION SetTime(Time : real);
+
+BEGIN
+	TIME := Time;
+END;
+
+
+OPERATION Recombined() : boolean;
+
+BEGIN
+	RETURN LREC;
+END;
+
+
+OPERATION AddFieldsTime(EPOS : PosArrayType;
+			Time : real);
+
+	CPU, ION : integer;
+BEGIN
+	CPU := 0;
+	ION := 1;
+
+	REPEAT
+
+	    FOR i IN 1 .. VAR[CPU].NION DO
+		VAR[CPU].EPOS[i].X +:= EPOS[ION + i - 1].X;
+		VAR[CPU].EPOS[i].Y +:= EPOS[ION + i - 1].Y;
+		VAR[CPU].EPOS[i].Z +:= EPOS[ION + i - 1].Z;
+	    OD;
+
+	    ION +:= VAR[CPU].NION;
+	    CPU +:= 1;
+
+	UNTIL ION > TOTAL;
+
+	IF Time < TIME THEN
+	    TIME := Time;
+	FI;
+
+	ADDED +:= 1;
+END;
+
+
+OPERATION SetComp(CPU  : integer;
+		  EPOS : PosArrayType);
+BEGIN
+	VAR[CPU].EPOS := EPOS;
+END;
+
+
+OPERATION GetPosField(CPU       : integer;
+		      POS, EPOS : OUT PosArrayType);
+BEGIN
+	POS  := VAR[CPU].POS;
+	EPOS := VAR[CPU].EPOS;
+END;
+
+
+OPERATION SetPosField(CPU, NrCPUs : integer;
+		      POS         : PosArrayType);
+BEGIN
+	VAR[CPU].POS := POS;
+
+	FOR i IN 1 .. VAR[CPU].NION DO
+	    VAR[CPU].EPOS[i].X := 0.0;
+	    VAR[CPU].EPOS[i].Y := 0.0;
+	    VAR[CPU].EPOS[i].Z := 0.0;
+	OD;
+
+	MOVED +:= 1;
+	IF MOVED = NrCPUs THEN
+	    ADDED := 0;
+	    MOVED := 0;
+	    TIME  := 1.0D+30;
+	FI;
+END;
+
+
+OPERATION GetPosInfo(CPU    : integer;
+		     POS    : OUT PosArrayType;
+		     IQ     : OUT RealArrayType;
+		     PARTYP : OUT ParTypType);
+BEGIN
+	POS    := VAR[CPU].POS;
+	IQ     := VAR[CPU].IQ;
+	PARTYP := VAR[CPU].PARTYP;
+END;
+
+
+OPERATION SetPosInfo(CPU, NION : integer;
+		     POS       : PosArrayType;
+		     IQ        : RealArrayType;
+		     PARTYP    : ParTypType);
+BEGIN
+	VAR[CPU].NION   := NION;
+	VAR[CPU].POS    := POS;
+	VAR[CPU].IQ     := IQ;
+	VAR[CPU].PARTYP := PARTYP;
+END;
+
+
+OPERATION GetSomePosInfo(NrCPUs,
+			 NrElts : integer;
+			 GNION  : OUT integer;
+			 NIONS  : OUT IntArrayType[0 .. NrCPUs - 1];
+			 INF    : OUT InfoType[0 .. NrCPUs - 1];
+			 NTYPS  : OUT NTYPInfType[0 .. NrCPUs - 1]
+						 [1 .. NrElts]);
+BEGIN
+	### Integrated synchronization-point.
+
+	GUARD (MOVED = 0) AND (SETUP = 0) DO
+	    GNION := TOTAL;
+	    FOR cpu IN 0 .. NrCPUs - 1 DO
+		NIONS[cpu]   := VAR[cpu].NION;
+		INF[cpu].POS := VAR[cpu].POS;
+		INF[cpu].IQ  := VAR[cpu].IQ;
+
+		FOR i IN 1 .. VAR[cpu].NION DO
+		    NTYPS[cpu][i] := VAR[cpu].PARTYP[i].NTYP;
+		OD;
+	    OD;
+	OD;
+END;
+
+
+OPERATION GetAllInfo(NION, IDX, Size, NrCPUs : integer;
+		     WHERE     : IntRecordType;
+		     POS, EPOS : OUT PosArrayType[1 .. Size];
+		     IQ        : OUT RealArrayType[1 .. Size];
+		     PARTYP    : OUT ParTypType[1 .. Size]);
+
+	DONE, ELT, CPU, TNION, FIRST, LAST, i, j : integer;
+
+	TPOS, TEPOS : PosArrayType;
+	TIQ         : RealArrayType;
+	TPARTYP     : ParTypType;
+BEGIN
+	### Integrated synchronization-point.
+
+	GUARD ADDED = NrCPUs DO
+
+	    DONE := 0;
+	    ELT  := IDX + 1;
+
+	    REPEAT
+
+		CPU   := WHERE[ELT, 1];
+		FIRST := WHERE[ELT, 2];
+
+		TNION   := VAR[CPU].NION;
+		TPOS    := VAR[CPU].POS;
+		TEPOS   := VAR[CPU].EPOS;
+		TIQ     := VAR[CPU].IQ;
+		TPARTYP := VAR[CPU].PARTYP;
+
+		IF NION - DONE >= TNION - FIRST + 1 THEN
+		    LAST := TNION;
+		ELSE
+		    LAST := NION - DONE;
+		FI;
+
+		FOR elts IN 1 .. LAST - FIRST + 1 DO
+		    i         := elts + DONE;
+		    j         := elts + FIRST - 1;
+		    POS[i].X  := TPOS[j].X;
+		    POS[i].Y  := TPOS[j].Y;
+		    POS[i].Z  := TPOS[j].Z;
+		    EPOS[i].X := TEPOS[j].X;
+		    EPOS[i].Y := TEPOS[j].Y;
+		    EPOS[i].Z := TEPOS[j].Z;
+		    IQ[i]     := TIQ[j];
+		    PARTYP[i].NTYP := TPARTYP[j].NTYP;
+		    PARTYP[i].NPAR := TPARTYP[j].NPAR;
+		OD;
+
+		ELT  +:= LAST - FIRST + 1;
+		DONE +:= LAST - FIRST + 1;
+
+	    UNTIL DONE = NION;
+	OD;
+END;
+
+
+OPERATION SetAllInfo(CPU, NION, NrCPUs : integer;
+		     POS, EPOS         : PosArrayType;
+		     IQ                : RealArrayType;
+		     PARTYP            : ParTypType);
+BEGIN
+	VAR[CPU].NION   := NION;
+	VAR[CPU].POS    := POS;
+	VAR[CPU].EPOS   := EPOS;
+	VAR[CPU].IQ     := IQ;
+	VAR[CPU].PARTYP := PARTYP;
+	SWITCHED       +:= 1;
+
+	IF SWITCHED = NrCPUs THEN
+	    ADDED    := NrCPUs;
+	    SWITCHED := 0;
+	FI;
+END;
+
+
+OPERATION SetReac(CPU, IREC : integer;
+		  IRP, IRM  : IntMrecType;
+		  RREC      : RealMrecType);
+BEGIN
+	LREC          := true;
+	VAR[CPU].IREC := IREC;
+	VAR[CPU].IRP  := IRP;
+	VAR[CPU].IRM  := IRM;
+	VAR[CPU].RREC := RREC;
+END;
+
+
+OPERATION GetReac(NrCPUs     : integer;
+		  IRECs      : OUT IntArrayType[0 .. NrCPUs - 1];
+		  IRPs, IRMs : OUT IntMrecArray[0 .. NrCPUs - 1];
+		  RRECs      : OUT RealMrecArray[0 .. NrCPUs - 1]);
+BEGIN
+	FOR cpu IN 0 .. NrCPUs - 1 DO
+	    IRECs[cpu] := VAR[cpu].IREC;
+	    IRPs[cpu]  := VAR[cpu].IRP;
+	    IRMs[cpu]  := VAR[cpu].IRM;
+	    RRECs[cpu] := VAR[cpu].RREC;
+	OD;
+END;
+
+
+END;

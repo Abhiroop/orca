@@ -1,0 +1,95 @@
+#!/bin/csh -f
+#
+# Call:  cv_arch arch ...
+#
+# Recursive CV of panda repositories for the desired architectures.
+#
+# The panda src/include/lib trees are created in the current directory.
+
+if (! $?PANDA_PROJ) set PANDA_PROJ = /net/panda
+
+set RM   = /bin/rm
+
+set bin  = $PANDA_PROJ/bin
+set this = $bin/cv_arch
+
+set rep = $PANDA_PROJ/Repositories
+set target = .
+
+set ARCHITECTURES = "$*"
+
+LAR $rep | sed "s?$rep/??" > cv_arch.tmp
+
+$RM -f cv_arch_non_dep.tmp
+egrep -v '(/|^)(lib|lib_[^/]*|sys|system|malloc|threads)/' cv_arch.tmp > cv_arch_non_dep.tmp
+
+$RM -f cv_arch_dep.tmp
+foreach a ( $ARCHITECTURES )
+	switch ( $a )
+case sparc:
+case nmd*_sparc:
+		grep -w $a cv_arch.tmp | \
+			egrep -v '(/|^)lib.*' | \
+			egrep -v "include/sys/$a/pthreads" >> \
+			cv_arch_dep.tmp
+		grep -w $a cv_arch.tmp | \
+			egrep '(/|^)(lib|lib_o|lib_p|lib_trace)' >> \
+			cv_arch_dep.tmp
+		grep -w pthreads2.1 cv_arch.tmp >> cv_arch_dep.tmp
+		grep -w gmalloc cv_arch.tmp >> cv_arch_dep.tmp
+		breaksw
+case rvr*:
+		grep -w $a cv_arch.tmp | \
+			egrep -v '(/|^)lib.*' >> \
+			egrep -v "include/sys/$a/rvr_threads" >> \
+			cv_arch_dep.tmp
+		grep -w $a cv_arch.tmp | \
+			egrep '(/|^)(lib|lib_o|lib_p|lib_trace)' >> \
+			cv_arch_dep.tmp
+		grep -w muts cv_arch.tmp >> cv_arch_dep.tmp
+		breaksw
+default:
+		grep -w $a cv_arch.tmp | \
+			egrep -v '(/|^)lib.*' >> \
+			cv_arch_dep.tmp
+		grep -w $a cv_arch.tmp | \
+			egrep '(/|^)(lib|lib_o|lib_p|lib_trace)' >> \
+			cv_arch_dep.tmp
+	endsw
+end
+
+# echo "non_arch = "
+# cat cv_arch_non_dep.tmp
+# echo "arch_dep = "
+# cat cv_arch_dep.tmp
+
+# exit
+
+foreach f ( `cat cv_arch_non_dep.tmp` `cat cv_arch_dep.tmp` )
+	set doc = $target/$f
+			# create its parent directory if necessary
+	if (! (-d $doc)) $bin/mkpath $doc
+	# echo "CV $rep/$f into $doc"
+	(cd $doc ; CV $rep/$f; echo -n "$doc version "; RC -i)
+end
+
+$RM -f cv_arch.tmp cv_arch_non_dep.tmp cv_arch_dep.tmp
+
+foreach a ( $ARCHITECTURES )
+    switch ( $a )
+case sparc:
+case nmd*_sparc:
+	(cd $target/src/system/$a; \
+	    ln -s ../../../src/threads/pthreads/pthreads2.1 pthreads; \
+	    ln -s ../../../../src/malloc/gmalloc pthreads/malloc)
+	(cd $target/include/sys/$a; \
+	    ln -s ../../../src/threads/pthreads/pthreads2.1/include pthreads; \
+	    ln -s pthreads/pthread)
+	breaksw
+case rvr*:
+	(cd $target/src/system/$a; ln -s ../../../src/threads/muts rvr_threads)
+	(cd $targer/include/sys/$a; ln -s ../../../src/threads/muts rvr_threads)
+	breaksw
+default:
+	endsw
+end

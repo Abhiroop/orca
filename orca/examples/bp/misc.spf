@@ -1,0 +1,26 @@
+MODULE SPECIFICATION misc;
+
+FROM BpTypes	IMPORT ArrayType;
+		IMPORT NetworkObject;
+
+FUNCTION ComputeOutput(		IPattern: ArrayType; 
+				network: NetworkObject; 
+				n1: integer;
+				n2: integer;
+				NetInput: OUT ArrayType[0..n1];
+				activations: OUT ArrayType[0..n1];
+				OPattern: OUT ArrayType[0..n2]);
+FUNCTION InitArrayBounds(	lb: integer;
+				ub: integer;
+				a: OUT ArrayType);
+FUNCTION ActivationFunction(	value: real)
+				: real;
+FUNCTION PrimeActivationFunction(value: real)
+				: real;
+FUNCTION AlmostSame(	TPattern: ArrayType;
+			OPattern: ArrayType;
+			NumUnits: integer)
+			: boolean;
+
+# end module specification
+END;

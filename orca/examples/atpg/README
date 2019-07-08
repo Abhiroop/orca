@@ -1,0 +1,96 @@
+	Running the Orca ATP-Generator:
+
+	This text will first tell you how to compile and execute the ATPG-
+	Generator. After that some necessary information about the program
+	is given.
+
+	COMPILING and EXECUTING the ATP-Generator
+	=========================================
+
+	 1) To compile it: use 'amake'
+	 2) To install it under Amoeba: 'ainstall circuitt /home/circuitt'
+	
+	 3) Now copy one of the circuit description files in './ISCAS/DATA' to
+	    Amoeba using the command: 'tob cXXX.isc /home/cXXX.isc'
+
+	 4) Log in under Amoeba
+
+	 5) Append to the circuit-description file and end-of-file marker (= @)
+	    (append one line to the file and place this marker on the first
+	     position)
+
+	 6) Create a file 'CONFIG' in /home/orca  (you can instruct the
+	    program to read another configuration file by changing the value
+	    of the constant CONFIG_FILE in AtpgTypes.spf)
+	    This file contains one line consisting of four strings. The first
+	    denotes the name of the circuit description file.  The second string
+	    indicates whether or not the program should be verbose. The third
+	    indicates whether or not the ATP-Generator should perform
+	    fault simulation (FS).
+	    The fourth string indicates whether or not the test patterns found
+	    should be communicated among the processors.
+	    Strings should be separated by the [SPACE]-character and should
+	    appear consecutively on the first line.
+	    The file CONFIG could contain (for example) the following line:
+
+       /home/orca/iscas/c499.isc.eof NOVERBOSE FAULT_SIMULATION COMM_TESTVECTORS
+
+
+	  ==================================================================
+
+	THE CONFIGURATION FILE
+	======================
+
+	The program uses a default configuration file ("/home/orca/CONFIG")
+	and reads four strings of it:
+	     1)	The first denotes the filename of the circuit description
+		e.g. /home/orca/iscas/c17.isc.eof
+		(Be sure that your circuit description file ends with
+		 the '@'-character)
+             2)	The second string denotes whether or not the program should be
+		verbose: VERBOSE  -- Write messages to stdout about test
+				     patterns found.
+			 Every other string makes the program Non-Verbose
+	     3)	The third string indicates whether or not fault simulation
+		should be carried out. 
+			 FAULT_SIMULATION -- Perform FS
+			 Every other string will result in no fault simulation
+	     4)	The fourth string indicates whether or not testvectors found by
+		one processor should be communicated to the other processors.
+			COMM_TESTVECTORS -- Testvectors will be communicated.
+			Every other string will result in no communication of
+			testvectors.
+		NOTE: Only testvectors are really communicated when fault
+		      simulation is carried out (there is no use in 
+		      communication of testvectors if no FS is carried out)
+
+	The configuration file that is read by the program is denoted by
+	the constant CONFIG_FILE in AtpgTypes.spf
+
+	CIRCUIT FILE CONSTANTS
+	======================
+
+	Several constants are defined in iscas.spf. The are listed here and
+	if necessary they can be changed:
+
+	MAX_NO_OF_GATES   ---	The highest gate-address used in the 
+				iscas-circuit description.
+	MAX_NO_OF_INPUTS  ---	The highest input address that is used in the
+				iscas-circuit description.
+	MAX_NO_OF_OUTPUTS ---	The maximum number of primary outputs that a
+				circuit can have.
+	MAX_NO_OF_FAULTS  ---	The maximum number of faults that can be
+				specified in the iscas-circuit description file.
+
+
+	ISCAS-CIRCUIT DESCRIPTION FILES
+	===============================
+
+	You can find these files in the directory: ./ISCAS/DATA
+	Remember to change the constants (discussed above) so that they fit
+	with the circuit to be read.
+	IMPORTANT: the ATP-generator reads the file until a special end-of-file
+		   marker is encountered. You must append this marker, a '@', to
+		   the circuit description file.
+
+

@@ -1,0 +1,672 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+
+#ifndef __PAN_MCAST_ORDR_CI__
+#define __PAN_MCAST_ORDR_CI__
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+
+#include "fm.h"
+
+#include "pan_sys_msg.h"
+
+#include "pan_system.h"
+#include "pan_sync.h"			/* Use macros */
+
+#include "pan_global.h"
+
+#include "pan_comm.h"
+
+#include "pan_mcast_bitset.h"
+#include "pan_mcast_global.h"
+#ifndef RELIABLE_NETWORK
+#include "pan_mcast_buf.ci"		/* Include .c file for inlining */
+#endif		/* RELIABLE_NETWORK */
+#include "pan_mcast_tick_buf.ci"	/* Include .c file for inlining */
+#include "pan_mcast_sweep.h"
+#include "pan_mcast_header.h"
+#include "pan_mcast_ordr.h"
+
+#include "pan_timer.h"
+
+#include "pan_trace.h"
+
+
+
+
+/*
+ *  This module implements the orderer functionality: data msgs
+ *  are received and delivered upwards in total order.
+ *
+ *    Mcast messages are received here; the network performs
+ *    an upcall to deliver mcast msgs in the ordered buffer. The ordering is
+ *    enforced with help of the sequence numbers. Out-of-order messages are
+ *    buffered, retransmit of missing messages is broadcast.
+ *
+ *    Reliability:
+ *    The sender stores its messages to serve possible retransmit requests.
+ *    The msg copy is made via the network; this might be done more
+ *    cheaply, BUT sender and receiver must synchronise anyway in order to
+ *    send the next Panda-level msg. The synchronisation is combined
+ *    with the copy action now.
+ *
+ *  This module exports the following user level functions:
+ *      - <none>
+ *
+ *  It exports communication with the sender module:
+ *	- some types
+ */
+
+
+
+/*
+ *	Global variables.
+ */
+
+static trc_event_t rexmit_req_ev;
+
+static pan_timer_p ordr_home;
+static pan_timer_p ordr_out;
+static pan_timer_p mcast_rcve_home_latency;
+static pan_timer_p mcast_rcve_out_latency;
+static pan_timer_p buffered_upcall;
+
+
+/*
+ * Local types
+ */
+
+typedef enum ORD_MSG_STATUS_T {
+    ORD_ACCEPT,
+    ORD_OVERFLOW,
+    ORD_DOUBLE
+} ord_msg_status_t, *ord_msg_status_p;
+
+
+#ifndef RELIABLE_NETWORK
+
+
+static pan_msg_p
+locate_rexmit(int missed_seqno)
+{
+/* Member tries to answers retransmit request.
+ */
+    pan_msg_p   hist_msg;
+    pan_mcast_hdr_p  hist_hdr;
+    int              i;
+
+    for (i = pan_buf_last(pan_mcast_state.hist);
+	    i < pan_buf_next(pan_mcast_state.hist); i++) {
+	hist_msg = pan_buf_look(pan_mcast_state.hist, i);
+	hist_hdr = msg_comm_hdr(hist_msg);
+	if (hist_hdr->seqno == missed_seqno) {	/* Match! */
+					    STATINC(ST_REXMIT_GSB);
+	    return hist_msg;
+	}
+    }
+
+    return NULL;
+}
+
+
+static void
+mcast_rexmit_req(int missed_seqno)
+{
+    pan_mcast_hdr_t hdr;
+    pan_mcast_hdr_p hist_hdr;
+    pan_msg_p       hist_msg;
+    pan_msg_p       cp_msg;
+
+					/* First try whether the missed msg
+					 * is from here; otherwise, we have
+					 * to do this anyway in response to the
+					 * mcast request.
+					 */
+    hist_msg = locate_rexmit(missed_seqno);
+    if (hist_msg != NULL) {
+					STATINC(ST_REXMIT_HOME);
+	cp_msg = pan_msg_create();
+	pan_msg_copy(hist_msg, cp_msg);
+	hist_hdr = msg_comm_hdr(cp_msg);
+	pan_mcast_ordr_data_upcall(cp_msg, hist_hdr);
+	return;
+    }
+
+					STATINC(ST_REXMIT_REQ);
+    trc_event(rexmit_req_ev, &missed_seqno);
+
+    hdr.sender     = pan_my_pid();
+    hdr.type       = MCAST_REXMITREQ;
+    hdr.seqno      = missed_seqno;
+    hdr.seen_seqno = pan_mcast_state.next_accept;
+
+    pan_mcast_state.last_rexmit_request = missed_seqno;
+
+    pan_mutex_unlock(pan_mcast_upcall_lock);
+    FM_broadcast(pan_mcast_cntrl_handler, (char*)&hdr, sizeof(pan_mcast_hdr_t));
+    pan_mutex_lock(pan_mcast_upcall_lock);
+}
+
+
+
+static void
+send_cntrl_to_purge(pan_mcast_hdr_p hdr)
+{
+    if (pan_mcast_state.purge_pe == pan_my_pid()) {
+
+	pan_mcast_purge_upcall(hdr);
+    } else {
+
+	pan_mutex_unlock(pan_mcast_upcall_lock);
+	FM_send_buf(pan_mcast_state.purge_pe, pan_mcast_cntrl_handler,
+		    (char *)hdr, sizeof(pan_mcast_hdr_t));
+	pan_mutex_lock(pan_mcast_upcall_lock);
+    }
+}
+
+
+
+/* Send a status message to the purge process.
+ * Two causes:
+ * 1. Respond to a SYNC request by the purge process
+ * 2. We ourselves have seen that our latest acknowledge has been too long
+ *    ago (in terms of buffer size vs. sequence numbers).
+ *
+ * Requirement: the caller must hold pan_mcast_upcall_lock.
+ */
+static void
+send_status(void)
+{
+    pan_mcast_hdr_t msg;
+
+    pan_mcast_state.last_status = pan_mcast_state.next_accept;
+
+    msg.sender     = pan_my_pid();
+    msg.type       = MCAST_STATUS;
+    msg.seqno      = pan_mcast_state.global_next_accept;
+    msg.seen_seqno = pan_mcast_state.next_accept;
+
+    send_cntrl_to_purge(&msg);
+
+    assert(pan_mcast_state.purge_pe != pan_my_pid() ||
+	   pan_mcast_state.last_status <=
+	   	pan_mcast_state.seen_seqno[pan_my_pid()]);
+}
+
+
+
+
+/* Receive msg from the purge watchdog: update our knowledge of the worldwide
+ * mcast state.
+ *
+ * Requirement: caller must hold pan_mcast_upcall_lock.
+ */
+static void
+ordr_update_status(pan_mcast_hdr_p hdr)
+{
+    if (hdr->seqno >= pan_mcast_state.global_next_accept) {
+	pan_mcast_state.global_next_accept = hdr->seqno + 1;
+    }
+}
+
+
+static void
+purge_history(pan_mcast_hdr_p cntrl_msg)
+{
+    int             i;
+    pan_msg_p       hist_msg;
+    pan_mcast_hdr_p hist_hdr;
+
+    assert(cntrl_msg->type == MCAST_SYNC || cntrl_msg->type == MCAST_PURGE);
+
+    for (i = pan_buf_last(pan_mcast_state.hist);
+	    i < pan_buf_next(pan_mcast_state.hist); i++) {
+	hist_msg = pan_buf_look(pan_mcast_state.hist, i);
+	hist_hdr = msg_comm_hdr(hist_msg);
+	if (hist_hdr->seqno >= cntrl_msg->seen_seqno) {
+	    break;
+	}
+	hist_msg = pan_buf_get(pan_mcast_state.hist);
+	pan_msg_clear(hist_msg);
+    }
+}
+
+
+
+static void
+answer_rexmit(pan_mcast_hdr_p hdr)
+{
+/* Member tries to answers retransmit request.
+ */
+    pan_msg_p   hist_msg;
+    int              size;
+
+    hist_msg = locate_rexmit(hdr->seqno);
+    if (hist_msg == NULL) {
+	return;
+    }
+
+					    STATINC(ST_REXMIT_GSB);
+    size = pan_sys_msg_nsap_store(hist_msg, msg_nsap(hist_msg));
+    pan_mutex_unlock(pan_mcast_upcall_lock);
+    FM_send_buf(hdr->sender, pan_mcast_data_handler, msg_data(hist_msg), size);
+    pan_mutex_lock(pan_mcast_upcall_lock);
+}
+
+
+
+/* Check whether we should start rexmit requesting by assigning an appropriate
+ * value to the ord_buf tick fields.
+ * If the lacking msgs have not yet arrived after some delay,
+ * rexmit requests are sent by the ordr daemon.
+ *
+ * Requirement: the caller must hold pan_mcast_upcall_lock.
+ */
+static void
+check_rexmits(void)
+{
+    int       my_accept;
+    int       i;
+    int       upb;
+
+    my_accept = pan_mcast_state.next_accept;
+    if (my_accept < pan_mcast_state.global_next_accept) {
+	set_flag(pan_mcast_state.ordr_flags, MCAST_rexmitting);
+	upb = pan_tick_buf_upb(pan_mcast_state.ord_buf);
+	if (pan_mcast_state.global_next_accept < upb) {
+	    upb = pan_mcast_state.global_next_accept;
+	}
+	for (i = my_accept; i < upb; i++) {
+	    if (! pan_tick_buf_in_use(pan_mcast_state.ord_buf, i) &&
+		 pan_tick_buf_ticks(pan_mcast_state.ord_buf, i) == -1) {
+				/* Set the ticks to the initial value, so the
+				 * sweeper will process it in due time */
+		pan_tick_buf_ticks_set(pan_mcast_state.ord_buf, i,
+				       pan_mcast_retrans_ticks);
+	    }
+	}
+    } else if (isset_flag(pan_mcast_state.ordr_flags, MCAST_rexmitting)) {
+	unset_flag(pan_mcast_state.ordr_flags, MCAST_rexmitting);
+    }
+}
+
+
+
+
+/* The ordr sweeper function.
+ * Repeatedly:
+ *  - if the receiver has noticed that a msg has not arrived and this is
+ *    some time past, broadcast a retransmit request for the missing
+ *    msgs.
+ */
+static void
+ordr_sweep(void *args)
+{
+    int              my_accept;
+    int              global_next_accept;
+    int              i;
+
+				/* Check if we (still) must rexmit */
+    my_accept = pan_mcast_state.next_accept;
+    global_next_accept = pan_mcast_state.global_next_accept;
+    if (my_accept > 0 && my_accept < global_next_accept) {
+	for (i = my_accept; i < global_next_accept; i++) {
+	    if (pan_tick_buf_ticks(pan_mcast_state.ord_buf, i) > 0 &&
+		pan_tick_buf_ticks_dec(pan_mcast_state.ord_buf, i) == 0) {
+		mcast_rexmit_req(i);
+		pan_tick_buf_ticks_set(pan_mcast_state.ord_buf, i,
+				       pan_mcast_retrans_ticks);
+	    }
+	}
+    }
+}
+
+
+
+/* Check whether a slot for this sequenced msg is free in the ordered buffer
+ *
+ * Requirement: the caller must hold pan_mcast_upcall_lock.
+ */
+static ord_msg_status_t
+ord_buf_acceptable(int seqno)
+{
+				/* Can we accept the message? */
+
+    if (seqno >= pan_tick_buf_upb(pan_mcast_state.ord_buf)) {
+			    /* Buffer overflow */
+	return ORD_OVERFLOW;
+    }
+
+    if (seqno < pan_mcast_state.next_accept ||
+	pan_tick_buf_in_use(pan_mcast_state.ord_buf, seqno)) {
+			    /* repeated accept (before/past next_accept) */
+	return ORD_DOUBLE;
+    }
+
+    return ORD_ACCEPT;
+}
+
+
+#endif		/* RELIABLE_NETWORK */
+
+
+
+
+static void
+mcast_make_upcall(pan_msg_p msg)
+{
+#ifdef DO_TIMINGS
+    int from_home = ! (msg->pm_type & FM_MSG);
+#endif
+
+    pan_mutex_unlock(pan_mcast_upcall_lock);
+
+    if (msg_nsap(msg)->type & PAN_NSAP_SMALL) {
+	assert(msg_offset(msg) == msg_nsap(msg)->data_len);
+
+	msg_nsap(msg)->rec_small(msg_data(msg));
+					/* Also clear small from home since its
+					 * msg is specially created for the
+					 * upcall */
+	pan_msg_clear(msg);
+    } else {
+#ifdef DO_TIMINGS
+	if (from_home) {
+	    pan_timer_start(mcast_rcve_home_latency);
+	} else {
+	    pan_timer_start(mcast_rcve_out_latency);
+	}
+#endif
+	msg_nsap(msg)->rec_msg(msg);
+#ifdef DO_TIMINGS
+	if (from_home) {
+	    pan_timer_stop(mcast_rcve_home_latency);
+	} else {
+	    pan_timer_stop(mcast_rcve_out_latency);
+	}
+#endif
+    }
+
+    pan_mutex_lock(pan_mcast_upcall_lock);
+}
+
+
+/* Requirement: caller must hold pan_mcast_upcall_lock */
+static INLINE void
+deliver_upwards(void)
+{
+    pan_msg_p  msg;
+
+			    /* When possible, deliver the messages from the
+			     * ordered buffer. */
+    while ((msg = pan_tick_buf_get(pan_mcast_state.ord_buf)) != NULL) {
+	pan_timer_start(buffered_upcall);
+					STATINC(ST_DELAYED_UPCALL);
+	mcast_make_upcall(msg);
+	pan_timer_stop(buffered_upcall);
+    }
+}
+
+
+
+
+/* Put msg into its slot in the ordered buffer
+ *
+ * Requirement: the caller must hold pan_mcast_upcall_lock.
+ */
+static INLINE void
+deliver_accept(pan_msg_p msg, int seqno)
+{
+    if (pan_tick_buf_advance(pan_mcast_state.ord_buf, seqno)) {
+					/* Special case merits shortcut:
+					 * this is the next expected msg,
+					 * we can deliver it immediately.
+					 * */
+					STATINC(ST_DIRECT_UPCALL);
+	mcast_make_upcall(msg);
+    } else {
+
+					STATINC(ST_UPCALL_ASIDE);
+	assert(pan_tick_buf_last_accept(pan_mcast_state.ord_buf) != seqno);
+	pan_tick_buf_accept(pan_mcast_state.ord_buf, msg, seqno);
+    }
+
+    deliver_upwards();		/* Deliver buffered ordered msgs */
+
+#ifdef MCAST_MAX_MISS
+    if (seqno - pan_tick_buf_last_accept(pan_mcast_state.ord_buf) >
+	    MCAST_MAX_MISS) {
+	pan_panic("Mcast buffer: current %d, misses %d\n",
+		  seqno, MCAST_MAX_MISS);
+    }
+#endif
+
+#ifndef RELIABLE_NETWORK
+    pan_mcast_state.next_accept =
+			pan_tick_buf_last_accept(pan_mcast_state.ord_buf);
+
+    if (pan_mcast_state.next_accept - pan_mcast_state.last_status >
+	    pan_mcast_hist_size / 2) {
+	send_status();
+					STATINC(ST_STATUS_SYNC);
+    }
+#endif		/* RELIABLE_NETWORK */
+}
+
+
+
+/* Handle a mcast data message that has arrived.
+ * Dispatch according to functionality.
+ *
+ * Requirement: the caller must hold pan_mcast_upcall_lock.
+ */
+
+#ifdef RELIABLE_NETWORK
+
+
+/* The orderer data upcall.
+ *  - a mcast message is received in this upcall; it acts according to
+ *    the semantics of the message;
+ *  - checks whether an ordered message has been missed; if so, enter retransmit
+ *    state;
+ *  - delivers all ordered messages via the registered receive upcall.
+ */
+STATIC_CI INLINE void
+pan_mcast_ordr_data_upcall(pan_msg_p msg, pan_mcast_hdr_p hdr)
+{
+#ifdef DO_TIMINGS
+    int from_home = ! (msg->pm_type & FM_MSG);
+
+    if (from_home) {
+	pan_timer_start(ordr_home);
+    } else {
+	pan_timer_start(ordr_out);
+    }
+#endif
+
+					STATINC(ST_ORDR_DATA_UPCALL);
+    deliver_accept(msg, hdr->seqno);		/* Handle the message */
+
+#ifdef DO_TIMINGS
+    if (from_home) {
+	pan_timer_stop(ordr_home);
+    } else {
+	pan_timer_stop(ordr_out);
+    }
+#endif
+}
+
+
+#else		/* RELIABLE_NETWORK */
+
+
+static INLINE void
+ordr_data_switch(pan_msg_p msg, pan_mcast_hdr_p hdr)
+{
+    ord_msg_status_t msg_status;
+    int              seqno = hdr->seqno;
+
+    assert(hdr->type == MCAST_GSB || hdr->type == MCAST_REXMIT);
+
+    msg_status = ord_buf_acceptable(seqno);
+
+    if (msg_status == ORD_ACCEPT) {
+	deliver_accept(msg, seqno);
+    } else if (msg_status == ORD_OVERFLOW) {
+				    STATDISCARD(DX_ORD_B, 1);
+	if (hdr->sender != pan_my_pid()) {
+	    pan_msg_clear(msg);
+	}
+    } else {
+	assert(msg_status == ORD_DOUBLE);
+	assert(hdr->sender != pan_my_pid());
+				    STATDISCARD(DX_REXMIT, 1);
+	pan_msg_clear(msg);
+    }
+}
+
+
+/* The orderer data upcall.
+ *  - a mcast message is received in this upcall; it acts according to
+ *    the semantics of the message;
+ *  - checks whether an ordered message has been missed; if so, enter retransmit
+ *    state;
+ *  - delivers all ordered messages via the registered receive upcall.
+ */
+STATIC_CI INLINE void
+pan_mcast_ordr_data_upcall(pan_msg_p msg, pan_mcast_hdr_p hdr)
+{
+#ifdef DO_TIMINGS
+    if (hdr->sender == pan_my_pid()) {
+	pan_timer_start(ordr_home);
+    } else {
+	pan_timer_start(ordr_out);
+    }
+#endif
+
+					STATINC(ST_ORDR_DATA_UPCALL);
+    ordr_update_status(hdr);
+    ordr_data_switch(msg, hdr);	/* Handle the message */
+    check_rexmits();			/* Check whether to init any rexmit */
+
+#ifdef DO_TIMINGS
+    if (hdr->sender == pan_my_pid()) {
+	pan_timer_stop(ordr_home);
+    } else {
+	pan_timer_stop(ordr_out);
+    }
+#endif
+}
+
+
+
+static INLINE void
+ordr_cntrl_switch(pan_mcast_hdr_p hdr)
+{
+    switch (hdr->type) {
+
+    case MCAST_SYNC:
+	send_status();
+					STATINC(ST_STATUS_ASYNC);
+	purge_history(hdr);
+				/* This is a "small" so don't clear the msg */
+	break;
+
+    case MCAST_PURGE:
+	purge_history(hdr);
+				/* This is a "small" so don't clear the msg */
+	break;
+
+    case MCAST_REXMITREQ:
+	answer_rexmit(hdr);
+				/* This is a "small" so don't clear the msg */
+	break;
+
+    default:
+	printf("%2d: Wrong msg arrived at ordr_switch:\n",
+		pan_my_pid());
+	pan_mcast_hdr_print(hdr);
+	pan_panic("Illegal cntrl msg arrived in receiver");
+    }
+}
+
+
+
+/* The orderer control upcall.
+ *  - a mcast message is received in this upcall; it acts according to
+ *    the semantics of the message;
+ *  - checks whether an ordered message has been missed; if so, enter retransmit
+ *    state;
+ *  - delivers all ordered messages via the registered receive upcall.
+ */
+STATIC_CI void
+pan_mcast_ordr_cntrl_upcall(pan_mcast_hdr_p hdr)
+{
+					STATINC(ST_ORDR_CNTRL_UPCALL);
+    ordr_update_status(hdr);
+    ordr_cntrl_switch(hdr);		/* Handle the message */
+    check_rexmits();			/* Check whether to init any rexmit */
+}
+
+
+#endif		/* RELIABLE_NETWORK */
+
+
+
+STATIC_CI void
+pan_mcast_ordr_init(void)
+{
+    pan_mcast_state.ord_buf    = pan_tick_buf_create(pan_mcast_ord_buf_size);
+
+#ifndef RELIABLE_NETWORK
+    pan_mcast_state.last_rexmit_request = -1;
+
+    pan_mcast_state.ordr_flags = 0;
+#endif
+
+    rexmit_req_ev = trc_new_event(2475, sizeof(int), "rexmit request",
+				  "missed %d");
+    ordr_home               = pan_timer_create();
+    ordr_out                = pan_timer_create();
+    mcast_rcve_home_latency = pan_timer_create();
+    mcast_rcve_out_latency  = pan_timer_create();
+    buffered_upcall         = pan_timer_create();
+
+				/* Start ordr watchdog thread */
+#ifndef RELIABLE_NETWORK
+    pan_mcast_sweep_register(ordr_sweep, NULL);
+#endif		/* RELIABLE_NETWORK */
+}
+
+
+STATIC_CI void
+pan_mcast_ordr_end(void)
+{
+    int n;
+
+    pan_timer_print(ordr_home, "home ordr upcall");
+    pan_timer_print(ordr_out, "out  ordr upcall");
+    pan_timer_print(buffered_upcall, "buff ordr upcall");
+    pan_timer_print(mcast_rcve_home_latency, "home msg upcall");
+    pan_timer_print(mcast_rcve_out_latency, "out  msg upcall");
+
+    pan_timer_clear(ordr_home);
+    pan_timer_clear(ordr_out);
+    pan_timer_clear(mcast_rcve_home_latency);
+    pan_timer_clear(mcast_rcve_out_latency);
+    pan_timer_clear(buffered_upcall);
+
+    n = pan_tick_buf_clear(pan_mcast_state.ord_buf, pan_msg_clear);
+				STATDISCARD_CLEANUP(DX_ORD_B, n);
+}
+
+
+#endif

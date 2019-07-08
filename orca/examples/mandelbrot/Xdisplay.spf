@@ -1,0 +1,63 @@
+MODULE SPECIFICATION Xdisplay;
+#
+# File:		Xdisplay.spf
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	front end for a (C based) graphics display module. 
+#
+#		SEE ALSO: the C-based xdisplay modules
+
+FROM Job IMPORT store_t;
+IMPORT JobQueue;
+IMPORT Request;
+
+# C to Orca callbacks
+# ===================
+#
+# The names:
+#     XDISPLAY_DRAWCALLBACK(), and
+#     XDISPLAY_REQUESTCALLBACK() 
+# as used below, denote functions in your Orca program, which will 
+# be called back by the graphics module.
+#
+# You should #define them in the "orca_link.h" file with names
+# of the format "f_MODULE__FUNCTION", in which:
+# MODULE == name of the module in which appears your callback function. 
+# FUNCTION == name of your callback function. 
+#
+
+FUNCTION create(n_colors, n_reserved, width, height, n_cpus : IN integer;
+		queue: SHARED JobQueue; request: SHARED Request);
+	# create an X display, using (n_colors-nreserved colors),
+	# colors, with dimensions 'width x height'.
+	#
+	# the display module, after having created the window, will
+	# do the callback: XDISPLAY_DRAWCALLBACK(queue) 
+
+FUNCTION draw(	start, size: IN integer; 
+		results: IN store_t; direct: IN integer);
+	# Dump the bytestream 'results' (every byte represents one 
+	# point), at point no. 'start' in the graphics display.  
+	# If direct /= 0, it shows directly on the screen. If not,
+	# the drawing is done in the background screen.
+	#
+	# control returns immediately after drawing is done.
+
+FUNCTION square(x, y, width, height, direct : IN integer);
+	# Draw a filled rectangle of dimensions 'width x height' at
+	# point (x,y) in the graphics display. 
+	# If direct /= 0, it shows directly on the screen. If not,
+	# the drawing is done in the background screen.
+	#
+	# control returns immediately after drawing is done.
+
+FUNCTION swap();
+	# swaps ths background screen to the foreground and vice versa.
+	#
+	# control returns immediately after drawing is done.
+
+FUNCTION ready(time: IN integer);
+	# enables all buttons in the graphics display.
+	#
+	# control returns when the user selects one of those buttons,
+	# with a callback to: XDISPLAY_REQUESTCALLBACK(request, x, y, w, h).
+END;

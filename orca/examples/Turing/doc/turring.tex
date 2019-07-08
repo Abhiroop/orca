@@ -1,0 +1,92 @@
+\section{The Turing Ring}
+\label{sTuringRing}
+In 1952, Alan Turing wrote a paper in which he formulated a model
+for describing the interaction of two chemicals in a ring of cells
+\cite{Tur52}. His
+work was later generalised by others to include many different kinds of
+reaction-migration systems and is now of importance in many branches
+of science, such as ecology \cite{Smith91}, epidemiology
+\cite{Moll77} and petroleum engineering \cite{Whee88}.
+
+Turing's model can be described as a spatial system in
+which reactants interact within locations and migrate between the
+locations. It can thus represent populations of predators and prey in
+a series of habitats.
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{introduction.eps}
+\caption{The Turing Ring}
+\label{fTuringRing}
+\end{figure}
+
+Turing used the following differential equations to model the
+interactions of reactants and the migration to neighbouring cells.  Let
+$X_i$ and $Y_i$ (where $i = 1, \ldots , n$) be the concentration of
+reactants (or population of predators/prey) in each cell $i$ in a
+ring-shaped world of size $n$ and let $\mu$ and $\nu$ be the migration
+rates between neighbouring cells for $X$ and $Y$ respectively. Then
+\begin{eqnarray}
+	\frac{dX_i}{dt} & = & f(X_i, Y_i) + \mu(X_{i-1} -
+		2X_i + X_{i+1}) \label{migrX} \\
+	\frac{dY_i}{dt} & = & g(X_i, Y_i) + \nu(Y_{i-1} -
+		2Y_i + Y_{i+1}) \label{migrY}
+\end{eqnarray}
+where $f(X, Y)$ and $g(X, Y)$ can be expressed as:
+\begin{eqnarray}
+	f(X, Y) & = & X(r_X + a_XX + b_XY) \\
+	g(X, Y) & = & Y(r_Y + a_YX + b_YY)
+\end{eqnarray}
+Note that $i$ is `wraparound':  location $1$ borders location $n$.  By
+using different values for the coefficients
+$r_{\{X, Y\}}$, $a_{\{X, Y\}}$ and $b_{\{X, Y\}}$
+different systems can be obtained, which for example 
+can be used to describe
+Volterra prey/predator systems or to model the mixing of water and oil
+in porous rock, and the resulting flow through rock structure.
+
+In this work, a predator/prey system in a ring-shaped world is
+described; the system can be visualised as a model for a series of
+locations around a
+lake, in which foxes and rabbits live. Using this image, the equations
+can be explained as follows.
+
+$X$ denotes the predator population and $Y$ the prey population. The
+migration rate $\mu$ ($\nu$) determines how many predators (prey) from
+neighbouring locations migrate to location $i$, and how many predators
+(prey) move to the locations $i + 1$ and $i - 1$.
+
+$f(X, Y)$ and $g(X, Y)$ are the generation functions of the predators
+and prey. For $f(X, Y)$, $r_X$ is the constant death rate, which denotes
+how many predators die of age. $a_X$ determines how many predators die
+of overpopulation. $b_X$ determines the birth rate, which depends further on
+the prey population (which represents the food situation).
+
+In $g(X,Y)$, $r_Y$ is the constant death rate for prey, as for
+predators above. $a_Y$ determines the number of prey killed by
+predators. $b_Y$ determines the birth rate, which increases if the
+number of prey increases.
+
+To calculate the evolution of the system with a computer the
+differential equations are discretised. Iterations
+over the populations of the locations are performed in small time
+steps (typically $10^{-4}$). The populations of
+the locations are updated probabilistically, i.e.\ the system decides
+randomly whether each predator or prey gives birth, dies or migrates. If
+the time step chosen is small enough this linear system nears the
+behaviour of the equations above.
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{population.eps}
+\caption{Typical behaviour for predator/prey systems}
+\label{fTypical}
+\end{figure}
+
+The system described above is chaotic. An expected typical behaviour
+is depicted in Figure \ref{fTypical}. However, a very small change in the
+coefficients can cause a large difference in the outcome. Therefore it is
+possible that the populations of cells differ by large numbers.
+Furthermore, parameters for the system which yield sensible results are
+very hard to find.
+

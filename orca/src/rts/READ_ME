@@ -1,0 +1,14 @@
+This directory contains the sources of the various Orca runtime systems.
+Some parts are system-independent:
+
+IO		Implementation of the InOut module.
+
+dataman		The data management part. Also contains the marshalling
+		code, which assumes (for now) a homogeneous system.
+
+misc		Routines for which no other logical place was created.
+
+std		Orca standard modules/objects.
+
+The system-dependent part resides in the directory "system", with a
+sub-directory for each system.

@@ -1,0 +1,323 @@
+#-----------------------------------------------#
+# Author : E.J.J. de Waal			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION AwariWorker;
+
+
+# FROM tracetypes IMPORT backdone;
+FROM	AwariTypes		IMPORT	PitsPerBoard, GoedelNr, Configuration,
+					ManyStones, EmptySlot,
+					ConfigUnit,
+					GTV;
+FROM	DataBaseTypes		IMPORT	DataBaseObject, AdresTable;
+FROM	InOut			IMPORT	Flush;
+FROM	ForwardRA		IMPORT	Forward;
+FROM	BackwardRA		IMPORT	Backward;
+FROM	RetrogradeAnalysis	IMPORT	Set_Remaining_Configurations_To_Draw;
+
+				IMPORT	SyncObject;
+				IMPORT	DBMetaDataObject;
+				IMPORT	ConverterObject;
+				IMPORT	ElectionObject;
+				IMPORT  buffer;
+				IMPORT  barrier;
+				IMPORT  terminate;
+				IMPORT IntObject;
+				IMPORT stat;
+				IMPORT DataBasePartObject;
+FROM buffer IMPORT buffers, buftype;
+
+FROM	Time			IMPORT	Sleep;
+
+#FROM Cluster    IMPORT  Cluster_Analysis;
+
+# MODULE backmod = NEW trace_gen(backdone, "backwards done", "%d", 6000);
+
+#
+# Synchronize with the other workers. Let then know you are done
+# and wait until every worker has done so.
+#
+FUNCTION sync(b: SHARED SyncObject);
+BEGIN
+    b$done();
+    b$ack();
+END;
+
+
+
+FUNCTION DetermineNrStones(conf: IN Configuration): integer;
+
+	nr_stones: integer;
+BEGIN
+    nr_stones := 0;
+    FOR i IN 1..PitsPerBoard
+    DO
+	nr_stones +:= conf[i].contents;
+    OD;
+    RETURN (nr_stones);
+END;
+
+
+
+#
+# MakeCpuTable calculates for each database object the begin and end
+# adres. This way each database object knows which adres to start and
+# to end with.
+
+FUNCTION MakeCpuTable(nr_configs: IN longint; 
+		      size: IN integer; 
+		      nr_dbpart_objects: IN integer; 
+		      cpu_table: OUT AdresTable[0..(nr_dbpart_objects-1)];
+		      converter: IN ConverterObject);
+
+    # vars needed to calculate the number of configuration there are in one DB part.
+	avg, rest: integer;
+
+    # vars needed for begin and end adresses.
+	begin: GoedelNr;
+	end: GoedelNr;
+	goedel_code: GoedelNr;
+	new_goedel_code: GoedelNr;
+
+    # miscellaneous variables.
+	found: boolean;
+	nr_stones: integer;
+	conf: Configuration;
+
+BEGIN
+    ASSERT(nr_dbpart_objects <= NCPUS());
+    avg := nr_configs / nr_dbpart_objects;
+    rest := nr_configs - (nr_dbpart_objects * avg);
+
+    end := -1;
+    new_goedel_code := -1;
+
+    FOR i IN 0..(nr_dbpart_objects-1)
+    DO
+	begin := end + 1;
+	end := (begin + avg - 1);
+	IF i < rest THEN
+		end +:= 1;
+	FI;
+	IF i = nr_dbpart_objects-1 THEN ASSERT(end = nr_configs-1); FI;
+
+	cpu_table[i].begin_adres := 0;	# !! random distribution now
+	cpu_table[i].end_adres := end - begin;
+
+	# WriteLine("cpu ", i, ": ", begin, " - ", end);
+    OD;
+    #WriteLine("cpu table");
+    #FOR i IN 0..(nr_dbpart_objects-1) DO
+#	WriteLine("begin= ", cpu_table[i].begin_adres,
+#		  "  end = ", cpu_table[i].end_adres,
+#		  "  begprev = ", cpu_table[i].begin_previous_dbp,
+#		  "  endprev ", cpu_table[i].end_previous_dbp);
+#    OD;
+
+END;
+
+PROCESS LoadMonitor(bufs: SHARED buffers; nworkers: integer);
+	load: integer;
+BEGIN
+	WriteLine("LOAD INFO");
+	FOR i IN 0 .. nworkers-1 DO Write(i, "	"); OD;
+	WriteLine();
+	DO
+		FOR i IN  0 .. nworkers - 1 DO
+			IF NOT bufs[i]$GetLoad(load) THEN RETURN; FI;
+			Write(load, "	");
+		OD;
+		WriteLine();
+		Sleep(1,0);
+	OD;
+END;
+
+# The communication thread repeatedly copies data from the output buffer
+# of the current process ('me') to the input buffer of the destination process
+
+PROCESS CommunicationThread(bufs: SHARED buffers; me: integer; go: SHARED IntObject);
+	g: GoedelNr;
+	value: GTV;
+	cpu: integer;
+	msgs: buftype;
+	cnt: integer;
+	ok: boolean;
+	myload: integer;
+BEGIN
+	cnt := 0;
+	# WHILE bufs[me]$OutSingleGet(g, value, cpu) DO
+	WHILE bufs[me]$TryOutGet(msgs, cpu, ok, myload) DO
+		  IF ok THEN
+			  # used to be a race condition here .... fixed by CheckOutEmpty
+			bufs[cpu]$InPut(msgs, me, myload);
+			# bufs[cpu]$InSinglePut(g, value);
+			bufs[me]$CheckOutEmpty();
+			  # this is to make sure the worker will not enter the
+			  # termination phase while the CT still has to send out
+			  # updates to other cpus.
+			cnt +:= 1;
+			#WriteLine("cpu ", MYCPU(), " sent msg");
+		  ELSE
+			#WriteLine("cpu ", MYCPU(), " waits");
+			go$AwaitValue(1);
+			#WriteLine("cpu ", MYCPU(), " continues");
+			go$assign(0);
+		  FI;
+	OD;
+	# WriteLine("Communication thread ", me, " terminates, sent ", cnt,
+	#		" messages");
+END;
+
+
+FUNCTION WriteAscii(cpu, ncpus, low, high: integer;
+		    db: SHARED DataBasePartObject);
+	configunit: ConfigUnit;
+	g: GoedelNr;
+BEGIN
+	g := cpu;
+	FOR i IN low .. high DO
+		db$Get_DBPart_Element(i, configunit);
+		WriteLine(">" , g, " ", configunit.gtv);
+		g +:= ncpus;
+	OD;
+END;
+		
+#
+# In process AwariWorker, all the 'real' work is done.
+ 
+#PROCESS AwariWorker(awari_database: SHARED DataBaseObject;
+PROCESS AwariWorker(awari_database: DataBaseObject;
+		    meta_data:	    SHARED DBMetaDataObject;
+		    synchronizer:   SHARED SyncObject;
+		    poll_station:   SHARED ElectionObject;
+		    bufs:	    SHARED buffer.buffers;
+		    term:	    SHARED terminate;
+		    bar:	    SHARED barrier);
+		    
+	go: IntObject;
+    # needed data structures
+	cpu_table: AdresTable[0..(NCPUS()-1)];
+	converter: ConverterObject;
+
+    # vars for various usefull things
+	nr_stones: integer;
+	nr_configs: longint;
+	nr_dbp_objects: integer;
+	input_filename: string;
+	output_filename: string;
+
+    # vars which indicate the begin and end goedelnumber of the DB
+	begin_adres: GoedelNr;
+	end_adres: GoedelNr;
+
+    # vars needed to synchronize the voting protocol.
+	round: integer;
+	vote_result: boolean;
+	unattainable: integer;
+
+	pass_nr :longint;
+	# backrec: backdone;
+
+	totwaiting: integer;	# total waiting time
+	totwaitforinput: integer;	# waiting time for input
+
+BEGIN
+    totwaiting := 0;
+    totwaitforinput := 0;
+    pass_nr := 1;
+    meta_data$Get_DB_Size(nr_stones);
+    converter$Init((ManyStones + PitsPerBoard), ManyStones);
+    converter$Set_Size(nr_stones);
+    meta_data$Get_DB_MetaData(nr_configs, nr_dbp_objects);
+    #converter$Init((ManyStones + PitsPerBoard), ManyStones, nr_configs);
+    meta_data$Get_IO_Filenames(input_filename, output_filename);
+
+    MakeCpuTable(nr_configs, nr_stones, nr_dbp_objects, cpu_table, converter);
+
+    begin_adres := cpu_table[MYCPU()].begin_adres;
+    end_adres := cpu_table[MYCPU()].end_adres;
+
+
+	# Initialise the database [part]
+    awari_database[MYCPU()]$InitDataBasePart(nr_stones, begin_adres, end_adres);
+
+	# Wait until all workers are ready initializing
+    sync(synchronizer);
+
+	# Wait for your turn to read the previous DB
+    synchronizer$AwaitTurn(MYCPU());
+
+	# Give the turn to the following worker
+    synchronizer$TurnInc();
+    sync(synchronizer);
+
+	# Starting single Forkward Retrograde Analysis pass 
+    Forward(awari_database, meta_data, converter, cpu_table, nr_dbp_objects);
+
+	# Wait until every worker has finished the forward pass
+    sync(synchronizer);
+
+	# Starting Backward Retrograde Analysis pass 
+
+    # create local communication thread
+    go$assign(0);
+    FORK CommunicationThread(bufs, MYCPU(), go);
+
+    # test: start another one!
+    #FORK CommunicationThread(bufs, MYCPU());
+
+    # IF MYCPU() = 0 THEN FORK LoadMonitor(bufs, nr_dbp_objects); FI;
+
+    REPEAT
+	unattainable := meta_data$Get_Unattainable();
+	awari_database[MYCPU()]$SetDBPartNotReady();
+	awari_database[MYCPU()]$CopyUnattainable(unattainable);
+	round := 1;
+	IF MYCPU() = 0 THEN WriteLine("UNATTAINABLE = ", unattainable); FI;
+
+        awari_database[MYCPU()]$SetDBPartReady();
+        Backward(awari_database, meta_data, converter, cpu_table,
+	    	bufs, term, bar, go,
+		nr_dbp_objects,	# Add RFHH
+		totwaiting, totwaitforinput);
+
+	sync(synchronizer);
+	synchronizer$WaitForUnattainable(unattainable + 1);
+
+ 	#WriteLine("CPU ", MYCPU(), ", passes:", pass_nr, " round:", round);Flush();
+    UNTIL ((unattainable + 1) = nr_stones);
+    # backmod.event(backrec);
+# 	 WriteLine("CPU ", MYCPU(), ", polling time:", totwaiting,
+#	 ", wait for input:", totwaitforinput); Flush();
+#	 stat.PrintStat(MYCPU());
+
+	# Set remaining configurations to draw 
+    Set_Remaining_Configurations_To_Draw(awari_database, meta_data, converter, cpu_table);
+
+	# Tell communication thread to call it a day
+	bufs[MYCPU()]$TerminateCommunicationThread();
+	go$assign(1);
+#	bufs[MYCPU()]$PrintStatistics();
+	# Wait until every worker is ready
+    sync(synchronizer);
+
+	# Wait for your turn to write the new DB
+    synchronizer$AwaitTurn(MYCPU());
+
+	# time to write this worker's part
+    IF output_filename /= "/dev/null" THEN
+	awari_database[MYCPU()]$WriteDBPToDisk(output_filename, MYCPU(), nr_stones<=17);
+    FI;
+    #WriteAscii(MYCPU(), NCPUS(), begin_adres, end_adres, awari_database[MYCPU()]);
+
+	# Give the turn to the following worker
+    synchronizer$TurnInc();
+    sync(synchronizer);
+END;
+
+
+
+END; # AwariWorker

@@ -1,0 +1,34 @@
+# The module Keys contains functions for key handling.
+
+MODULE IMPLEMENTATION Keys;
+
+FROM Types IMPORT DataRecord,MatrixType;
+
+FROM Const IMPORT WHITE,BLACK,HSIZE,VSIZE,PAWN,KING;
+	   IMPORT Random;
+
+	# The function InitMatrix() fills a matrix with random numbers by 
+	# calling the C-routine random(). The matrix contains an entry for
+	# every possible piece on any board field.
+	FUNCTION InitMatrix(matrix : SHARED MatrixType);
+		r: Random;
+	BEGIN
+		r$init(12347);
+		FOR a IN WHITE .. BLACK DO
+		  FOR b IN 0 .. HSIZE * VSIZE - 1 DO
+		    FOR c IN PAWN .. KING DO
+		      matrix[a][b][c] := r$val();
+		    OD;
+		  OD;
+		OD;
+	END;
+
+	# The function NewKey() returns the exclusive or of the previous key
+	# and the value of the appropriate matrix entry.
+	FUNCTION NewKey(dr : SHARED DataRecord; color : integer;
+			field : integer; piece : integer) : integer;
+	BEGIN
+		RETURN (dr.key ^ dr.matrix[color][field][piece & 7]) & 7FFFFFFFH;
+	END;
+
+END;

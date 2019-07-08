@@ -1,0 +1,27 @@
+OBJECT SPECIFICATION CommunicationObject;
+
+	FROM TspTypes IMPORT ProcessorStatusType;
+
+	OPERATION StopProducer ();
+	OPERATION ProducerWait ();
+	OPERATION ProducerRecommence ();
+	OPERATION ProducerStarted ();
+	OPERATION ProducerDone ();
+	OPERATION ProducerStatus () : ProcessorStatusType;
+	OPERATION JobsProduced () : integer;
+	OPERATION JobProduced ();
+#	OPERATION SetJobLevel (l : integer);
+#	OPERATION JobLevel () : integer;
+	
+	OPERATION StopEval ();
+	OPERATION EvalStarted ();
+	OPERATION EvalDone ();
+	OPERATION EvalStatus () : ProcessorStatusType;
+	OPERATION JobsEvaluated () : integer;
+	OPERATION JobEvaluated ();
+#	OPERATION JobsPursued () : integer;
+#	OPERATION JobPursued ();
+
+
+
+END;

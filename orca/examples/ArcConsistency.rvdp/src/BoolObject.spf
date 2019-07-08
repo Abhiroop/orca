@@ -1,0 +1,4 @@
+OBJECT SPECIFICATION BoolObject; 
+  OPERATION assign(v : boolean);
+  OPERATION test() : boolean;
+END;

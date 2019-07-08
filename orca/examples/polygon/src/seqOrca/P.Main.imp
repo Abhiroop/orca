@@ -1,0 +1,374 @@
+ ###############################################################################
+ ######  Main.imp  :  serialBetterLOSDOverlay                             ######
+ ###                                                                         ###
+
+MODULE IMPLEMENTATION Main;
+
+
+ ##-----------------------------------------------------------------------------
+ ## Imports:
+ ##-----------------------------------------------------------------------------
+
+FROM Finish IMPORT
+    Finish
+;
+FROM InOut IMPORT
+    CloseInput,
+    CloseOutput,
+    Flush,
+    OpenInputFile,
+    OpenOutputFile,
+    ReadInt,
+    ReadString,
+    WriteInt,
+    WriteString,
+    WriteLn
+;
+FROM Time IMPORT
+   SysMilli
+;
+
+FROM BoxModule IMPORT
+    Box,
+    isEqualBox,
+    noMoreBoxSurface,
+#define noMoreBoxSurface(box)	(box.surface <= 0)
+    readBox,
+    overlayBoxes,
+    substractBoxSurface
+;
+FROM BoxListModule IMPORT
+    BoxList,
+    BoxListNode,
+    addToBoxList,
+    delFirstBoxFromList,
+    delNextBoxFromList,
+    isEmptyBoxList,
+    length,
+    swapBoxList
+;
+
+#ifndef NO_OUTPUT
+   FROM BoxModule IMPORT
+       writeBox
+   ;
+#endif
+
+ ##-----------------------------------------------------------------------------
+ ## Functions local to module Main:
+ ##-----------------------------------------------------------------------------
+
+FUNCTION getInputValues(
+    aFile:      OUT string; # Name of the aFile to be read from stdin.
+    bFile:      OUT string; # Name of the bFile to be read from stdin.
+    resultFile: OUT string; # Name resultFile to be read from stdin.
+    mainBox:    OUT Box;    # Contains the outer box sizes.
+    tries:      OUT integer # Number of repetetions.
+);
+
+FUNCTION allocMBytesOnTheHeep(
+    reserveMBytes: integer # Number of Mega Bytes to reserve on local heep.
+);
+
+FUNCTION readList(
+    fileName: IN string;  # File to get the boxes from.
+    list:     OUT BoxList # Contains the read boxes whithout the outer box.
+);
+
+FUNCTION qSortBoxListCorner1X(
+    list:   SHARED BoxList; # List to sort.
+    head:   IN BoxListNode; # Head of the list to sort.
+    length: IN integer      # Length of the list to sort.
+);
+
+FUNCTION writeOverlays(
+    checkBox: IN Box;        # To get overlays whith.
+    aList:    SHARED BoxList # Contains posible overlay boxes.
+);
+
+ ##-----------------------------------------------------------------------------
+ ## OrcaMain()
+ ##-----------------------------------------------------------------------------
+
+PROCESS OrcaMain(
+);
+    aFile:         string;  # File name.
+    aList:         BoxList; # Boxes from "aFile".
+    bFile:         string;  # File name.
+    bList:         BoxList; # Boxes from "bFile".
+    mainBox:       Box;     # Contains the outer box.
+    resultFile:    string;  # Name of file where to write results to.
+    time:          integer; # To keep track of duration.
+    timeAfterRead: integer; # To keep track of read duration.
+    timeAfterSort: integer; # To keep track of sort duration.
+    tries:         integer; # Number of repetions.
+#   ifdef ONCE_INPUT
+        aFileList: BoxList; # Boxes from "aFile" to use each try.
+        bFileList: BoxList; # Boxes from "bFile" to use each try.
+#   else
+#   endif
+BEGIN
+    getInputValues(aFile, bFile, resultFile, mainBox, tries);
+
+#   ifdef ONCE_INPUT
+        readList(aFile, aFileList);
+        readList(bFile, bFileList);
+#   endif
+
+     ## Do work 'tries' time.
+     FOR t IN 1 .. tries DO
+        time := SysMilli();
+
+#       ifdef ONCE_INPUT
+            aList := aFileList;
+            bList := bFileList;
+#       else
+            readList(aFile, aList);
+            readList(bFile, bList);
+#       endif
+        timeAfterRead := SysMilli() - time;
+
+        qSortBoxListCorner1X(aList, aList.head, length(aList));
+        qSortBoxListCorner1X(bList, bList.head, length(bList));
+
+        timeAfterSort := SysMilli() - time;
+
+#       ifndef NO_OUTPUT
+            IF OpenOutputFile(resultFile) THEN
+                writeBox(mainBox);    # Write the surounding box.
+            ELSE
+                WriteString("Can't open file '");
+                WriteString(resultFile);
+                WriteString("'");
+                WriteLn();
+                Finish();
+            FI;
+#       endif
+
+        ## Find all overlays.
+        WHILE NOT isEmptyBoxList(bList) DO
+	    writeOverlays(bList[bList.head].box, aList);
+	    delFirstBoxFromList(bList);
+        OD;
+
+#       ifndef NO_OUTPUT
+            CloseOutput();
+#       endif
+
+        ## Print elapsed time.
+        time := SysMilli() - time;
+        WriteString("total time = "); WriteInt(time);
+        WriteString(" = read:"); WriteInt(timeAfterRead);
+        WriteString(" + sort:"); WriteInt(timeAfterSort - timeAfterRead);
+        WriteString(" + calc:"); WriteInt(time - timeAfterSort);
+        WriteString("(ms)"); WriteLn();
+    OD;
+
+    Flush();
+    Finish();
+END; # OrcaMain
+
+ ##-----------------------------------------------------------------------------
+ ## getInputValues()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION getInputValues(
+    aFile:      OUT string; # Name of the aFile to be read from stdin.
+    bFile:      OUT string; # Name of the bFile to be read from stdin.
+    resultFile: OUT string; # Name resultFile to be read from stdin.
+    mainBox:    OUT Box;    # Contains the outer box sizes.
+    tries:      OUT integer # Number of repetetions.
+);
+    reserveMBytes: integer; # To reserve space on the master.
+    testBox:       Box;     # To test against mainBox.
+BEGIN
+    ReadString(aFile);
+    ReadString(bFile);
+    ReadString(resultFile);
+    ReadInt(reserveMBytes);
+    ReadInt(tries);
+
+    IF OpenInputFile(aFile) THEN
+	IF NOT readBox(mainBox) THEN
+	    WriteString("Read error whilst reading file '");
+	    WriteString(aFile); WriteString("'"); WriteLn();
+	    Finish();
+	FI;
+	CloseInput();
+    ELSE
+	WriteString("Can't open file '");
+	WriteString(aFile); WriteString("'"); WriteLn();
+        Finish();
+    FI;
+
+    IF OpenInputFile(bFile) THEN
+	IF NOT readBox(testBox) THEN
+	    WriteString("Read error whilst reading file '");
+	    WriteString(bFile); WriteString("'"); WriteLn();
+	    Finish();
+	FI;
+	CloseInput();
+	IF NOT isEqualBox(mainBox, testBox) THEN
+	    WriteString("Files '"); WriteString(aFile);
+	    WriteString("' and '"); WriteString(bFile);
+	    WriteString("' have different surounding boxes!"); WriteLn();
+            Finish();
+	FI;
+    ELSE
+	WriteString("Can't open file '");
+	WriteString(bFile);
+	WriteString("'");
+	WriteLn();
+        Finish();
+    FI;
+
+    IF NOT OpenOutputFile(resultFile) THEN
+        WriteString("Can't open file '");
+        WriteString(resultFile);
+        WriteString("'");
+        WriteLn();
+        Finish();
+    ELSE
+        CloseOutput();
+    FI;
+
+    ## As Amoeba is not able to allocate all the memory if you try to get it
+    ##  bit by bit you have to get it in large chunks or all at ones (like
+    ##  this: ).
+    allocMBytesOnTheHeep(reserveMBytes);
+
+END; # getInputValues()
+
+ ##-----------------------------------------------------------------------------
+ ## allocMBytesOnTheHeep()
+ ##-----------------------------------------------------------------------------
+ 
+FUNCTION allocMBytesOnTheHeep(
+    reserveMBytes: integer # Number of Mega Bytes to reserve on local heep.
+);
+    fakeArray: ARRAY[integer 1..((reserveMBytes * 1048576) / 4)] OF integer;
+BEGIN
+END; # allocMBytesOnTheHeep()
+
+ ##-----------------------------------------------------------------------------
+ ## readList()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION readList(
+    fileName: IN string;  # File to get the boxes from.
+    list:     OUT BoxList # Contains the read boxes whithout the outer box.
+);
+    box:    Box;     # Box that has been read and is put in the list.
+    ignore: boolean; # To ignor useless information about the ability to read.
+BEGIN
+    IF OpenInputFile(fileName) THEN
+        ignore := readBox(box); # Don't include the outer box.
+
+	WHILE readBox(box) DO
+	    addToBoxList(list, box);
+	OD;
+    FI;
+END; # readList()
+
+ ##-----------------------------------------------------------------------------
+ ## qSortBoxListCorner1X()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION qSortBoxListCorner1X(
+    list:   SHARED BoxList; # List to sort.
+    head:   IN BoxListNode; # Head of the list to sort.
+    length: IN integer      # Length of the list to sort.
+);
+    last: BoxListNode; # To keep track of the last element of the 1st sublist.
+    n:    integer;     # The length of the 1st sublist.
+    p:    BoxListNode; # Walks trough the whole list.
+BEGIN
+    WHILE true DO    # Inline tail recursion by hand!
+        IF length <= 1 THEN
+            RETURN;
+        FI;
+
+        last := head;
+        p := list[last].next;
+        n := 1;
+        FOR i IN (1) .. (length-1) DO
+            IF    (list[p].box.corner1.x < list[head].box.corner1.x)
+	       OR (    (list[p].box.corner1.x = list[head].box.corner1.x)
+		    AND (list[p].box.corner1.y < list[head].box.corner1.y)
+		  )
+	    THEN
+                last := list[last].next;
+                n +:= 1;
+                swapBoxList(list, p, last);
+            FI;
+            p := list[p].next;
+        OD;
+        swapBoxList(list, last, head);  # 'compair-item' is now on it's place.
+        last := list[last].next;        # And doesn't has to be sorted anymore.
+
+        ## Instead of doing the next calls
+        ##  qSortBoxListCorner1X(list, head, n - 1);
+        ##  qSortBoxListCorner1X(list, last, length - n);
+        ## do the folowing: (which eliminates tail recursion and recursion on
+        ##                   on sorted list-parts.)
+        IF n-1 <= 1 THEN
+           ## qSortBoxListCorner1X(list, last, length - n);
+           head := last;
+           length := length - n;
+        ELSIF length-n <= 1 THEN
+           ## qSortBoxListCorner1X(list, head, n - 1);
+           length := n - 1;
+        ELSE
+           qSortBoxListCorner1X(list, head, n - 1);
+           ## qSortBoxListCorner1X(list, last, length - n);
+           head := last;
+           length := length - n;
+        FI;
+    OD;
+END; # qSortBoxListCorner1X()
+
+ ##-----------------------------------------------------------------------------
+ ## writeOverlays()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION writeOverlays(
+    checkBox: IN Box;        # To get overlays whith.
+    aList:    SHARED BoxList # Contains posible overlay boxes.
+);
+    p:         BoxListNode; # Walks trough the aList.
+    q:         BoxListNode; # Is one step behind p to be able to delete.
+    resultBox: Box;         # Valid product of a overlay.
+BEGIN
+    p := aList.head;
+    q := NIL;
+    WHILE (NOT (p = NIL)) AND (NOT noMoreBoxSurface(checkBox)) DO
+	IF overlayBoxes(aList[p].box, checkBox, resultBox) THEN
+#           ifndef NO_OUTPUT
+	            writeBox(resultBox);
+#           endif
+	    substractBoxSurface(aList[p].box, resultBox);
+	    substractBoxSurface(checkBox, resultBox);
+	    IF noMoreBoxSurface(aList[p].box) THEN
+		delNextBoxFromList(aList, q);
+		IF q = NIL THEN
+                    p := aList.head;
+		ELSE
+		    p := aList[q].next;
+		FI;
+	    ELSE
+		q := p;
+		p := aList[p].next;
+	    FI;
+	ELSE
+	    q := p;
+	    p := aList[p].next;
+	FI;
+    OD;
+END; # writeOverlays()
+
+
+END; # Main
+
+ ###                                                                         ###
+ ######  Main.imp                                                         ######
+ ###############################################################################

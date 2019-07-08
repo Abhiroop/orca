@@ -1,0 +1,4 @@
+ASP (all-pairs shortest paths problem) finds the shortest path between
+any pair of nodes.
+
+We used a 2000-node graph for performance measurements.

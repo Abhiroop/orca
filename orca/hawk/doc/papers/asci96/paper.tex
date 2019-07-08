@@ -1,0 +1,401 @@
+\documentclass{article}
+
+\usepackage{a4}
+\usepackage{times}
+\usepackage{graphicx}
+\usepackage{epsfig}
+
+\textwidth 6.5in
+\oddsidemargin -0.2in
+
+\newcommand{\remark}[1] {}
+
+\title{Implementation of a Portable Runtime System Supporting Mixed
+Task and Data Parallelism}
+
+\author{Saniya Ben Hassen \and Tim R\"uhl \and Ceriel J.H. Jacobs}
+
+\date{}
+
+
+\begin{document}
+
+\maketitle
+
+\begin{center}
+Vrije Universiteit, Amsterdam 
+
+\{saniya,tim,ceriel\}@cs.vu.nl
+\end{center}
+
+\begin{abstract}
+  This paper describes the portable implementation of a programming
+  model based on shared objects that integrates task and data
+  parallelism. As a starting point, the implementation uses two
+  existing runtime systems: the Orca runtime system (RTS), for task
+  parallel programming, and Hawk, for data parallel programming.  To
+  achieve this portable integration, we implemented the Orca RTS and
+  Hawk on top of Panda, a virtual machine that was designed to
+  facilitate porting parallel programming systems to new
+  architectures. With the resulting system, an application program may
+  use the task parallel model of Orca and the data parallel model of
+  Hawk by calling the appropriate primitives in either the Orca RTS or
+  in Hawk.
+
+  \vspace{0.5cm}
+  \textbf{keywords:} Data Parallel Programming.  Partitioned Shared
+  Objects. Portable Runtime System. Portable Virtual Machine. Shared
+  Objects. Task Parallel Programming.
+\end{abstract}
+
+
+\section{Introduction}
+\label{sec:intro}
+
+Supporting both task and data parallelism in one programming system is
+useful, since many applications need both types of parallelism. We are
+implementing a programming model based on shared objects that supports
+both task and data parallelism~\cite{ics96}. In this model, there are
+two types of objects: \emph{shared objects}, that are either stored on
+one processor or replicated on multiple processors and
+\emph{partitioned shared objects} (partitioned objects for short), for
+which the state is distributed over multiple processors. In a parallel
+application, concurrent processes may share data, communicate, and
+synchronize by invoking objects of either type.
+
+To implement this integrated model, we start with two existing runtime
+systems (RTSs), one that supports shared objects and one that supports
+partitioned objects. Orca is a language based on shared objects for
+programming task parallel applications~\cite{bal92} and its RTS
+provides an interface for managing processes and shared objects. On
+the other hand, Hawk is a language independent RTS that implements
+partitioned objects~\cite{hicss96}. Our goal is to integrate the Orca
+RTS and Hawk into a portable RTS that allows both models to be used
+together at application level.
+
+To achieve this goal, we use Panda~\cite{bhoedjang93}, a portable
+virtual machine that was designed to facilitate porting parallel
+programming systems to new architectures. Panda provides threads,
+communication primitives, and synchronization primitives to
+programming systems. Only a small part of Panda needs to be rewritten
+to be used on a new architecture.
+
+In this paper, we describe the portable implementation of the mixed
+task and data parallel object model on top of Panda.
+Section~\ref{sec:model} presents the programming model.
+Section~\ref{sec:implem} gives a brief overview of the Orca RTS and
+Hawk. The portable implementation is described in
+section~\ref{sec:PandaImplem}. The Orca RTS and Hawk were written
+independently on top of Panda. Each required a different set of
+communication and synchronization tools for the implementation of its
+object model. With the resulting system, an application program may
+use both shared objects and partitioned objects by calling the
+appropriate primitives in the Orca RTS or in Hawk.
+Section~\ref{sec:performance} presents the performance of an
+application that uses mixed task and data parallelism.
+Section~\ref{sec:RelatedWork} discusses how other systems have
+integrated task and data parallel programming models. Finally,
+Section~\ref{sec:conclusions} provides conclusions.
+
+\pagestyle{empty}
+\thispagestyle{empty}
+
+
+\section{Programming Model}
+\label{sec:model}
+
+In our object-based parallel programming model, multiple threads of
+control (processes or tasks) can communicate and synchronize through
+operations on shared objects or partitioned objects.
+
+Shared objects are used for task parallelism. A shared object
+encapsulates a shared data structure and the operations on the data
+and is thus an instance of an Abstract Data Type (ADT). Its state is
+either stored on one processor or replicated on multiple processors.
+Processes may be created explicitly on different processors and these
+processes may communicate by calling the operations defined on shared
+objects.
+
+In contrast, partitioned objects are used for data parallelism. As in
+the shared object model, a partitioned object is an instance of an
+ADT. The state of the ADT, however, is restricted to be a
+multidimensional array that the programmer must partition using
+directives. These partitions may then be distributed arbitrarily over
+several processors.
+
+After the state of an object has been partitioned and distributed, the
+object may be invoked. An operation on an object can be either
+sequential or parallel. A sequential operation may update the entire
+state of the object sequentially. A parallel operation is executed
+according to the \emph{owner-computes rule}, i.e., each processor
+applies the operation to the partitions it owns. The RTS guarantees
+that all partitions accessed and updated are consistent.
+
+The integration of both types of objects leads to a flexible model
+that is suitable for general-purpose parallel programming. It supports
+a general process model with arbitrary interactions between processes
+and mappings to physical machines. Below, we illustrate its
+flexibility using an example application.
+
+\subsection{Fast Fourier Transform}
+\label{sec:fft}
+
+%We use the Narrow-band Tracking Radar (NTR)~\cite{dinda94} application
+%to illustrate the usage of mixed task and data parallelism. The
+%program applies a computationally expensive transformation, including
+%Fast Fourier Transform (FFT), to a stream of matrices. A master
+%process reads and stores the matrices in a shared job-queue object,
+%and a number of worker processes repeatedly fetch them from this
+%queue. Each worker (see Figure~\ref{fig:ntr}) is assigned a list of
+%processors on which it may start data parallel computations. A worker
+%first creates a partitioned object and specifies a partitioning and a
+%distribution for it that are suitable for the transformation. Whenever
+%a worker has fetched a new matrix, it stores the matrix in the object,
+%which causes the data of the matrix to be distributed to the different
+%processors. Next, the worker invokes a parallel operation on the
+%partitioned object to do the transformation in a data parallel way.
+
+To illustrate the usage of mixed task and data parallelism we apply a
+one-dimensional, unordered, radix-2 Fast Fourier Transform (FFT) to a
+stream of matrices. A producer process (see Figure~\ref{fig:fft})
+generates and stores the vectors in a shared job-queue object. A
+number of worker processes repeatedly fetch a vector from this queue.
+Each worker is assigned a set of processors on which it may perform
+data parallel computations. After the worker process has performed the
+FFT, the result is stored in an output job-queue, where it can be
+read by a consumer process.
+
+\begin{figure}
+  \begin{center}
+  \framebox[5in]{\includegraphics[scale=.8]{fft.eps}}
+  \end{center}
+\caption{\label{fig:fft} {\small \sf Data flow in the FFT benchmark program.}}
+\end{figure}
+
+
+Figure~\ref{fig:worker} shows the implementation of the worker
+process. A worker first creates a partitioned object and specifies a
+partitioning and a distribution for it that are suitable for the FFT.
+When a worker fetches a new job from the input queue, it stores the
+job in the \emph{fft} object, which causes the data to be distributed
+to the different processors. Next, the worker invokes parallel
+operations on the partitioned object to compute the phases of the FFT
+in a data parallel manner. After all phases are completed, the result
+is fetched from the partitioned object and stored in the output queue.
+
+
+%\begin{figure}
+%  \begin{center}
+%  \framebox[5in]{\includegraphics{TaskData.eps}}
+%  \end{center}
+%\caption{\label{fig:ntr} {\small \sf A program using mixed task and
+%data parallelism.}}
+%\end{figure}
+
+\begin{figure}
+  \begin{center}
+  \framebox[6.5in]{\includegraphics{Worker.eps}}
+  \end{center}
+\caption{\label{fig:worker} {\small \sf The Worker process of the FFT
+    program using mixed task and data parallelism.}}
+\end{figure}
+
+Fast Fourier transform is often used in a series of computations of a
+larger program, like the narrow-band tracking radar
+program~\cite{dinda94}. Often these kind of applications must satisfy
+real time requirements. To satisfy these requirements, we proceed in
+two steps.  During the first step, we execute the program with one
+reader and one worker and determine the number of processors we should
+allocate to each worker to satisfy the requirements. Then, during the
+second step, by increasing the number of workers, we increase the
+throughput of the program.
+
+The process that creates the worker processes determines how the
+available processors are used. For example, if 32 processors are
+available, it could create 8 worker processes and assign 4 CPUs to
+each of them for data parallel computation. The list of CPUs is passed
+as an argument to the {\em distribution} primitive (see
+Figure~\ref{fig:worker}).
+
+\section{Implementation of the Programming Model}
+\label{sec:implem}
+
+Two runtime systems are now available for either shared objects or
+partitioned objects. The Orca RTS provides all necessary primitives
+for the dynamic creation of processes and for the creation and
+invocation of single-copy or replicated objects. It requires from the
+underlying operating system several communication and synchronization
+primitives: Remote Procedure Call, Group
+Communication~\cite{kaashoek92}, and threads.
+
+Next to the Orca RTS, Hawk is a language-independent RTS that supports
+partitioned objects~\cite{hicss96}. Using the Hawk primitives, a
+program may instantiate an object by specifying the number of its
+dimensions, its size, and the operations that can be applied to it.
+Hawk also provides routines to partition an object and distribute
+partitions over several processors. Hawk requires from the underlying
+operating system a different set of communication protocols than the
+Orca RTS does. It uses collective communication in addition to Group
+Communication.
+
+In both RTSs, every invocation of an object is sent using a totally
+ordered group message to all processors. This ensures sequential
+consistency per RTS. To maintain sequential consistency in the
+combined system, a total ordering must be maintained between
+invocations on shared objects and invocations on partitioned objects.
+This is done easily by having the Orca RTS and Hawk share the same
+Group Communication channel.
+
+In order to integrate shared objects and partitioned objects into one
+model, we have implemented the Orca RTS and Hawk on top of Panda. The
+portable implementation of both systems is briefly described in the
+next section. 
+
+\section{Portable Implementation}
+\label{sec:PandaImplem}
+
+Panda provides threads, communication primitives, and synchronization
+primitives. To facilitate porting Panda, a low-level \emph{system
+interface} is defined (see Figure~\ref{fig:overview}). This system
+interface includes threads, messages, and low-level communication
+primitives. On top of this interface, a number of \emph{modules} may
+be built. To support multiple communication modules, the system layer
+provides message multiplexing and demultiplexing. Only the system
+layer of Panda needs to be rewritten to be used on a new architecture;
+high-level communication modules are architecture independent.
+
+\begin{figure*}[htbp]
+  \begin{center}
+    \leavevmode
+    \input{overview.pstex_t}
+    \caption{{\small \sf System overview.}}
+    \label{fig:overview}
+  \end{center}
+\end{figure*}
+
+We implemented the Orca RTS and Hawk on top of Panda by creating three
+independent communication modules: Group Communication, Remote
+Procedure Call, and Collective Communication.
+Figure~\ref{fig:overview} gives an overview of the resulting system.
+The Orca RTS uses Group Communication and Remote Procedure Call.
+Independently from the Orca RTS, Hawk is implemented on top of Group
+Communication and Collective Communication. Both the Orca RTS and Hawk
+use the threads provided by Panda. At the highest level, an
+application calls primitives of the Orca RTS to create and use shared
+objects and primitives of Hawk to create and use partitioned objects.
+
+The original Orca compiler has been extended to support the data
+parallel extensions. Based on the classification of an object,
+partitioned or shared, it generates code that calls either the Hawk
+RTS or the Orca RTS. The Orca application writer is unaware of the
+fact that two different RTSs are used.
+
+Since the entire system is implemented on top of Panda, it will be
+available on all systems that Panda is ported to. Currently, Panda is
+available on top of the Amoeba operating system, on Ethernet, and on
+Myrinet~\cite{Boden95-myrinet}. Furthermore, implementations exist for
+Solaris~2.4, Thinking Machines CMOS, and Parix.
+
+\section{Performance}
+\label{sec:performance}
+
+We measured the performance of the benchmark program given in
+Section~\ref{sec:fft} on a Parsytec PowerXplorer running the Parix
+operating system. In this benchmark, we measured the average latency
+of processing one FFT vector. Figure~\ref{fig:parix} shows the
+performance results on 8~processors, with different vector and cluster
+sizes.
+
+\begin{figure}
+  \begin{center}
+  \includegraphics{parix.eps}
+  \end{center}
+  \caption{\label{fig:parix} {\small \sf Average latency per FFT on
+      8~processors with different cluster sizes.}}
+\end{figure}
+
+The performance degradation from a cluster with 1~processor to a
+multiple-processor cluster is due to communication overhead. The
+compiler and run-time analyses are not able to detect the
+communication patterns precisely, and therefore each phase (see
+Figure~\ref{fig:worker}) will involve communication. We are working on
+an interface that allows the programmer to pass more precise data
+dependency information to the RTS.
+
+Multiple clusters executing concurrently on different processor sets
+influence each other. The input and output job-queues, for example,
+are sequential bottlenecks. Also, communication within a cluster
+causes network contention on some architectures. Finally, all
+operations on partitioned objects are sequentially consistent. The
+totally ordered group communication module that is used to guarantee
+this semantics uses a centralized sequencer.
+
+%\begin{figure}
+%  \begin{center}
+%  \framebox[6in]{\includegraphics[scale=.8]{taskdata.eps}}
+%  \end{center}
+%\caption{\label{fig:taskdata} {\small \sf Comparing task and data parallelism.}}
+%\end{figure}
+
+
+\section{Related Work}
+\label{sec:RelatedWork}
+
+Several research groups are attempting to define suitable models that
+support mixed task and data parallelism, such as Shared Data
+Abstractions (SDAs)~\cite{chapman96}, Braid~\cite{west95},
+Fx~\cite{gross94}, and Fortran-M~\cite{foster94}. Below we will
+address the few of them that are concerned with the issue of a
+portable implementation.
+
+SDAs are an extension to the Fortran language very similar to Orca
+shared objects. SDA operations can be sequential or can be implemented
+in a data parallel way. They are used for the coordination of multiple
+tasks. The portable implementation of SDAs uses a portable
+communication library such as MPI~\cite{mpi95} and, since MPI has no
+support for threads yet, the POSIX thread standard for the
+implementation of tasks as lightweight threads.
+
+Sundaresan and Gannon describe a portable thread model for supporting
+task and data parallelism in~\cite{sundaresan95}. In their model,
+thread objects are used to support task parallelism and rope objects
+(groups of thread objects) are used to support data parallelism and
+collective communication. As described in~\cite{sundaresan95}, the
+model was implemented on top of the SGI Challenge and the Intel
+Paragon.
+
+%To our knowledge, no other systems that integrates task and data
+%parallelism has addressed the issue of portability. 
+We have chosen to use Panda as a portable platform for two reasons.
+First, the Orca RTS is already available on top of Panda.
+Consequently, to implement our model for mixed task and data
+parallelism, only Hawk needed to be written on top of Panda. Second,
+the Orca RTS and Hawk use multiple threads to implement tasks and
+parallel operations. Therefore, we needed a portable communication
+interface that also integrates threads, such as Panda. We only needed
+to extend it to provide collective communication as an independent
+module.
+
+\section{Conclusions}
+\label{sec:conclusions}
+
+The Group Communication and Remote Procedure Call modules have been
+implemented on top of the Panda system layer and the portable Orca RTS
+has been in use for the implementation of many task parallel
+applications on various platforms. A Collective Communication module
+has been added to the Panda system to support the Hawk runtime system.
+Furthermore, the Orca compiler has been extended to translate
+partitioned objects and generate calls to the corresponding RTS.
+Together, a portable programming system for mixed task and data
+parallelism is available.
+
+\section*{Acknowledgments}
+
+We like to thank Henri Bal and Raoul Bhoedjang for making valuable
+comments on draft versions of this paper.
+
+
+\bibliographystyle{unsrt}
+\bibliography{/home/saniya/bibliography/biblio,/home/saniya/bibliography/publications,/home/tim/bib/head,/home/tim/bib/comm,/home/tim/bib/tail}
+
+\end{document}

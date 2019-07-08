@@ -1,0 +1,48 @@
+OBJECT SPECIFICATION task_graph_obj;
+
+FROM ParamRes IMPORT result_t;
+
+TYPE task_graph_ptr;
+
+TYPE task_t = task_graph_ptr;
+
+FUNCTION nil_task() : task_t;
+
+FUNCTION is_nil_task(task   : task_t) : boolean;
+
+OPERATION set_result(task   : task_t;
+		     result : result_t);
+
+OPERATION set_cpu(task : task_t;
+		  cpu  : integer);
+
+OPERATION inc_wait_count(task : task_t);
+
+OPERATION set_wait_count(task : task_t;
+			 n    : integer);
+
+OPERATION child_result(task      : task_t;
+		       child_num : integer;
+		       result    : OUT result_t);
+
+OPERATION name(task : task_t) : integer;
+
+OPERATION cpu(task : task_t) : integer;
+
+OPERATION wait_count(task : task_t) : integer;
+
+OPERATION notify(task : task_t);
+
+OPERATION mkroot(task : OUT task_t; root_cpu: integer);
+
+OPERATION new(task      : OUT task_t;
+	      parent    : task_t;
+	      child_num : integer);
+
+OPERATION await(task    : task_t);
+
+OPERATION print(task : task_t);
+
+OPERATION print_all();
+
+END;

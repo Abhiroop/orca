@@ -1,0 +1,541 @@
+# The module TreeSearch contains functions for search and tree splitting.
+
+MODULE IMPLEMENTATION TreeSearch;
+
+FROM Types IMPORT DataRecord,EvalType,MoveArray,SaveType,Path,JobType,
+		  ProblemArray,ResultRecord;
+FROM MoveGen IMPORT Moves;
+FROM Eval IMPORT Threat,Evaluate;
+FROM Misc IMPORT ThinkMove,UnthinkMove,Check,Other,AddMove,AllocMove,Min,Max;
+FROM Const IMPORT MATE,TACTWIN,ANY,MAXLEVEL,FULLSRCH,MATESRCH,
+		  QUIESCEN;
+FROM Problem IMPORT TTABLE,KTABLE,QSEARCH,ITDEEP;
+FROM Board IMPORT LoadProblems,SetUp;
+FROM Keys IMPORT InitMatrix;
+
+IMPORT Jobs,TransTable,KillerTable,Stack;
+
+CONST LOWB = 0;		# Lowerbound
+CONST REAL = 1;		# Real evaluated value
+CONST UPB = 2;		# Upperbound
+
+CONST MINDEPTH = 1;		# Minimal Depth for Transposition Table
+CONST MAXDEPTH = 5;		# Limit for Iterative Deepening
+CONST MAXSPLITS = 2;		# Maximum number of job splits in search call
+CONST QDEPTH = 6;		# Quiescence Search depth
+
+	FUNCTION SlaveJob(dr : SHARED DataRecord; job : SHARED JobType;
+			  transtable : SHARED TransTable; killertable : SHARED
+			  KillerTable; jobs : SHARED Jobs;
+			  stack : SHARED Stack);
+	FUNCTION Adjust(value : EvalType; upbound : integer) : EvalType;
+	FUNCTION SortMoves(ml : SHARED MoveArray; vl : SHARED MoveArray);
+	FUNCTION KillSort(dr : SHARED DataRecord; killertable : SHARED
+			  KillerTable; level : integer;
+			  movelist : SHARED MoveArray);
+	FUNCTION ExtendSearch(dr : SHARED DataRecord; move : integer;
+			      depth : integer) : boolean;
+	FUNCTION JobManager(jobs : SHARED Jobs;
+			    method,iter,level,splits,depth : integer) : boolean;
+	FUNCTION Negate(value : SHARED EvalType);
+	FUNCTION AlphaUpdate(dr : SHARED DataRecord; killertable : SHARED 
+			     KillerTable; r,best : SHARED EvalType;
+			     alpha : SHARED integer; beta : integer;
+			     bp,sp : SHARED Path;
+			     color,move,level : integer) : boolean;
+	FUNCTION ReadStack(dr : SHARED DataRecord; killertable : SHARED 
+			   KillerTable;
+			   jobs : SHARED Jobs; stack : SHARED Stack;
+			   best : SHARED EvalType;
+			   vl : SHARED MoveArray; splits : SHARED integer;
+			   bp : SHARED Path; cutoff : SHARED boolean;
+			   signature : integer; alpha : SHARED integer;
+			   beta,color,level : integer);
+	FUNCTION QuickSort(ml : SHARED MoveArray; vl : SHARED MoveArray;
+			   lb : integer; ub : integer);
+	FUNCTION Invert(ml,vl : SHARED MoveArray; upbound : integer);
+
+	# The Slave checks the JobList for jobs and calls SlaveJob() if a job
+	# is found.
+	PROCESS Slave(problem : integer; transtable : SHARED TransTable;
+		      killertable : SHARED KillerTable;
+		      jobs : SHARED Jobs; stack : SHARED Stack);
+	  dr : DataRecord;
+	  job : JobType;
+	  reinfeld : ProblemArray;
+	BEGIN
+#		IF KTABLE THEN killertable$InitKTable(); FI;
+		LoadProblems(reinfeld);
+		IF TTABLE THEN
+		  InitMatrix(dr.matrix); dr.key := 1;
+		FI;
+		# Set up board and other variables.
+		SetUp(dr,reinfeld[problem]);
+		jobs$WaitStart();
+		jobs$AddIdle(MYCPU());		# cpu idle
+		WHILE jobs$SlaveContinue() DO
+		  IF jobs$GetJob(MYCPU(), ANY,job) THEN
+		    WriteLine("G ",MYCPU());
+		    SlaveJob(dr,job,transtable,killertable,jobs,stack);
+		    jobs$AddIdle(MYCPU());	# cpu idle
+		    WriteLine("D ",MYCPU());
+		  FI;
+		OD;
+		jobs$SlaveAck();		# inform master of termination
+		WriteLine("Ack(",MYCPU(),") done");
+	END;
+
+	# The function SlaveJob() handles a job by evaluating the subtree
+	# and pushing the results on the Result Stack.
+	FUNCTION SlaveJob(dr : SHARED DataRecord; job : SHARED JobType;
+			  transtable : SHARED TransTable; killertable : SHARED
+			  KillerTable; jobs : SHARED Jobs;
+			  stack : SHARED Stack);
+	  result : EvalType;
+	  player : integer;
+	  level : integer;
+	  kills : integer;
+	  save : ARRAY [integer 0 .. MAXLEVEL] OF SaveType;
+	  path : Path;
+	BEGIN
+	  # Fill the datarecord with the right values.
+	  level := 0; player := dr.player;
+	  dr.method := job.method;
+	  dr.signature := job.signature;
+	  dr.history := job.history;
+	  dr.mate := job.mate; dr.iter := job.iter;
+	  dr.nodes := 0; dr.transpos := 0; dr.killers := 0;
+	  kills := 0;
+	  # Update the board to the right position.
+	  WHILE job.history[level] /= 0 DO
+	    ThinkMove(dr,player,job.history[level],save[level]);
+	    player := Other(player);
+	    level +:= 1;
+	  OD;
+	  # Search the subtree.
+	  result := Search(dr,transtable,killertable,jobs,stack,job.color,
+			  job.level,job.alpha,job.beta,job.depth,job.move,path);
+	  path.len +:= 1;
+	  # Undo all moves.
+	  WHILE level > 0 DO
+	    level -:= 1;
+	    player := Other(player);
+	    UnthinkMove(dr,player,save[level]);
+	  OD;
+	  # Update the JobList if necessary and push the results on the 
+	  # Result Stack.
+	  IF result.realval <= job.alpha THEN
+	    kills := jobs$JobKill(job.signature);
+	    jobs$MurderRecur(job.signature);
+	   ELSIF result.realval < job.beta THEN
+	    jobs$JobUpdate(job.signature,result.realval);
+	  FI;
+	  stack$PushResult(ResultRecord :
+	   { job.signature,result,job.move,job.index,
+		path,dr.nodes,dr.transpos,dr.killers,kills });
+	END;
+
+	# The function Search() is the main search routine.
+	FUNCTION Search(dr : SHARED DataRecord; transtable : SHARED TransTable;
+			killertable : SHARED KillerTable;
+			jobs : SHARED Jobs; stack : SHARED Stack;
+			color : integer; level : integer;
+			alpha : integer; beta : integer;
+			depth : integer; lmove : integer;
+			bp : OUT Path) : EvalType;
+	  move,type : integer;
+	  r,best : EvalType;
+	  startalpha : integer;		# initial value of alpha
+	  searchdepth : integer;
+	  method : integer;
+	  tabledepth : integer;
+	  cutoff : boolean;
+	  index : integer;
+	  movelist,vallist : MoveArray;
+	  sp : Path;			# subtree path
+	  save : SaveType;
+	  splits : integer;		# number of tree splits
+	  splitdone : boolean;		# was the last subtree splitted ?
+	  firstsplit : boolean;		# is this the first split ?
+	  murderflag : boolean;
+	  signature,oldsig : integer;
+	  priority : integer;
+	BEGIN
+		FOR i IN LB(vallist) .. UB(vallist) DO vallist[i] := MIN(integer); OD;
+		bp.len := 0;
+		best := EvalType : { alpha,MIN(integer) };
+		splits := 0;
+		method := dr.method;
+		signature := dr.signature;
+		dr.nodes +:= 1;
+		tabledepth := depth;
+		IF alpha >= beta THEN RETURN Adjust(best,beta); FI;
+		# If the current signature is in MurderSet then stop searching.
+		IF (depth > 0) THEN
+		  IF jobs$IsVictim(signature) THEN
+		    RETURN EvalType : { 0,MIN(integer) };
+		  FI;
+		FI;
+		dr.checked := Check(dr,color);
+		# If this position is a terminal node and the current player
+		# is checked then start a quiescence search.
+		IF QSEARCH AND (depth = 0) AND (dr.method = FULLSRCH) THEN
+		  IF dr.mate AND dr.checked THEN
+		    depth := QDEPTH;
+		    dr.method := MATESRCH;
+		  FI;
+		FI;
+		# Bottom of search tree => Evaluate position.
+		IF depth = 0 THEN
+		  Evaluate(best,dr,color,level,lmove);
+		  RETURN Adjust(best,beta);
+		FI;
+		# If Transposition Table is active and depth is big enough,
+		# retrieve information about this position and update alpha.
+		IF TTABLE AND (depth >= MINDEPTH) AND
+		   transtable$Retrieve(dr.key,color,depth,r,type) THEN
+		  dr.transpos +:= 1;
+		  IF type = REAL THEN
+		    IF alpha < r.realval THEN
+		      best := EvalType : { r.realval,r.expval };
+		    FI;
+		    RETURN Adjust(best,beta);
+		  FI;
+		  IF (type = UPB) AND (alpha >= r.realval) THEN
+		    RETURN Adjust(best,beta);
+		  FI;
+		  IF (type = LOWB) AND (alpha < r.realval) THEN
+		    best := EvalType : { r.realval,r.expval };
+		    alpha := r.realval;
+		  FI;
+		  IF alpha >= beta THEN RETURN Adjust(best,beta); FI;
+		FI;
+		# Generate all possible moves.
+		Moves(dr,color,movelist,lmove);
+		startalpha := alpha;
+		IF ITDEEP AND (level = 0) THEN dr.iter := 0;
+		 ELSIF level = 0 THEN dr.iter := ((depth + 1) >> 1) - 1;
+		FI;
+		# Do Iterative Deepening until a proper result is found or
+		# MAXDEPTH is reached.
+		REPEAT
+		  cutoff := false;
+		  alpha := startalpha;
+		  IF level = 0 THEN
+		    dr.iter +:= 1;
+		    WriteLine("Iteration ",dr.iter);
+		    # Sort movelist to get aggressive moves in front.
+		    IF depth > 1 THEN
+		      SortMoves(movelist,vallist);
+		      beta -:= 1;
+		    FI;
+		  FI;
+		  # If Killer Table active and level is not top level then
+		  # look for killer moves and put them in front of movelist.
+		  IF (level > 0) AND (method /= MATESRCH) AND KTABLE THEN
+		    KillSort(dr,killertable,level,movelist);
+		  FI;
+		  index := 1; murderflag := false;
+		  firstsplit := true;
+		  # Examine all moves until a cutoff is found.
+		  WHILE (movelist[index] /= 0) AND NOT cutoff DO
+		    move := movelist[index];
+		    searchdepth := depth - 1;
+		    method := dr.method;
+		    IF depth = 1 THEN dr.threat := Threat(dr,color,move); FI;
+		    # Extend horizon if conditions are ok.
+		    IF QSEARCH AND ExtendSearch(dr,move,depth) THEN
+		      searchdepth +:= QDEPTH / 3;
+		      dr.method := QUIESCEN;
+		    FI;
+		    # Add last move to history sequence.
+		    dr.history[level] := move; dr.history[level+1] := 0;
+		    splitdone := false;
+		    # If the function JobManager() returns ok, a job is added to
+		    # the JobList and evaluated in parallel.
+		    jobs$GrabLock();
+		    IF JobManager(jobs,method,dr.iter,level,splits,
+					searchdepth) THEN
+		      IF firstsplit THEN
+			oldsig := signature;
+			# Get an unique signature.
+			dr.signature := jobs$NewSignature();
+			signature := dr.signature;
+			jobs$AddSign(oldsig,signature,level);
+			firstsplit := false;
+		      FI;
+		      # Compute job priority.
+		      priority := level * 100000 + (15000 - vallist[index]);
+		      jobs$AddJob(JobType : { priority,dr.method,
+			signature,level+1,Other(color),-beta,-alpha,
+			searchdepth,move,index,dr.history,dr.mate,dr.iter });
+		      jobs$ReleaseLock();
+		      splits +:= 1;
+		      splitdone := true;
+		      murderflag := true;
+		     ELSE
+		      # Search the subtree sequential.
+		      jobs$ReleaseLock();
+		      ThinkMove(dr,color,move,save);	# try move
+		      r := Search(dr,transtable,killertable,jobs,stack,
+		                  Other(color),level+1,-beta,-alpha,searchdepth,
+				  move,sp);
+		      sp.len +:= 1;
+		      Negate(r);
+		      # Save the threat value of the move in vallist.
+		      vallist[index] := r.expval;
+		      # Update the results.
+		      cutoff := AlphaUpdate(dr,killertable,r,best,alpha,beta,bp,
+					    sp,color,move,level);
+		      UnthinkMove(dr,color,save);	# undo move
+		    FI;
+		    # Examine stack for parallel search results.
+		    IF (splits > 0) AND NOT(splitdone) THEN
+		      ReadStack(dr,killertable,jobs,stack,best,vallist,splits,
+				bp,cutoff,signature,alpha,beta,color,level);
+		    FI;
+		    IF cutoff AND (splits > 0) THEN
+	    	      splits -:= jobs$JobKill(signature);
+	    	      jobs$MurderRecur(signature);
+		    FI;
+		    index +:= 1;
+		    dr.method := method;
+		  OD;
+		  # Examine stack until all results have been read.
+		  WHILE splits > 0 DO
+		    stack$FullStack(signature);
+		    ReadStack(dr,killertable,jobs,stack,best,vallist,splits,bp,
+		              cutoff,signature,alpha,beta,color,level);
+		  OD;
+		  # Search has terminated so remove signature from 
+		  # MurderSet if necessary.
+		  IF murderflag THEN
+			jobs$Murdered(signature);
+		  FI;
+		  IF TTABLE AND (tabledepth >= MINDEPTH) AND
+		     (dr.method = FULLSRCH) THEN
+		    # Save the results in the Transposition Table for
+		    # later use.
+		    IF (alpha <= startalpha) THEN type := UPB;
+		     ELSIF (alpha >= beta) THEN type := LOWB;
+		     ELSE type := REAL;
+		    FI;
+		    transtable$Store(dr.key,color,tabledepth,best,type);
+		  FI;
+		  IF level = 0 THEN
+		    WriteLine("Depth ",depth," gives result ",alpha);
+		  FI;
+		  depth +:= 2;
+		  IF depth > MAXDEPTH THEN depth -:= 1; FI;
+		  # If the Mate Search seems to fail, switch to Tactical Win
+		  # Search.
+		  IF (level = 0) AND dr.mate AND (best.expval < MATE - 100) AND
+		     (best.realval < MATE - 100) THEN
+		    beta := TACTWIN + 1; dr.mate := false; depth := 1;
+		    alpha := startalpha;
+		    best := EvalType : { alpha,MIN(integer) };
+		    IF TTABLE THEN transtable$InitTTable(); FI;
+		    WriteLine("Switching To Tactical Win Approach");
+		    IF ITDEEP THEN dr.iter := 0; FI;
+		  FI;
+		UNTIL NOT(ITDEEP) OR (level > 0) OR (depth > MAXDEPTH) OR
+		      (alpha >= beta);
+		IF (movelist[1] = 0) AND NOT(dr.checked) THEN
+		  best := EvalType : { 0,best.expval };
+		FI;
+		# If search method is Mate Search and the top player cannot
+		# check his opponent, then return realval = 0.
+		IF (dr.method = MATESRCH) AND (color = dr.player) AND
+		   (movelist[1] = 0) THEN
+		  best := EvalType : { 0,best.expval };
+		FI;
+		RETURN Adjust(best,beta);
+	END;
+
+	# The function Adjust() adjusts the returned value to be within the
+	# alpha,beta- bounds.
+	FUNCTION Adjust(value : EvalType; upbound : integer) : EvalType;
+	BEGIN
+		RETURN EvalType :
+			{ Min(Max(value.realval,-MATE),upbound),value.expval };
+	END;
+
+	# The function ReadStack() examines the stack for parallel search
+	# results and calls AlphaUpdate() for any necessary updates.
+	FUNCTION ReadStack(dr : SHARED DataRecord; killertable : SHARED 
+			   KillerTable;
+			   jobs : SHARED Jobs; stack : SHARED Stack;
+			   best : SHARED EvalType;
+			   vl : SHARED MoveArray; splits : SHARED integer;
+			   bp : SHARED Path; cutoff : SHARED boolean;
+			   signature : integer; alpha : SHARED integer;
+			   beta,color,level : integer);
+	  rr : ResultRecord;
+	BEGIN
+		WHILE stack$PopResult(signature,rr) DO
+		  Negate(rr.value);
+		  vl[rr.index] := rr.value.expval;
+		  IF NOT(cutoff) THEN
+		    cutoff := AlphaUpdate(dr,killertable,rr.value,best,alpha,
+			beta,bp,rr.path,color,rr.lmove,level);
+		  FI;
+		  dr.nodes +:= rr.nodes;
+		  dr.transpos +:= rr.transpos;
+		  dr.killers +:= rr.killers;
+		  splits -:= rr.kills;
+		  splits -:= 1;
+		OD;
+	END;
+
+	# The function ExtendSearch() determines whether a position is stable.
+	# If the last move was a threat- or capture move, the function returns
+	# true and the search is extended. Checking moves are automaticly 
+	# expanded in the function Search() to save a Check()-call.
+	FUNCTION ExtendSearch(dr : SHARED DataRecord; move : integer;
+			      depth : integer) : boolean;
+	BEGIN
+		RETURN (dr.method = FULLSRCH) AND
+		       (depth = 1) AND
+		       NOT(dr.mate) AND
+		       ((dr.b[(move>>3)&7][move&7] /= 0) OR (dr.threat >= 300)
+			OR ((move >> 12) & 7 /= 0));
+	END;
+
+	# The function JobManager() contains the conditions for splitting the
+	# tree.
+	FUNCTION JobManager(jobs : SHARED Jobs;
+			    method,iter,level,splits,depth : integer) : boolean;
+	BEGIN
+		RETURN (((iter <= 2) AND (depth >= MINDEPTH) AND
+			(method = FULLSRCH)) OR
+			((iter <= 2) AND (depth >= MINDEPTH + 1)) OR
+		        ((iter = 1) AND (depth >= MINDEPTH + 1)) OR
+			((iter > 2) AND (depth >= MINDEPTH + 2))) AND
+		       (method /= MATESRCH) AND
+		       ((iter = 1) OR (level /= 0) OR
+			(splits < MAXSPLITS)) AND
+		       jobs$AllowJobs();
+	END;
+
+	# The function AlphaUpdate() tests if the new found result 'r' is better
+	# than the old best result 'best'.
+	FUNCTION AlphaUpdate(dr : SHARED DataRecord; killertable : SHARED 
+			     KillerTable; r,best : SHARED EvalType;
+			     alpha : SHARED integer; beta : integer;
+			     bp,sp : SHARED Path;
+			     color,move,level : integer) : boolean;
+	  method : integer;
+	  rval : integer;
+	BEGIN
+		rval := r.realval;
+		method := dr.method;
+		# The top player prefers aggressive moves. His opponent tries
+		# to evade loss of material or mate approaches.
+		IF (color = dr.player) AND (r.expval > best.expval) THEN
+		  best.expval := r.expval;
+		FI;
+		IF (rval > alpha) OR
+		   ((rval = alpha) AND (bp.len = 0)) OR
+		   ((rval = alpha) AND (rval > 0) AND
+		    (sp.len < bp.len)) OR
+		   ((rval = alpha) AND (rval < 0) AND
+		    (sp.len > bp.len)) THEN
+		  # New best result ! Update alpha,best and bp.
+		  alpha := rval;
+		  best.realval := rval;
+		  IF (color /= dr.player) THEN best.expval := r.expval; FI;
+		  IF dr.mate THEN
+		    bp := AddMove(move,sp);
+		   ELSE IF level = 0 THEN
+			bp := AllocMove(move);
+			bp.len := sp.len;
+		   FI;
+		  FI;
+		FI;
+		IF (alpha >= beta) THEN
+		  IF KTABLE AND (level > 0) AND (method = FULLSRCH) THEN
+		    # Save the killer move in the Killer Table.
+		    killertable$AddKiller(level,move);
+		    dr.killers +:= 1;
+		  FI;
+		  RETURN true;
+		FI;
+		RETURN false;
+	END;
+
+	FUNCTION Negate(value : SHARED EvalType);
+	BEGIN
+		value := EvalType : { -value.realval,-value.expval };
+	END;
+
+	# The function SortMoves() sorts the moves on threats.
+	FUNCTION SortMoves(ml : SHARED MoveArray; vl : SHARED MoveArray);
+	  index : integer;
+	BEGIN
+		index := 1;
+		WHILE ml[index] /= 0 DO index +:= 1; OD;
+		vl[index] := MAX(integer);
+		QuickSort(ml,vl,1,index);
+		Invert(ml,vl,index - 1);
+	END;
+
+	# The function QuickSort() contains the standard quicksort-algorithme.
+	FUNCTION QuickSort(ml : SHARED MoveArray; vl : SHARED MoveArray;
+			   lb : integer; ub : integer);
+	  i,j,tmp : integer;
+	  value : integer;
+	BEGIN
+		IF lb < ub THEN
+		  value := vl[lb];
+		  i := lb; j := ub + 1;
+		  WHILE i < j DO
+		    REPEAT
+		      i +:= 1;
+		    UNTIL vl[i] >= value;
+		    REPEAT
+		      j -:= 1;
+		    UNTIL vl[j] <= value;
+		    IF i < j THEN
+		      tmp := vl[j]; vl[j] := vl[i]; vl[i] := tmp;
+		      tmp := ml[j]; ml[j] := ml[i]; ml[i] := tmp;
+		    FI;
+		  OD;
+		  tmp := vl[lb]; vl[lb] := vl[j]; vl[j] := tmp;
+		  tmp := ml[lb]; ml[lb] := ml[j]; ml[j] := tmp;
+		  QuickSort(ml,vl,lb,j - 1);
+		  QuickSort(ml,vl,j + 1,ub);
+		FI;
+	END;
+
+	# The function Invert() turns an array around.
+	FUNCTION Invert(ml,vl : SHARED MoveArray; upbound : integer);
+	  hml,hvl : MoveArray;
+	BEGIN
+		hml := ml; hvl := vl;
+		FOR index IN 1 .. upbound DO
+		  ml[index] := hml[upbound + 1 - index];
+		  vl[index] := hvl[upbound + 1 - index];
+		OD;
+	END;
+
+	# The function KillSort() puts all killer moves on front of the array.
+	FUNCTION KillSort(dr : SHARED DataRecord; killertable : SHARED
+			  KillerTable; level : integer;
+			  movelist : SHARED MoveArray);
+	  killindex,moveindex : integer;
+	  move : integer;
+	BEGIN
+		killindex := 1; moveindex := 1;
+		move := movelist[1];
+		WHILE move /= 0 DO
+		  IF killertable$TestKiller(level,move) THEN
+		    movelist[moveindex] := movelist[killindex];
+		    movelist[killindex] := move;
+		    killindex +:= 1;
+		  FI;
+		  moveindex +:= 1;
+		  move := movelist[moveindex];
+		OD;
+	END;
+
+END;

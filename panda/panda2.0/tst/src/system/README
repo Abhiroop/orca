@@ -1,0 +1,10 @@
+Tests for the panda 2.0 system interface. Since the interface layer is
+architecture independent, these tests should be portable.
+
+saw		Stop and wait protocol between 2 processors, one
+		sender and one receiver
+
+forward		Test forwarding mechanism with 3 processors, one
+		sender, one forwarder, and one receiver. The
+		receiver sends the acknowledgements.
+		

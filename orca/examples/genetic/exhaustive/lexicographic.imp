@@ -1,0 +1,82 @@
+MODULE IMPLEMENTATION lexicographic;
+
+FROM CromoVector IMPORT individual;
+FROM BoolVector IMPORT BoolVector;
+
+FUNCTION initindividual(Ind: SHARED individual; nb_nodes: integer);
+BEGIN
+	FOR i IN 0..nb_nodes/2-1 DO
+		Ind.cromozom[i] := true;
+	OD;
+	FOR i IN nb_nodes/2..nb_nodes-1 DO
+		Ind.cromozom[i] := false;
+	OD;
+END;
+
+#
+# finds the largest non-incresing right substring of cromo
+# the position of the left side of the substring is given as result
+# if pos = nb_nodes-1 the cromosome string is decreasingly ordered
+#
+FUNCTION find_substring(cromo: SHARED BoolVector; nb_nodes: integer): integer;
+	pos: integer;
+BEGIN
+	pos := -1;
+	REPEAT
+		pos +:= 1;
+	UNTIL (pos >= nb_nodes-1) OR (cromo[pos+1]<cromo[pos]);
+	RETURN pos;
+END;
+
+#
+# find the smalest element of the right substring which is greater than 
+# the one in position i+1
+#
+FUNCTION find_change(cromo: SHARED BoolVector; i: integer): integer;
+	j: integer;
+BEGIN
+	j := 0;
+	WHILE cromo[j]<= cromo[i+1] DO
+		j +:= 1;
+	OD;
+	RETURN j;
+END;
+
+#
+# interchanges the positions i and j of the chromosome cromo
+# 
+FUNCTION exchange (cromo: SHARED BoolVector; i,j: integer);
+	temp: boolean;
+BEGIN
+	temp := cromo[i];
+	cromo[i] := cromo[j];
+	cromo[j] := temp;
+END;
+
+#
+# reverse the substring of cromo, starting with position i
+#
+FUNCTION reverse_substring(cromo: SHARED BoolVector; i: integer);
+	l, r: integer;
+BEGIN
+	l := 0;
+	r := i;
+	WHILE l<r DO
+		exchange (cromo, l, r);
+		l +:= 1; r -:= 1;
+	OD;
+END;
+
+FUNCTION nextindividual(Ind: SHARED individual; nb_nodes: integer): boolean;
+	i, j: integer;
+BEGIN
+	i := find_substring(Ind.cromozom, nb_nodes);
+	IF i >= nb_nodes-1 THEN RETURN false; FI;
+	j := find_change(Ind.cromozom, i);
+	exchange (Ind.cromozom, i+1, j);
+	reverse_substring(Ind.cromozom, i);
+	RETURN true;
+END;
+
+END;
+

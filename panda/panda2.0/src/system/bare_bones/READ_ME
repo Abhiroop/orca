@@ -1,0 +1,7 @@
+A "panda" pseudo architecture.
+This achitecture is to be used be the off-line programs trc_sm, trc_convert
+and upshot, which use some features of panda:
+ - pan_malloc etc
+ - pan_panic etc
+
+Rutger Hofman

@@ -1,0 +1,44 @@
+# The module KillerTable contains operations for the Killer Table.
+
+OBJECT IMPLEMENTATION KillerTable;
+
+FROM Const IMPORT MAXLEVEL;
+FROM Types IMPORT IntSet;
+
+CONST NRKILLERS = 10;		# maximum number of killermoves per set
+
+TYPE KillerArray = ARRAY [integer] OF IntSet;
+
+	# 'killtable' is the Killer Table containing killermoves encountered
+	# during previous search.
+	killtable  : KillerArray;	# the Killer Table
+
+	# Clear the Killer Table.
+	OPERATION InitKTable();
+	  nullset : IntSet;
+	  tmp : KillerArray [1 .. MAXLEVEL];
+	BEGIN
+		killtable := tmp;
+		FOR index IN 1 .. MAXLEVEL DO
+		  killtable[index] := nullset;
+		OD;
+	END;
+
+	# Is the move a killermove ?
+	OPERATION TestKiller(level : integer; move : integer) : boolean;
+	BEGIN
+		RETURN move IN killtable[level];
+	END;
+
+	# Mark a move as killermove in the Killer Table.
+	OPERATION AddKiller(level : integer; move : integer);
+	BEGIN
+		IF move IN killtable[level] THEN RETURN; FI;
+		IF SIZE(killtable[level]) = NRKILLERS THEN
+		  # Remove a random killermove.
+		  IF FROM(killtable[level]) = 0 THEN ; FI;
+		FI;
+		INSERT(move,killtable[level]);
+	END;
+
+END;

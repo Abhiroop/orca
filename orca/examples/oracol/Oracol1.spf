@@ -1,0 +1,8 @@
+MODULE SPECIFICATION Oracol1;
+
+FROM Types IMPORT Path;
+
+	PROCESS OrcaMain();
+
+	FUNCTION PrintPath(path : Path);
+END;

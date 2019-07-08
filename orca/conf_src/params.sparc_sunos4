@@ -1,0 +1,26 @@
+# platform-dependent macros
+
+# platform
+OS		= sunos4
+PROC		= sparc
+BINSUF		= sun4
+
+# C compiler
+CC		= gcc
+EXT_FLAGS	= -O -ansi -pedantic
+LDFLAGS		= 
+
+# archiver
+AR 		= ar
+ARFLAGS		= cr
+RANLIB		= ranlib
+
+# lint
+LINT		= /usr/bin/lint
+LINTFLAGS	=
+LINTPREF	= llib-l
+LINTSUF		= ln
+LINTMKLIB	= -C$(LIBNAM)
+
+# dependency generator
+MAKEDEPEND	= /usr/bin/X11/makedepend

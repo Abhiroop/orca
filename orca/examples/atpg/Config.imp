@@ -1,0 +1,68 @@
+MODULE IMPLEMENTATION Config;
+
+	FROM InOut IMPORT OpenInputFile, CloseInput;
+	FROM AtpgTypes IMPORT CONFIG_FILE;
+
+	FUNCTION Init_Config(config:OUT Config_Rec):boolean;
+
+        # This function reads the configuration parameters and returns
+        # their values in config.
+        # These parameters indicate whether or not fault simulation should
+        # be carried out and whether testvectors found by one processor should
+        # be communicated among the other processors.
+
+	str: string;
+
+	BEGIN
+		IF OpenInputFile(CONFIG_FILE) THEN
+			Read(config.filename);
+			Read(str);
+			config.be_verbose:=(str="VERBOSE");
+			Read(str);
+			IF str="FAULT_SIMULATION" THEN
+				config.fault_sim:=true;
+				Read(str);
+				config.communicate:=(str="COMM_TESTVECTORS");
+			ELSE
+				config.fault_sim:=false;
+				config.communicate:=false;
+			FI;
+			CloseInput();
+			RETURN true;
+		ELSE
+			config.be_verbose:=false;
+			config.communicate:=false;
+			config.communicate:=false;
+			RETURN false;
+		FI;
+	END; # FUNCTION Init_Config
+				
+
+        FUNCTION Simulate(config:Config_Rec):boolean;
+
+	BEGIN
+		RETURN config.fault_sim;
+	END; # FUNCTION Simulate
+
+        
+        FUNCTION Communicate(config:Config_Rec):boolean;       
+ 
+	BEGIN
+		RETURN config.communicate;
+	END; # FUNCTION Communicate
+
+
+        FUNCTION Be_Verbose(config:Config_Rec):boolean;
+
+	BEGIN
+		RETURN config.be_verbose;
+	END; # FUNCTION Be_Verbose
+
+	FUNCTION Circuit_File(config:Config_Rec):string;
+
+	BEGIN
+		RETURN config.filename;
+	END; # FUNCTION Circuit_File
+	
+ 
+END; # MODULE IMPLEMENTATION Config

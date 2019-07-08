@@ -1,0 +1,67 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT SPECIFICATION ConverterObject;
+
+# The ConverterObject is necessary for conversion between Goedel numbers and
+# configurations, and back. This is needed in both forward and backward 
+# retrograde analysis routines, as well as during reading a database from and
+# writing a database to disk. Because speed is the most important isue, the 
+# size field of the ConverterObject keeps the size of the current database, 
+# since forward and backward need this value. For reading and writing, a 
+# different value is needed, so this value must be passed as a parameter.
+
+
+FROM AwariTypes IMPORT Configuration;
+
+
+# The next four conversions are used in RetroGradeAnalysis:
+
+OPERATION Init(n: IN integer;
+	       k: IN integer); 
+  # Initialize the binomiumarray in the converter object
+
+
+OPERATION Goedel2Config(goedel_code: longint;
+			configuration: OUT Configuration);
+  # Converts a goedel number to a configuration
+
+
+OPERATION Config2Goedel(configuration: Configuration; 
+			goedel_code: OUT longint);
+  # Converts a configuration to a goedel number
+
+
+OPERATION Set_Size(newsize: integer);
+  # sets the size field  in the object -permanently - 
+
+
+OPERATION Get_Size():integer;
+  # gets the size field in the object 
+
+
+
+
+# The next two conversions are used in DataBasePartObject:
+
+OPERATION DB_Goedel2Config(goedel_code: longint;
+			   db_size: integer;
+			   configuration: OUT Configuration);
+  # Converts a configuration to a goedel number for databaseconversions
+  # with a different size than the (standard) set 'size'
+  # An extra db_size parameter is needed for this conversion.
+
+
+OPERATION DB_Config2Goedel(configuration: Configuration; 
+			   db_size: integer;
+			   goedel_code: OUT longint);
+  # Converts a configuration to a goedel number for databaseconversions
+  # with a different size than the (standard) set 'size'
+  # An extra db_size parameter is needed for this conversion.
+
+
+
+END; # ConverterObject

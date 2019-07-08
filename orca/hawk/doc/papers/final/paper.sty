@@ -1,0 +1,92 @@
+
+\newcommand{\remark}[1]{}
+
+\newcommand{\IncludeFigure}[2]{
+\begin{figure} 
+\begin{center} 
+\includegraphics[scale=0.75]{eps/#1.eps} 
+\end{center}
+\caption{\label{fig:#1} #2}
+\end{figure}
+}
+
+\newcommand{\IncludeTexFigure}[2]{
+\begin{figure} 
+\begin{center} 
+\scalebox{0.75}{\input{#1.pstex_t}}
+\end{center}
+\caption{\label{fig:#1} #2}
+\end{figure}
+}
+
+\newcommand{\IncludePlot}[2]{
+% inserts one plot
+\begin{figure} 
+\begin{center} 
+\includegraphics[scale=0.75]{plots/#1.eps} 
+\end{center}
+\caption{\label{plot:#1} #2}
+\end{figure}
+}
+
+\newcommand{\IncludeFourPlots}[4]{
+% inserts four plots next to each other
+{ \renewcommand{\baselinestretch}{1} \small
+\begin{figure} 
+  \begin{center}
+     \includegraphics[scale = 0.6]{plots/#2.eps} \includegraphics[scale = 0.6]{plots/#2.spd.eps}
+
+     \includegraphics[scale = 0.6]{plots/#3.eps} \includegraphics[scale = 0.6]{plots/#3.spd.eps}
+     
+  \end{center}
+\caption{\label{plot:#1} #4}
+\end{figure}
+}}
+
+\newcommand{\IncludeTwoPlots}[4]{
+% inserts two plots next to each other
+{ \renewcommand{\baselinestretch}{1} \small
+\begin{figure}
+  \begin{center}
+     \includegraphics[scale = 0.62]{plots/#2.eps} \includegraphics[scale = 0.62]{plots/#3.eps}
+  \end{center}
+\caption{\label{plot:#1} #4}
+\end{figure}
+}}
+ 
+% \newcommand{\IncludeAlgorithm}[2]{
+% \begin{figure} 
+%   \begin{center}
+%   % \framebox[6.0in]{\includegraphics{eps/#1.eps}}
+%   \framebox[4.8in]{\includegraphics[scale = 0.75]{eps/#1.eps}}
+%   \end{center}
+% \caption{\label{algo:#1} #2}
+% \end{figure}
+% }
+
+\newcommand{\IncludeAlgorithm}[2]{
+\begin{figure} 
+  \tt{
+  \centerline{\parbox{4.7in}{
+  \input{txt/#1}
+  }}}
+  \caption{\label{algo:#1} #2}
+\end{figure}
+}
+
+% Page layout
+% \topmargin      -0.25in
+% \oddsidemargin  -0.19in
+% \evensidemargin -0.19in
+% \textheight     9in
+% \textwidth      6.75in
+% \columnsep        0.25in
+% \parindent        1.0em
+% \headsep          6.3mm
+% \headheight        12pt
+% \lineskip           1pt
+% \normallineskip     1pt
+% \baselineskip      14pt
+% \marginparsep      10pt
+% \marginparwidth    20pt
+% \marginparpush     25pt

@@ -1,0 +1,14 @@
+OBJECT SPECIFICATION MatObject;
+  FROM Types IMPORT Vali;
+  TYPE Val = ARRAY[integer] OF boolean;
+  TYPE LineVal = ARRAY[integer] OF Val;
+
+  OPERATION init(i, j : integer);
+  OPERATION getvalue(): LineVal;
+  OPERATION assign(i,j : integer; v : boolean);
+  OPERATION test(i,j : integer) : boolean;
+  OPERATION change(list_change  : Vali; poz_change, i : integer);
+  OPERATION print(N, a: integer);
+
+END;
+

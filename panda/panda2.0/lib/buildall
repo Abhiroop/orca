@@ -1,0 +1,34 @@
+#!/bin/sh
+
+cleanup=
+
+while true; do
+        case $1 in
+                -c)     cleanup=yes
+                 	;;
+                *)      break
+			;;
+        esac
+        shift 1
+done
+
+modules=$*
+
+for i in `find . -name setup.mk -print`; do
+	(
+		dir=`dirname $i`
+		cd $dir
+		PWD=`pwd`
+		export PWD
+		echo $PWD
+		if [ $cleanup ]; then
+			echo "Cleaning up directory $dir"
+			gmake clean
+		fi
+		gmake -k $modules
+	)
+done
+
+# Local Variables:
+# compile-command: "buildall"
+# End:

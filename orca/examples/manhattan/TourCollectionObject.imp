@@ -1,0 +1,610 @@
+# TourCollectionObject.imp
+#
+# The TourCollectionObject (TCO) is as main purpose a collection
+# of tours for the deliveryboys. Upon this collection of tours 
+# some well defined operations have been constructed. These 
+# are the operations that will be performed on the TourObjects
+# in the collection by the different processes during the
+# objects way through the chain of processing. Thus the basis
+# of a TCO is a distribution and the TourObjects that are formed
+# by this distribution.
+#  A TCO also contains age information, that is how many times
+# has it been run through the processing chain. This information
+# is used for instance to know when to terminate the program
+# (search depth) and to know how many levels the object
+# has gotten worse solutions.
+
+
+OBJECT IMPLEMENTATION TourCollectionObject;
+	
+FROM TspTypes IMPORT
+	NodeSubset,
+	DistributionChange,
+	NodeDistribution;
+FROM TspFunctions IMPORT
+	AppendString;
+FROM CollectionTypes IMPORT
+	TourCollection;
+FROM PresentationModule IMPORT
+	PrintMessage,
+	PrintMessageInt,
+	PrintSubMessage,
+	Warning;
+FROM unix IMPORT
+	ReadString,
+	open,
+	close;
+FROM InOut IMPORT
+	WriteString,
+	WriteLn,
+	OpenOutputFile,
+	CloseOutput;
+FROM conversions IMPORT	
+	StringToInt,
+	RealToString,
+	IntToString;
+IMPORT SpecificationObject;
+IMPORT TourObject;
+
+CONST PursueHistory = 3;	# Number of consecutive bad moves allowed
+CONST Max_real = 90000.0;
+
+tc : TourCollection [1..4];	# The TourObjects
+history : integer;		# Number of consecutive bad moves 
+worstIndex : integer;		# Worst problem of tc
+value : real;			# Value of problem
+oldValue : real;		# The last value (for improvement calc)
+valueSet : boolean;		# If "Value" is set or not
+improvement : real;		# The improvement from last distribution
+evalLevel : integer;		# Number of times through process chain
+improveHistory : integer;	# Number of approx since last improvement
+ImproveApproxLimit : integer;	# Number of approx before Improve is applied.
+searchDepth : integer;		# Specified search depth of distribution tree
+total_nr_nodes : integer;	# Total number of nodes;
+
+
+OPERATION PrimitiveInitialize (spec : SpecificationObject);
+BEGIN
+	evalLevel := 0;
+	valueSet := false;
+	value := Max_real;
+	oldValue := Max_real;
+	ImproveApproxLimit := TRUNC (FLOAT (spec$SearchDepth ()) / 3.0);
+	searchDepth := spec$SearchDepth ();
+END;
+
+
+
+
+# Initialize
+#
+# Initializes the object by setting the variables to their
+# appropriate values. It does not perform time consuming functions
+# such as calculating tour value, constructing or improving a tour.
+# Must be called before the object is used.
+#
+OPERATION Initialize (nd : NodeDistribution; 
+		spec : SpecificationObject);
+BEGIN
+	SELF$PrimitiveInitialize (spec);
+	total_nr_nodes := spec$Dimension ();
+	FOR i IN LB(nd)..UB(nd) DO
+		tc[i]$Initialize (nd[i], spec);
+	OD;
+END;
+
+
+
+
+OPERATION CreateFromArray (new : TourCollection; 
+			spec : SpecificationObject);
+	val : real;
+BEGIN
+	SELF$PrimitiveInitialize (spec);
+	tc := new;
+	FOR i IN LB(tc)..UB(tc) DO
+		val := FLOAT (tc[i]$Value ());
+		IF ((val > value) OR (NOT valueSet)) THEN
+			value := val;
+			valueSet := true;
+			worstIndex := i;
+		FI;
+	OD;
+END;	
+
+
+
+
+FUNCTION ReadLine (fildes : integer; s : OUT string);
+	str : string;
+	buff : string;
+BEGIN
+	str := "";
+	buff := ReadString (fildes);
+	WHILE ((buff /= ";") AND (buff /= "EOF")) DO
+		IF str /= "" THEN
+			str := AppendString (str, 
+				AppendString (" ", buff));
+		ELSE
+			str := buff;
+		FI;
+		buff := ReadString (fildes);
+	OD;
+	IF (buff = "EOF") THEN
+		s := "EOF";
+	ELSE
+		s := str;
+	FI;
+END;		
+
+
+OPERATION Load (name : string; spec : SpecificationObject);
+	id,
+	temp : string;
+	max,
+	val,
+	temp2 : integer;
+	i : integer;
+	fildes : integer;
+BEGIN
+	max := MIN (integer);
+	SELF$PrimitiveInitialize (spec);
+	i := LB(tc);
+
+	# Mode 0: O_RDONLY
+	fildes := open (name, 0);
+
+	IF fildes = -1 THEN
+		Warning ("Could not open initial solution persistent store");
+	ELSE
+		ReadLine (fildes, id);
+		WHILE ((id /= "EOF") AND (i <= UB(tc))) DO
+			tc[i]$Initialize (spec$NodesSet (), spec);
+			ReadLine (fildes, temp);
+			val := StringToInt (temp, temp2);
+			tc[i]$FromStringInt (id, val);
+			IF val > max THEN
+				value := FLOAT (val);
+				worstIndex := i;
+				max := val;
+				valueSet := true;
+			FI;
+			i +:= 1;
+			ReadLine (fildes, id);
+		OD;
+		IF close (fildes) /= 0 THEN
+			Warning ("TCO Load: Persistent store could not be closed");
+		FI;
+	FI;
+END;
+
+
+
+OPERATION Save (name : string);
+BEGIN
+	IF NOT OpenOutputFile (name) THEN
+		Warning ("Could not save solution");
+	ELSE
+		FOR i IN LB(tc)..UB(tc) DO
+			WriteString (tc[i]$Id ());
+			WriteString (" ;");
+			WriteLn ();
+			WriteString (IntToString (tc[i]$Value ()));
+			WriteString (" ;");
+			WriteLn ();
+		OD;
+		WriteString ("EOF");
+		WriteLn ();
+		CloseOutput ();
+	FI;
+END;
+
+
+
+OPERATION SetBounds (l, u : integer);
+BEGIN
+	FOR i IN LB(tc)..UB(tc) DO
+		tc[i]$SetLower (l);
+		tc[i]$SetUpper (u);
+	OD;
+END;
+
+
+
+# Print
+#
+# Print prints the object to stdout.
+#
+OPERATION Print ();
+BEGIN
+	PrintMessage ("Tour collection:");
+	FOR i IN LB(tc)..UB(tc) DO
+		tc[i]$Print ();
+	OD;
+	PrintSubMessage (AppendString ("Total value: ", 
+			RealToString (SELF$Value (), 4)));
+END;
+
+
+
+# Consistent
+#
+# Check if the tours of the tour collection are consistent
+# and that all nodes are included. This function checks that
+# the more primitive functions do not include bugs. 
+# The function is time consuming and should thus be called
+# only when needed.
+#
+OPERATION Consistent () : boolean;
+	ns : ARRAY[integer 1..4] OF NodeSubset;
+	consistent : boolean;
+	found : boolean;
+BEGIN
+	consistent := true;
+
+	FOR i IN LB(tc)..UB(tc) DO
+		ns[i] := tc[i]$Nodes_Set ();
+		consistent := consistent AND tc[i]$Consistent ();
+	OD;
+
+
+	FOR i IN 0..total_nr_nodes DO
+		found := false;
+		FOR j IN LB(tc)..UB(tc) DO
+			FOR m IN ns[j] DO
+				IF ((i = m) AND found) THEN
+					PrintMessageInt ("Consistency breach: Duplicate node: ", m);
+					consistent := false;
+					EXIT;
+				FI;
+				IF (i = m) THEN
+					found := true;
+					# Do not halt. Check for more occurrences
+				FI;
+			OD;
+			IF ((i = 0) AND (NOT found)) THEN
+				PrintMessageInt ("Consistency breach: 0 not included in group ", j);
+				consistent := false;
+			FI;
+			IF ((i = 0) AND found) THEN
+				found := false;
+			FI;
+		OD;
+		IF ((i /= 0) AND (NOT found)) THEN
+			PrintMessageInt ("Consistency breach: Node not included ", i);
+			consistent := false;
+		FI;
+	OD;			
+			
+	IF NOT consistent THEN
+		Warning ("Tour was NOT consistent!!!!!");
+		SELF$Print ();
+	FI;
+	RETURN consistent;
+END;
+
+
+
+OPERATION UpdateAfterEval ();
+BEGIN
+	# If this is the first evaluation let the improvement think 
+	# nothing has changed. Thus the value of improvement will 
+	# be 1.
+	IF (valueSet AND (oldValue = Max_real)) THEN
+		oldValue := value;
+	FI;
+
+	# This distribution is worse than the previous one
+	IF (valueSet AND (oldValue < value)) THEN
+		history +:= 1;
+		improvement := oldValue / value;
+	FI;
+
+	# This distribution has the same value as the previous one
+	IF (valueSet AND (oldValue = value)) THEN
+		IF (history > 0) THEN
+			history -:= 1;
+		FI;
+		improvement := 1.0;
+	FI;
+
+	# This distribution has a better value than the previous one.
+	IF (valueSet AND (oldValue > value)) THEN
+		# The question here is if we should
+		# a) Reset history
+		# b) Decrease it by one if it's > 0
+		# c) Decrease it by one
+		history := 0;
+		improvement := oldValue / value;
+	FI;
+END;
+
+
+
+# Improve
+#
+# Improves the tsp tours of the TourObjects using heuristics.
+#
+OPERATION Improve ();
+	val	: real;
+BEGIN
+	IF ((evalLevel /= 3) AND (evalLevel /= searchDepth) AND
+	    (improveHistory < ImproveApproxLimit)) THEN
+		improveHistory +:= 1;
+	ELSE
+		improveHistory := 0;
+		FOR i IN LB(tc)..UB(tc) DO
+			tc[i]$Improve ();
+		OD;
+	FI;
+
+	FOR i IN LB(tc)..UB(tc) DO
+		val := FLOAT (tc[i]$Value ());
+
+		IF ((val > value) OR (NOT valueSet)) THEN
+			value := val;
+			valueSet := true;
+			worstIndex := i;
+		FI;
+	OD;
+
+	SELF$UpdateAfterEval ();
+END;
+
+
+
+
+# ChangeDistribution
+#
+# ChangeDistribution changes the distribution of a tour and tries
+# to estimate the new value of the tours without improving with
+# TSP heuristics, but instead using faster methods.
+#
+OPERATION ChangeDistribution (dc : DistributionChange);
+	set : NodeSubset;
+	val : real;
+BEGIN
+	FOR n IN dc DO
+		INSERT (n.nr, set);
+		tc[n.to]$BestInsert (set);
+		tc[n.from]$BestRemove (set);
+		DELETE (n.nr, set);
+	OD;
+
+	valueSet := false;
+	FOR i IN LB(tc)..UB(tc) DO
+		val := FLOAT (tc[i]$Value ());
+		IF ((val > value) OR (NOT valueSet)) THEN
+			value := val;
+			valueSet := true;
+			worstIndex := i;
+		FI;
+	OD;
+	SELF$UpdateAfterEval ();
+END;
+
+
+
+OPERATION RevertDistributionChange (dc : DistributionChange);
+	set : NodeSubset;
+	val : real;
+BEGIN
+	FOR n IN dc DO
+		INSERT (n.nr, set);
+		tc[n.from]$BestInsert (set);
+		tc[n.to]$BestRemove (set);
+		DELETE (n.nr, set);
+	OD;
+
+	valueSet := false;
+	FOR i IN LB(tc)..UB(tc) DO
+		val := FLOAT (tc[i]$Value ());
+		IF ((val > value) OR (NOT valueSet)) THEN
+			value := val;
+			valueSet := true;
+			worstIndex := i;
+		FI;
+	OD;
+	SELF$UpdateAfterEval ();
+END;
+
+
+
+# NewDistribution
+# 
+# NewDistribution inserts a new distribution generated by the
+# distribution object into the tour collection. When a new
+# distribution is inserted the value has to be recalculated
+# and the tours has to be reimproved but the state variables
+# indicating level and history remain the same.
+#
+OPERATION NewDistribution (nd : NodeDistribution);
+BEGIN
+	valueSet := false;
+	FOR i IN LB(tc)..UB(tc) DO
+		tc[i]$ChangeNodes (nd[i]);
+	OD;
+END;
+
+
+
+OPERATION EvaluationLevel () : integer;
+BEGIN
+	RETURN evalLevel;
+END;
+
+
+
+OPERATION IncreaseLevel ();
+BEGIN
+	evalLevel +:= 1;
+END;
+
+
+
+OPERATION DecreaseLevel ();
+BEGIN
+	evalLevel +:= 1;
+END;
+
+
+	
+# The history of an object tells you how many
+# times it has gotten worse solutions when the 
+# distribution has changed. 
+OPERATION History () : integer;
+BEGIN
+	RETURN history;
+END;
+
+
+
+# Pursue
+#
+# This operation provides the rules for when a TCO should be
+# pursued and passed back to the distributor for generation 
+# of new jobs. It answers the question is this distribution
+# good enough to be examined any further?
+#
+OPERATION Pursue () : boolean;
+BEGIN
+	IF (history <= PursueHistory) THEN
+		IF (improvement >= 0.80) THEN
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	ELSE
+		IF (improvement >= 1.20) THEN
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	FI;
+	RETURN false;
+END;
+
+
+
+
+
+# Value
+#
+# Value returns the value of the problem, that is the 
+# longest tour of the tours in the collection
+#
+OPERATION Value () : real;
+	val : real;	# Temporary value
+	max : real;	# Maximum tour value
+	index : integer;# Index of maximum tour
+BEGIN
+	max := 0.0;
+	IF valueSet THEN
+		RETURN value;
+	ELSE
+		FOR i IN LB(tc)..UB(tc) DO
+			val := FLOAT (tc[i]$Value ());
+			IF max < val THEN
+				max := val;
+				index := i;
+			FI;
+		OD;
+		worstIndex := index;
+		value := max;
+		valueSet := true;
+		RETURN value;
+	FI;
+END;
+
+
+
+# Tours
+#
+# Tours returns an array of TourObjects
+#
+OPERATION Tours () : TourCollection;
+BEGIN
+	RETURN tc;
+END;
+
+
+
+# Distribution
+#
+# Distribution returns the current distribution of the
+# tours.
+#
+OPERATION Distribution () : NodeDistribution;
+	nd : NodeDistribution[1..4];
+BEGIN
+	FOR i IN LB(tc)..UB(tc) DO
+		FOR n IN tc[i]$Nodes_Set () DO
+			INSERT (n, nd[i]);
+		OD;
+	OD;
+	RETURN nd;
+END;
+
+
+
+# ImproveHistory
+#
+# ImproveHistory returns the number of times the object
+# has been changed, without improvement-message beeing
+# sent.
+#
+OPERATION ImproveHistory () : integer;
+BEGIN
+	RETURN improveHistory;
+END;
+
+
+
+
+OPERATION SetTourIfBetter (nr : integer; t : TourObject) : boolean;
+	val1,
+	val2 : integer;
+	ns1,
+	ns2 : NodeSubset;
+BEGIN
+	val1 := tc[nr]$Value ();
+	val2 := t$Value ();
+	ns1 := tc[nr]$Nodes_Set ();
+	ns2 := t$Nodes_Set ();
+	FOR n IN ns1 DO
+		IF NOT (n IN ns2) THEN
+			RETURN false;
+		FI;
+	OD;
+	FOR n IN ns2 DO
+		IF NOT (n IN ns1) THEN
+			RETURN false;
+		FI;
+	OD;
+	IF val1 > val2 THEN
+		valueSet := false;
+		tc[nr] := t;
+		RETURN true;
+	FI;
+	RETURN false;
+END;
+
+
+
+
+BEGIN
+	SELF$SetBounds (6, 11);
+	improveHistory := MAX (integer);
+	valueSet := false;
+	history := 0;
+END;
+
+
+
+
+
+
+
+
+
+

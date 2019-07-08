@@ -1,0 +1,4 @@
+MODULE SPECIFICATION timeup;
+
+PROCESS OrcaMain();
+END;

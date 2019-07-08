@@ -1,0 +1,21 @@
+OBJECT IMPLEMENTATION MatrixObject[integer I1..I2, integer J1..J2];
+
+    m: real;
+
+PARALLEL OPERATION[i,j] multiply( m1, m2: SHARED MatrixObject);
+BEGIN
+    m[i,j] := DotProduct( m1$GetRow(i), m2$GetColumn(j));
+END;
+
+...
+
+OrcaMain();
+    m1, m2: MatrixObject[1..100,1..100];
+BEGIN
+    m1$partition(100,1);
+    m2$partition(1,100);
+    m1$distribute_on_n(NCPUS(),100, BLOCK, 1, BLOCK);
+    m2$distribute_on_n(NCPUS(),1, BLOCK, 100, BLOCK);
+    m1$multiply(m1,m2);
+  ...
+END.

@@ -1,0 +1,14 @@
+MODULE SPECIFICATION distributions;
+
+  TYPE DistributionType = ARRAY[integer] OF integer;
+
+  FUNCTION block(npart, ncpus: integer) : DistributionType;
+  # Block distribution: each cpu gets npart/ncpus adjacent partitions.
+  # If npart%ncpus is not 0, the first npart%ncpus cpus get one more.
+
+  FUNCTION cyclic(npart, ncpus: integer) : DistributionType;
+  # The partitions are divided circularly among the processors: processor
+  # 0 gets partition 0, processor 1 gets partition 1, ..., processor 0 gets
+  # partition ncpus, processor 1 gets partition ncpus+1, ...
+
+END;

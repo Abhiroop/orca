@@ -1,0 +1,52 @@
+################################################################################
+######  BoxListModule.spf                                                 ######
+###                                                                          ###
+
+MODULE SPECIFICATION BoxListModule;
+
+ FROM BoxModule IMPORT Box;
+
+ TYPE BoxListNode = NODENAME OF BoxList;
+
+ TYPE BoxList =
+     GRAPH
+	 head: BoxListNode;
+     NODES
+	 box: Box;          # Information field.
+	 next: BoxListNode; # Single list 'pointer'.
+     END; # BoxList
+
+
+ FUNCTION addToBoxList(
+     list: SHARED BoxList;
+     box:  IN Box
+ );
+
+ FUNCTION delFirstBoxFromList(
+     list: SHARED BoxList
+ );
+
+ FUNCTION delNextBoxFromList(
+     list: SHARED BoxList;
+     node: IN BoxListNode
+ );
+
+ FUNCTION isEmptyBoxList(
+     list: IN BoxList
+ ): boolean;
+
+ FUNCTION length(
+     list: IN BoxList
+ ): integer;
+
+ FUNCTION swapBoxList(
+     list:  SHARED BoxList;
+     nodeA: SHARED BoxListNode;
+     nodeB: SHARED BoxListNode
+ );
+
+END; # BoxListModule
+ 
+###                                                                          ###
+######  BoxListModule.spf                                                 ######
+################################################################################

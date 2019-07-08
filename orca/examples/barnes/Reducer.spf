@@ -1,0 +1,16 @@
+OBJECT SPECIFICATION Reducer;
+    FROM vectmath IMPORT Vectmath;
+
+FUNCTION sync( b : SHARED Reducer);
+OPERATION minmax( V1 : Vectmath; V2 : Vectmath);
+OPERATION add( V : real);
+OPERATION wait() : real;
+OPERATION wait_m( M, m: OUT Vectmath);
+OPERATION Init();
+
+
+END;
+
+
+
+

@@ -1,0 +1,132 @@
+
+
+
+
+
+
+oc_panda(U)		 User Program		    oc_panda(U)
+
+
+_N_a_m_e
+
+oc_panda -  Orca compiler, with	Panda RTS.
+
+_S_y_n_o_p_s_i_s
+
+
+_o_c__p_a_n_d_a _a_r_g_u_m_e_n_t_s
+
+
+_D_e_s_c_r_i_p_t_i_o_n
+
+_O_C__P_A_N_D_A is a front-end	for the	Orca compiler driver, to  be
+used when compiling Orca programs to run them with the Panda
+runtime	system.	 The _o_c__p_a_n_d_a script calls _o_c with  suitable
+arguments.
+
+
+_O_p_t_i_o_n_s
+
+
+-aaaammmmooooeeeebbbbaaaa
+     select a  version	of  the	 Panda	runtime	 system	 for
+     Amoeba.   For  this  Amoeba  distribution,	 this is the
+     default and in fact the only possibility.
+
+-3333     Select the Panda	3 version of Panda.  For this Amoeba
+     distribution,  this is the	default	and in fact the	only
+     possibility.
+
+-ssssppppaaaarrrrcccc
+     Produce code for  the  SPARC  processor.  This  is	 the
+     default.
+
+-iiii88880000333388886666
+     Produce code for the Intel	80386 family of	processors.
+
+-mmmmssssoooofffftttt
+     Use  software  floating  point  instead   of   hardware
+     floating  point  instructions (only valid for the Intel
+     80386 family).
+
+
+_D_i_a_g_n_o_s_t_i_c_s
+
+All warning and	error messages are written on standard error
+output.
+
+
+
+
+
+
+
+			 Amoeba	5.3			   1
+
+
+
+
+
+oc_panda(U)		User Program		 oc_panda(U)
+
+
+_E_n_v_i_r_o_n_m_e_n_t _V_a_r_i_a_b_l_e_s
+
+See the	_o_c manual page.
+
+
+_F_i_l_e_s
+
+See the	_o_c manual page.
+
+_E_x_a_m_p_l_e_s
+
+
+	_o_c__p_a_n_d_a _a_s_p._i_m_p
+
+Compiles the source file asp.imp  and,	in  the	 absence  of
+errors,	produces an amoeba SPARC binary.
+
+	_o_c__p_a_n_d_a -_i_8_0_3_8_6 _a_s_p._i_m_p
+
+Compiles the source file asp.imp  and,	in  the	 absence  of
+errors,	produces an amoeba I80386 binary.
+
+_S_e_e _A_l_s_o
+
+oc(U)
+
+"User's	Manual of the Programming Language Orca", by  Ceriel
+Jacobs.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2			 Amoeba	5.3
+
+

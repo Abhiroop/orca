@@ -1,0 +1,16 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: IntObject.spf,v 1.1 1997/05/27 11:52:49 ceriel Exp $
+
+OBJECT SPECIFICATION IntObject;
+	OPERATION dummy();  # used for benchmarks
+	OPERATION value(): integer;
+	OPERATION assign(v: integer);
+	OPERATION min(v: integer);
+	OPERATION inc();
+	OPERATION dec();
+	OPERATION AwaitValue(v: integer);
+	OPERATION AwaitBigger(v: integer) : integer;
+END;

@@ -1,0 +1,26 @@
+#-----------------------------------------------#
+# Author : H. Staalman  			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION RetrogradeAnalysis;
+
+# One function related to RA is defined in this module: setting the remaining
+# - not yet determined - configurations in the database to draws.
+# The other two parts of the RA, the forward and backward pass algorithms are
+# defined in two separate modules.
+
+FROM	DataBaseTypes		IMPORT	DataBaseObject, AdresTable;
+		IMPORT	DBMetaDataObject;
+		IMPORT	ConverterObject;
+
+
+FUNCTION Set_Remaining_Configurations_To_Draw(database: SHARED DataBaseObject;
+					      dbmetadata: SHARED DBMetaDataObject;
+					      converter: IN ConverterObject;
+					      cpu_table: IN AdresTable);
+  # set remaining configurations to 'draw' (well... what's more to say?)
+
+
+END; # RetrogradeAnalysis

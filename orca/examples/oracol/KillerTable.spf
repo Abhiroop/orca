@@ -1,0 +1,9 @@
+OBJECT SPECIFICATION KillerTable;
+
+
+	OPERATION InitKTable();
+	OPERATION TestKiller(level : integer; move : integer) : boolean;
+	OPERATION AddKiller(level : integer; move : integer);
+
+END;
+

@@ -1,0 +1,28 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION WaterWorker;
+
+FROM	Common		IMPORT	InputArrayType, PCC_Type, TLC_Type;
+FROM	GlobalType	IMPORT	GlobalObject;
+IMPORT	barrier;
+IMPORT	DirArrayObject;
+IMPORT	LongRealObject;
+
+
+### The work done by each CPU
+#
+PROCESS WaterWorker(Data                  : SHARED GlobalObject;
+		    Barrier               : SHARED barrier;
+		    Min, Sum, Su          : SHARED DirArrayObject;
+		    TVIR, TKIN, Total,
+		    POTA, POTR, POTRF     : SHARED LongRealObject;
+		    RandomArray		  : InputArrayType;
+		    TLC                   : TLC_Type;
+		    PCC                   : PCC_Type;
+		    StartMol, NrMols, NMOL, NrParts,
+		    NATMO, NSTEP, NORDER, NPRINT   : integer;
+		    TSTEP, BOXH, BOXL, REF1, CUTOFF,
+		    CUT2, FHM, FOM, FPOT, FKIN     : longreal);
+END;

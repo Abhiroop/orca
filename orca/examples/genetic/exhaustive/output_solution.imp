@@ -1,0 +1,26 @@
+MODULE IMPLEMENTATION output_solution;
+
+FROM CromoVector IMPORT individual;
+
+
+#
+# writes a solution (chromozome and evaluation values)
+# 1 stands for true
+# 0 stands for false
+#
+FUNCTION write_solution(nb_nodes: integer; solution: individual);
+
+BEGIN
+	Write ("Chromosome= ");
+	FOR i IN 0..nb_nodes-1 DO
+	  IF solution.cromozom[i] THEN Write(" 1");
+		ELSE Write(" 0");
+	  FI;
+	OD;
+	WriteLine();
+	WriteLine(" Evaluation= ", solution.eval);
+END;
+
+END;
+
+

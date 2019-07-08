@@ -1,0 +1,32 @@
+MODULE IMPLEMENTATION MiscUtil;
+
+# Gauss1 - crude approximation of normal distribution formed
+# from sum of 12 uniforms. 
+FUNCTION gauss1(a: SHARED integer; mean, sigma: real): real;
+  x: real;
+
+BEGIN
+  x := 0.0;
+  FOR i IN 0..11 DO x +:= random1(a); OD;
+  RETURN mean + sigma*(x - 6.0);
+END;
+
+
+
+# random1 - uniformly distributed [0,1) real.
+FUNCTION random1(a: SHARED integer): real;
+  CONST m = 100000000;
+  CONST m1 = 10000;
+  CONST b1 = 3141;
+  CONST b0 = 5821;
+  a0, a1: integer;
+
+BEGIN
+  a1 := a/m1;
+  a0 := a%m1;
+  a0 := ((a0*b1 + a1*b0)%m1)*m1 + a0 * b0;
+  a := (a0 + 1) % m;
+  RETURN FLOAT(a)/FLOAT(m);
+END;
+
+END;

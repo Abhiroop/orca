@@ -1,0 +1,5 @@
+MODULE SPECIFICATION reglab;
+
+	TYPE RowType = ARRAY[integer] OF integer;
+	PROCESS OrcaMain();
+END;

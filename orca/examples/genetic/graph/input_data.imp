@@ -1,0 +1,117 @@
+MODULE IMPLEMENTATION input_data;
+
+FROM GenTypes IMPORT configuration;
+FROM BoolVector IMPORT BoolMatrix, DynBoolMatrix;
+FROM InOut IMPORT OpenInputFile, CloseInput, ReadChar, ReadInt, ReadReal, Eof;
+
+#
+# searches for the character c
+#
+
+FUNCTION search_char (c: char): boolean;
+	new_char: char;
+BEGIN
+	ReadChar(new_char);
+	WHILE (new_char /= c) AND NOT Eof() DO
+		ReadChar(new_char);
+	OD;
+	IF new_char = c THEN
+		RETURN true;
+	ELSE
+		RETURN false;
+	FI;
+END;
+
+
+#
+# reads from the configuration file named genetic.cfg
+# the configuration parameters of the genetic algorithm
+#
+FUNCTION read_configuration (config: SHARED configuration): boolean;
+
+BEGIN
+	IF NOT OpenInputFile("genetic.cfg") THEN RETURN false; FI;
+	IF NOT search_char(':') THEN RETURN false; FI;
+ 	ReadInt(config.nb_generations);
+	IF NOT search_char(':') THEN RETURN false; FI;
+ 	ReadInt(config.nb_individuals);
+	IF NOT search_char(':') THEN RETURN false; FI;
+ 	ReadInt(config.migration_rate);
+	IF NOT search_char(':') THEN RETURN false; FI;
+ 	ReadInt(config.nb_migrators);
+	IF NOT search_char(':') THEN RETURN false; FI;
+ 	ReadReal(config.cross_probab);
+	IF NOT search_char(':') THEN RETURN false; FI;
+ 	ReadReal(config.mutation_probab);
+	CloseInput();
+	config.nb_slaves := NCPUS();
+	RETURN true;
+END;
+
+FUNCTION print_configuration (config: configuration);
+BEGIN
+	WriteLine();
+	WriteLine("Configuration parameters:");
+	WriteLine("=========================");
+	WriteLine("Number of generations = ", config.nb_generations);
+	WriteLine("Number of individuals = ", config.nb_individuals);
+	WriteLine("Migration rate        = ", config.migration_rate);
+	WriteLine("Number of migrators   = ", config.nb_migrators);
+	WriteLine("Crossover probability = ", config.cross_probab);
+	WriteLine("Mutation probability  = ", config.mutation_probab);
+	WriteLine("Number of slaves      = ", config.nb_slaves);
+END;
+
+
+#
+# reads the number of nodes and the adjacency matrix of the graph
+# from the file with the name given as parameter in the command line
+#
+FUNCTION read_matrix (matrix_file: string; nb_nodes: OUT integer; 
+		maxdegree: OUT integer; G: SHARED BoolMatrix): boolean;
+	element: integer; degree: integer;
+BEGIN
+	IF NOT OpenInputFile(matrix_file) THEN RETURN false; FI;
+	ReadInt(nb_nodes);
+	IF nb_nodes = 0 THEN RETURN false; FI;
+	G := DynBoolMatrix(nb_nodes, nb_nodes);
+	maxdegree := 0;
+	FOR i IN 0..nb_nodes-1 DO
+		degree := 0;
+		FOR j IN 0..nb_nodes-1 DO
+			IF Eof() THEN RETURN false; FI;
+			ReadInt (element);
+			IF element = 1 THEN 
+				G[i,j] := true;
+				degree +:= 1;
+			ELSE
+				G[i,j] := false;
+			FI;
+		OD;
+		IF degree>maxdegree THEN maxdegree := degree; FI;
+	OD;
+	RETURN true;
+END;
+
+#
+# prints, line by line, the adjacency matrix of the graph
+# 1 stands for true 0 stands for false
+#
+FUNCTION print_matrix (nb_nodes: integer; G: BoolMatrix);
+
+BEGIN
+	WriteLine();
+	WriteLine("Adjacency matrix:");
+	WriteLine("Number of Nodes= ", nb_nodes);
+	FOR i IN 0..nb_nodes-1 DO
+		FOR j IN 0..nb_nodes-1 DO
+			IF G[i,j] = true THEN Write(" 1");
+					 ELSE Write(" 0");
+			FI;
+		OD;
+		WriteLine();
+	OD;
+END;
+
+END;
+

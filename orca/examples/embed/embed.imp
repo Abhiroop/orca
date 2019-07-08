@@ -1,0 +1,311 @@
+MODULE IMPLEMENTATION embed;
+# started Mon Jun 6 1994
+
+  IMPORT Random, PointArray, RowCollection, IntObject, CSemaphore;
+
+  FROM RowCollection IMPORT RowType; 
+  FROM Points 	IMPORT Point, printIt, distanceBetween, normalized, length;
+  FROM asp 	IMPORT aspMain;
+  FROM graphdef IMPORT NVertices;
+  FROM Finish 	IMPORT Finish;
+  FROM InOut  	IMPORT WriteInt, OpenOutputFile, CloseOutput, Flush;
+  FROM Math   	IMPORT pow, sin, cos, PI, IntToLongReal;
+  FROM CSemaphore IMPORT sync;
+  FROM Time 	IMPORT SysMilli, PrintTime;
+  
+  CONST	NNodes = NVertices;
+  CONST MAXCOUNT = 100;
+  CONST recordProgress = true; # whether the graph should be dumped 
+  CONST NFrames = 100;  # the number of times the graph is dumped
+  CONST oneVertexOneSlave = true;
+
+FUNCTION min(x: integer; y: integer) : integer;
+BEGIN
+  IF x <= y THEN RETURN(x); FI;
+  RETURN(y);
+END;
+
+FUNCTION oneMod(i: integer; m: integer) : integer;
+BEGIN
+  IF i < 0 THEN RETURN(oneMod((i % m) + m, m)); FI;
+  RETURN(i % m);
+END;
+
+FUNCTION initDistancesCycle( matrix: OUT RowCollection);
+k, l : integer;
+BEGIN
+  # initialize the distance matrix to reflect a cycle
+  FOR row IN 1..NNodes DO
+    FOR column IN 1..NNodes DO
+      k := row - column;
+      l := column - row;
+      matrix$atPut(row, column, min(oneMod(k,NNodes),oneMod(l,NNodes)));
+    OD;
+  OD;
+END;
+
+FUNCTION circularEmbedding(positions: SHARED PointArray);
+p : Point;
+BEGIN
+  # initialize the positions of the nodes to be arranged 
+  # on a circle.
+  FOR i IN 1..NNodes DO
+    p[1]:= cos(2.0 * PI * FLOAT(i) / FLOAT(NNodes));
+    p[2]:= sin(2.0 * PI * FLOAT(i) / FLOAT(NNodes));
+    positions$atPut(i,p);
+  OD;
+END;
+
+FUNCTION randomEmbedding(positions: SHARED PointArray); 
+p : Point;
+r : Random;
+BEGIN
+  # initialize the positions of the nodes to be arranged 
+  # randomly
+  r$init(1);
+  FOR i IN 1..NNodes DO
+    p[1]:= FLOAT(r$val()) /  pow(2.0,30.0);
+    p[2]:= FLOAT(r$val()) /  pow(2.0,30.0);
+    positions$atPut(i,p);
+  OD;
+END;
+
+
+FUNCTION forceBetween( posA, posB: Point; dist: integer) : longreal;
+BEGIN
+  # return the force acting on node a from node b
+  RETURN(distanceBetween(posA, posB) - IntToLongReal(dist));
+END;
+
+FUNCTION printGraph(m : RowCollection; positions: PointArray );
+# print a representation of the graph suitable for plotting with gnuplot
+p, q : Point;
+BEGIN
+  FOR i IN 1 .. NNodes DO
+    p := positions$at(i);
+    FOR j IN 1 .. NNodes DO
+      IF m$at(i,j)=1 THEN
+        q := positions$at(j);
+        WriteLine(p[1], " ", p[2]);
+        WriteLine(q[1], " ", q[2]);
+        WriteLine();
+      FI;
+    OD;
+  OD;
+END; 
+
+PROCESS slave(m : RowType; positions: SHARED PointArray; 
+                  vertex:integer; readDone, writeDone : SHARED CSemaphore;
+                  go : SHARED IntObject );
+i : integer;
+f, fx, fy, alpha, error : longreal;
+pos, q , vec: Point;
+BEGIN
+  go$AwaitValue(1);
+  # WriteInt(MYCPU());
+  # WriteLine("Enter Slave");
+  i := 0;
+  alpha := 0.6;
+  
+
+  WHILE writeDone$cycles() < MAXCOUNT DO
+    # counter$AwaitValue(i);
+   
+    pos := positions$at(vertex);
+    # compute resultant force
+    fx := 0.0;
+    fy := 0.0;
+    error := 0.0;
+    FOR j IN 1..NNodes DO
+      q := positions$at(j);
+
+      vec[1] := q[1]-pos[1];
+      vec[2] := q[2]-pos[2];
+      vec := normalized(vec);
+      
+      f := forceBetween(q, pos, m[j]);
+      error +:= f;
+      fx +:= f * (vec[1]);
+      fy +:= f * (vec[2]);
+    OD;   
+    pos[1] +:= alpha * fx / IntToLongReal(NNodes);
+    pos[2] +:= alpha * fy / IntToLongReal(NNodes);
+    sync(readDone);
+    positions$atPut(vertex, pos);
+    sync(writeDone);
+    # sema$dec();
+    # i +:= 1;
+  OD;
+END;
+
+PROCESS nslave(lb,ub : integer; m : RowCollection; positions: SHARED PointArray; 
+                  readDone, writeDone : SHARED CSemaphore;
+                  gon : SHARED IntObject );
+f, fx, fy, alpha, error : longreal;
+pos, q , vec: Point;
+TYPE PointBuffer = ARRAY[integer] OF Point;
+posBuffer : PointBuffer[lb..ub];
+BEGIN
+WriteLine("forked on: ", MYCPU()," ", lb, "  ", ub);
+  gon$AwaitValue(1);
+  WriteInt(MYCPU());
+  WriteLine("Enter Slave");
+  
+  alpha := 0.6;    
+  WHILE writeDone$cycles() < MAXCOUNT DO
+    FOR vertex IN lb..ub DO
+      WriteLine(" vertex: ", vertex);
+      pos := positions$at(vertex);
+      # compute resultant force
+      fx := 0.0;
+      fy := 0.0;
+      error := 0.0;
+      FOR j IN 1..NNodes DO
+        q := positions$at(j);
+
+        vec[1] := q[1]-pos[1];
+        vec[2] := q[2]-pos[2];
+        vec := normalized(vec);
+WriteLine("here***");      
+m$printIt();
+WriteLine(vertex, j);
+        f := forceBetween(q, pos, m$at(vertex,j));
+WriteLine("here*");
+        error +:= f;
+        fx +:= f * (vec[1]);
+        fy +:= f * (vec[2]);
+      OD;   
+      pos[1] +:= alpha * fx / IntToLongReal(NNodes);
+      pos[2] +:= alpha * fy / IntToLongReal(NNodes);
+      posBuffer[vertex] := pos;
+    OD;
+    sync(readDone);
+    FOR vertex IN lb..ub DO
+      positions$atPut(vertex, posBuffer[vertex]);
+    OD;
+    sync(writeDone);
+  OD;
+END;
+
+
+PROCESS OrcaMain();
+	go, go2 : IntObject;
+	positions: PointArray;
+	m : RowCollection;
+        aspFinish : IntObject;
+	f : boolean;
+        filename : string;
+	readDone, writeDone : CSemaphore;
+        lastFrame, thisFrame : integer;
+	start, stop : integer;
+        nslaves, lb, ub : integer;
+
+  BEGIN
+    lastFrame := 0;
+    thisFrame := 0;
+    filename := "grid ";
+    filename[5] := CHR(65);
+    WriteLine("Enter Main");
+    WriteLine(NNodes, "Nodes");
+    go$assign(0);
+    go2$assign(0);
+    readDone$init(NNodes);
+    writeDone$init(NNodes);
+
+    IF NOT oneVertexOneSlave THEN
+      nslaves := NCPUS();
+      lb := 1;
+      FOR i IN 1 .. nslaves-1 DO
+	ub := lb + (NNodes-lb+1) / (nslaves-i) - 1;
+	FORK nslave(lb, ub, m, positions, readDone, writeDone, go2) ON(nslaves-i-1);
+	lb := ub+1;
+      OD;
+    FI;
+ 
+# compute distances
+
+    aspFinish$assign(0);
+    FORK aspMain(m, aspFinish);
+    aspFinish$AwaitValue(1); # wait for asp to finish
+    WriteLine("Distance matrix:");
+    
+# save distances
+
+    f := OpenOutputFile("distances");
+    m$printItA();
+    CloseOutput();
+    Flush();
+
+# startup slaves
+
+    IF oneVertexOneSlave THEN
+      start := SysMilli();
+      WriteLine("startup slaves");
+  
+      FOR i IN 2.. NNodes DO
+        FORK slave(m$rowAt(i), positions, i, readDone, writeDone, go) 
+          ON (i % (NCPUS() - 1)) + 1;
+      OD;
+      FORK slave(m$rowAt(1), positions, 1,readDone, writeDone, go);
+  
+      WriteLine("slaves started");
+    FI;
+
+# initialize positions
+
+    positions$init(NNodes);  
+    randomEmbedding(positions);
+
+    WriteLine("embedded randomly. ");
+    
+# record the random embedding
+
+    f := OpenOutputFile(filename);
+    printGraph(m, positions);
+    CloseOutput();
+    Flush();
+
+# sync slaves
+
+    go$assign(1);
+    go2$assign(1);
+    WHILE writeDone$cycles() < MAXCOUNT DO  
+      readDone$wait();
+     
+      IF recordProgress THEN
+      IF (writeDone$cycles() - lastFrame) > (MAXCOUNT / NFrames) THEN
+        thisFrame +:= 1;
+        #  filename[5] := CHR(65 + thisFrame);
+        f := OpenOutputFile(filename);
+        printGraph(m, positions);
+        CloseOutput();
+        Flush();    
+        lastFrame := writeDone$cycles();
+      FI;
+      FI;
+      readDone$ack();
+      writeDone$wait();
+      writeDone$ack();
+
+    OD;
+
+    stop := SysMilli();
+
+# print performance measurements
+
+    WriteLine("Distance embedding of a graph with ", NNodes, " vertices");
+    WriteLine("on ", NCPUS(), " processors", " with ", 	MAXCOUNT, " iterations. ");
+    PrintTime("Embedding", stop - start);
+
+# record results
+
+    f := OpenOutputFile(filename);
+    printGraph(m, positions);
+    CloseOutput();
+    Flush();
+
+    Finish();
+  END;
+END;
+
+

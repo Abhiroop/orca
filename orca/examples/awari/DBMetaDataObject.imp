@@ -1,0 +1,109 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT IMPLEMENTATION DBMetaDataObject;
+
+	# Object fields:
+unattainable:	   integer;	# number of stones that cannot be attained
+db_size:	   integer;
+nr_configs:	   longint;
+nr_dbpart_objects: integer;
+input_filename:    string;
+output_filename:   string;
+
+
+
+OPERATION Set_Unattainable(n: IN integer);
+BEGIN
+  unattainable := n;
+END;
+
+
+OPERATION Get_Unattainable(): integer;
+BEGIN
+  RETURN unattainable;
+END;
+
+
+
+OPERATION Increase_Unattainable(): integer;
+  # When a every worker is ready with the backward pass, the unattainable
+  # has to be increased. The Manager takes care for the actual incrementation.
+BEGIN
+     unattainable +:= 1;
+     ASSERT(unattainable <= db_size);
+     RETURN unattainable;
+END;
+
+
+
+OPERATION Set_DB_Size(new_db_size: IN integer);
+BEGIN
+  db_size := new_db_size;
+END;
+
+
+
+OPERATION Get_DB_Size(current_db_size: OUT integer);
+BEGIN
+  current_db_size := db_size;
+END;
+
+
+
+OPERATION Set_Nr_Configs(new_nr_configs: IN longint);
+BEGIN
+  nr_configs := new_nr_configs;
+END;
+
+
+
+OPERATION Get_Nr_Configs(current_nr_configs: OUT longint);
+BEGIN
+  current_nr_configs := nr_configs;
+END;
+
+
+
+OPERATION Set_DB_MetaData(new_nr_configs: IN longint; 
+			  new_nr_dbpart_objects: IN integer);
+BEGIN
+  nr_dbpart_objects := new_nr_dbpart_objects;
+  nr_configs := new_nr_configs;
+END;
+
+
+
+OPERATION Get_DB_MetaData(new_nr_configs: OUT longint;
+			  new_nr_dbpart_objects: OUT integer);
+BEGIN
+  new_nr_dbpart_objects := nr_dbpart_objects;
+  new_nr_configs := nr_configs;
+END;
+
+
+
+OPERATION Set_IO_Filenames(input_name:	IN string;
+			   output_name: IN string);
+BEGIN
+    input_filename  := input_name;
+    output_filename := output_name;
+END;
+
+
+
+OPERATION Get_IO_Filenames(input_name:	OUT string;
+			   output_name: OUT string);
+BEGIN
+    input_name	:= input_filename;
+    output_name := output_filename;
+END;
+
+
+
+BEGIN
+  unattainable :=  0;
+END; # DBMetaDataObject

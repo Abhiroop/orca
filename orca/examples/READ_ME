@@ -1,0 +1,10 @@
+Most of the Orca programs here were used for our TOCS paper (feb 1998).
+
+Each sub-directory has a 'compile' file which contains the compiler options
+and arguments. So, to compile an application, the command is:
+
+	<Orca Compiler> [ <extra options> ] `cat compile`
+
+There also is a 'run' file which contains the options with which the
+application should be run. For some applications, you may need to generate
+an input file first. The READ_ME files describe how.

@@ -1,0 +1,14 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+RTS_UNIXPROC = {
+	$PWD/DoFork.c,
+	$PWD/DoOperation.c,
+	$PWD/Finish.c,
+	$PWD/Time.c,
+	$PWD/alloc.c,
+	$PWD/main.c,
+	$PWD/print.c,
+	$PWD/unix.c,
+};

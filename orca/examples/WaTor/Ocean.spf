@@ -1,0 +1,19 @@
+OBJECT SPECIFICATION Ocean;
+ FROM ConTypes IMPORT  ListaPFish, entry_ocean, 
+                      ModList, elem_o;
+
+  TYPE  LinieOcean = ARRAY [integer] OF entry_ocean;   
+  TYPE MatOcean   = ARRAY [ integer] OF LinieOcean;
+
+
+
+  OPERATION  init(lat, lung, nf, ns :integer; fish, shark : ListaPFish);
+  OPERATION  GetValue() : MatOcean;
+  OPERATION  change(lista_m : ModList; nr : integer);
+  OPERATION  AfiseazaOcean(lung, lat : integer);
+  OPERATION  Busy(lista_m : ModList; nr : integer);
+  OPERATION  value(x, y : integer) : entry_ocean;
+
+END;
+
+

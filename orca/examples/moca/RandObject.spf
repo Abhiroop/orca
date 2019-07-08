@@ -1,0 +1,58 @@
+OBJECT SPECIFICATION RandObject;
+
+FROM	Common	IMPORT	RealArrayType;
+
+##
+## Return one random number between 0 an 1.
+##
+FUNCTION Random(Seed : SHARED integer) : real;
+ 
+ 
+##
+## Fill 'RanVals' with 'Count' random numbers between 0 and 1.
+##
+FUNCTION GetRan(Seed    : SHARED integer;
+		Count   : integer;
+		RanVals : OUT RealArrayType[1 .. Count]);
+
+
+##
+## Initialize RandObject for 'NrWorkers' workers.
+##
+OPERATION Init(NrWorkers, Seed : integer);
+
+
+##
+## Return one random number between 0 and 1.
+##
+OPERATION Ran() : real;
+
+
+##
+## Wait for turn.
+##
+OPERATION AwaitTurn(CPU, NrWorkers: integer);
+
+
+##
+## Increase turn and continue.
+##
+OPERATION TurnInc(Seed : OUT integer);
+
+
+##
+## Fill 'RanVals' with 'Count' random numbers between 0 and 1.
+##
+OPERATION GetVals(Count   : integer;
+                  RanVals : OUT RealArrayType[1 .. Count]);
+
+
+##
+## For all workers (sequentially and in order): fill 'RanVals' with
+## 'Count' random numbers between 0 and 1.
+##
+OPERATION GetValsSEQ(CPU,
+		     Count, NrWorkers : integer;
+                     RanVals          : OUT RealArrayType[1 .. Count]);
+
+END;

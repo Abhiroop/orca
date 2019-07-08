@@ -1,0 +1,1122 @@
+#-----------------------------------------------#
+# Author : E.J.J. de Waal			#
+# Date   : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT IMPLEMENTATION DataBasePartObject;
+
+
+FROM InOut 	IMPORT Flush; 
+FROM AwariTypes IMPORT ConfigUnit, ElementUnit, EmptySlot, ConfigList, 
+		       Configuration, GoedelAdresList,
+		       GoedelNr, GTV, GtvKnown, GtvDetermined;
+FROM unix	IMPORT creat, open, close, iobuf, read, write, lseek;
+		IMPORT ConverterObject;
+
+
+
+CONST	SEEKSET = 0;
+CONST	RD = 0;
+CONST	WR = 1;
+CONST	SignBit  = 1;
+CONST	SuccBits = 3;
+CONST	NoAdres = -1;
+
+
+TYPE	BitBuf   = ARRAY[integer] OF integer;
+TYPE	MaskType = ARRAY[integer] OF integer;
+
+#TYPE	DBPart = ARRAY[GoedelNr] OF char;
+TYPE	DBPart = iobuf;
+
+
+# This structure is used to buffer disk writes
+
+#CONST NBLOCKS = 1024;
+#CONST NBLOCKS = 8192;
+CONST NBLOCKS = 65536;
+
+TYPE diskbuffer =
+   RECORD
+	pos, size: integer;
+	buf: iobuf;
+   END;
+
+
+stones:		     integer;
+begin_adres:	     GoedelNr;
+end_adres:	     GoedelNr;
+
+		# variables needed for reading and writing to disk.
+score_bits:	     integer;
+score_bits_long:     longint;
+score_bits_prev_db:  integer;
+score_bits_l_prev_db:longint;
+
+		# variables needed for getting and putting information 
+		# from memory.
+bits_per_position:   integer;
+bits_pp_long:	     longint;
+bits_pp_prev_db:     integer;
+bits_pp_l_prev_db:   longint;
+
+nr_bytes:	     longint;
+begin_position:	     longint;
+mask:		     MaskType;
+dbp_mem:	     DBPart;
+my_unattainable:     integer;
+db_part_ready:       boolean;
+
+
+FUNCTION flush_diskbuffer(fd: integer; d: SHARED diskbuffer);
+BEGIN
+	IF d.pos > 1 THEN
+		IF write(fd, d.buf, d.pos-1) < 0 THEN
+			WriteLine("Process ", MYCPU(), ": Write Error");
+		FI;
+		d.pos := 1;
+	FI;
+END;
+
+FUNCTION buffered_write(fd: integer; chunk: iobuf; size: integer;
+		d: SHARED diskbuffer);
+BEGIN
+	ASSERT(size <= d.size);
+	IF d.pos + size - 1 > d.size THEN
+		flush_diskbuffer(fd, d);
+	FI;
+	FOR i IN 1 .. size DO
+		ASSERT(d.pos <= d.size);
+		d.buf[d.pos] := chunk[i];
+		d.pos +:= 1;
+	OD;
+END;
+
+FUNCTION buffered_read(fd: integer; r_chunk: OUT iobuf; size: integer;
+		d: SHARED diskbuffer);
+	chunk: iobuf[1..size];
+BEGIN
+	ASSERT(size <= d.size);
+	FOR i IN 1 .. size DO
+		IF d.pos > d.size THEN
+			IF read(fd, d.buf, d.size) < 0 THEN
+				WriteLine("Process ", MYCPU(), ": Read Error");
+				# Hack: try one more time:
+				IF read(fd, d.buf, d.size) < 0 THEN
+					WriteLine("Process ", MYCPU(), ": 2nd Read Error");
+					ASSERT(false);
+				FI;
+			FI;
+			d.pos := 1;
+		FI;
+		chunk[i] := d.buf[d.pos];
+		d.pos +:= 1;
+	OD;
+	r_chunk := chunk;
+END;
+FUNCTION MakeIOBuf(size: integer): iobuf;
+	tmp: iobuf[1 .. size];
+BEGIN
+	RETURN tmp;
+END;
+
+
+
+
+#
+# Determine the minimal number of bits needed to store the information
+#
+FUNCTION DetermineNrBits(stones: IN integer): integer;
+
+	nr_values: integer;
+	nr_bits:   integer;
+BEGIN
+    nr_values := (2 * stones) + 1;
+    nr_bits := 0;
+    WHILE (nr_values > 0)
+    DO
+	nr_values >>:= 1;
+	nr_bits +:= 1;
+    OD;
+    RETURN nr_bits;
+END;
+
+
+
+#
+# Determine the start of a block of 8 godelnumbers. In this block 
+# "goedel_nr" can be found.
+#
+FUNCTION DetermineBlockPosition(goedel_nr: IN GoedelNr; 
+				bits_pp: IN longint): longint;
+BEGIN
+    RETURN ((goedel_nr >> 3) * bits_pp);
+END;
+
+
+
+#
+# Initialize the array of mask bits
+#
+OPERATION InitMask(bits_pp: IN integer);
+
+	value: integer;
+	tmp_mask: MaskType[0..bits_pp];
+BEGIN
+    tmp_mask[0] := 0;
+    FOR i IN 1..bits_pp
+    DO
+	value := 1;
+        FOR j IN 1..i
+        DO
+	    value := value * 2;
+        OD;
+	tmp_mask[i] := value - 1;
+    OD;
+    mask := tmp_mask;
+END;
+
+
+
+#
+# Set the bounds of the array holding all the information.
+# To avoid using more memory than needed; we use exactly 
+# 'goedel_nr * bits_per_position' bytes.
+#
+
+FUNCTION FSetBounds(b, e: IN integer; a: OUT DBPart[b .. e]);
+BEGIN
+END;
+
+OPERATION SetBounds(b_adres: IN integer; e_adres: IN integer);
+BEGIN
+    FSetBounds(b_adres, e_adres, dbp_mem);
+END;
+
+#OPERATION SetBounds(b_adres: IN integer; e_adres: IN integer);
+#
+#	tmp_db: DBPart[b_adres..e_adres];
+#BEGIN
+#    dbp_mem := tmp_db;
+#END;
+
+
+#
+# Make some initializations to the variables and the database part
+#
+OPERATION InitDataBasePart(size: integer; b_adres, e_adres: GoedelNr);
+
+BEGIN
+    stones := size;
+    begin_adres := b_adres;
+    end_adres := e_adres;
+
+    score_bits := DetermineNrBits(stones);
+    score_bits_long := score_bits;
+    score_bits_prev_db := DetermineNrBits(stones - 1);
+    score_bits_l_prev_db := score_bits_prev_db;
+
+    bits_per_position := (score_bits + SuccBits);
+    bits_pp_long := bits_per_position;
+    bits_pp_prev_db := (score_bits_prev_db + SuccBits);
+    bits_pp_l_prev_db := bits_pp_prev_db;
+
+    nr_bytes := (((end_adres - begin_adres + 1) * bits_pp_long) / 8);
+
+    db_part_ready := false;
+    SELF$InitMask(bits_per_position);
+    #begin_position := DetermineBlockPosition(begin_adres, bits_pp_long);
+    begin_position := (begin_adres >> 3) * bits_pp_long;
+    # begin_position := 0;	# !!
+    IF MYCPU() = 0 THEN
+        WriteLine("CPU ", MYCPU(), " allocates ",
+          begin_position + nr_bytes - begin_position + 1, " bytes");
+    FI;
+    SELF$SetBounds(begin_position, (begin_position + nr_bytes));
+    FOR i IN begin_position..(begin_position + nr_bytes)
+    DO
+	dbp_mem[i] := CHR(255);
+    OD;
+END;
+
+
+
+#
+# Bits2Values translate a bitpattern to the GTV and number of successors
+#
+FUNCTION Bits2Values(bit_value: IN integer; unit: OUT ConfigUnit);
+
+	sign: integer;
+BEGIN
+    unit.nr_succ := (bit_value & 7);		# 7 = [00000111]
+    sign := (bit_value & 8);			# 8 = [00001000]
+    unit.gtv := (bit_value >> (SignBit + SuccBits));
+
+    IF (sign /= 0) THEN
+       unit.gtv := -unit.gtv;
+    FI;
+END;
+
+
+
+#
+# Values2Bits translates the GTV and number of successors to a bitpattern
+#
+FUNCTION Values2Bits(unit: IN ConfigUnit; bit_value: OUT integer); 
+
+	sign: integer;
+BEGIN
+    IF (unit.gtv < 0) THEN
+       bit_value := -unit.gtv;
+       sign := 1;
+    ELSE
+       bit_value := unit.gtv;
+       sign := 0;
+    FI;
+    
+    bit_value := (bit_value << SignBit) + sign;
+    bit_value := (bit_value << SuccBits) + unit.nr_succ;
+END;
+
+
+
+#
+# GetBits retrieves the bits, which belong to a specific goedel number,
+# from memory. The bits can be in 1, 2 or 3 bytes.
+#
+FUNCTION GetBits(r_chunk: iobuf; start_byte: longint; 
+		 start_bit, length, bpp: integer): integer;
+
+	tmp_int: integer;
+BEGIN
+    CASE length OF
+    	1 => tmp_int := (ORD(r_chunk[start_byte]) >> (8 - bpp - start_bit + 1));|
+    	2 => tmp_int := (ORD(r_chunk[start_byte]) << 8) + ORD(r_chunk[start_byte + 1]);
+    	     tmp_int >>:= (16 - bpp - start_bit + 1);	|
+	3 => tmp_int := (ORD(r_chunk[start_byte]) << 8) + ORD(r_chunk[start_byte + 1]);	
+	     tmp_int := (tmp_int << 8) + ORD(r_chunk[start_byte + 2]);
+	     tmp_int >>:= (24 - bpp - start_bit + 1);
+    ESAC;
+
+    RETURN tmp_int;
+END;
+
+
+
+#
+# SetBits puts the bits belonging to a specific goedel number at the 
+# right place in memory.
+#
+FUNCTION SetBits(w_chunk: SHARED iobuf; value, start_byte, start_bit,
+		 length, bpp: IN integer; mask: IN integer);
+
+	tmp_int: integer;
+	tmp_char: char;
+	int_mask: integer;
+	not_mask: char;
+BEGIN
+    CASE length OF
+	1 => tmp_int := (value << (8 - bpp - start_bit + 1));
+	     int_mask := (mask << (8 - bpp - start_bit + 1));
+	     not_mask := CHR((~int_mask) & 255);
+	     w_chunk[start_byte] := CHR(ORD(w_chunk[start_byte]) & ORD(not_mask));
+	     w_chunk[start_byte] := CHR(tmp_int | ORD(w_chunk[start_byte]));|
+	2 => tmp_int:= (value >> (bpp - 8 + start_bit - 1));
+	     int_mask:= (mask >> (bpp - 8 + start_bit - 1));
+	     not_mask := CHR((~int_mask) & 255);
+	     w_chunk[start_byte] := CHR(ORD(w_chunk[start_byte]) & ORD(not_mask));
+	     w_chunk[start_byte] := CHR(tmp_int | ORD(w_chunk[start_byte]));
+
+	     tmp_int := (value << (16 - bpp - start_bit + 1));
+	     int_mask := (mask << (16 - bpp - start_bit + 1));
+	     not_mask := CHR((~int_mask) & 255);
+	     w_chunk[start_byte + 1] := CHR(ORD(w_chunk[start_byte + 1]) & ORD(not_mask));
+	     tmp_char := CHR((tmp_int & 255));
+	     w_chunk[start_byte + 1] := CHR(ORD(tmp_char) | ORD(w_chunk[start_byte + 1]));|
+	3 => tmp_int := (value >> (bpp - 8 + start_bit - 1));
+	     int_mask := (mask >> (bpp - 8 + start_bit - 1));
+	     not_mask := CHR((~int_mask) & 255);
+	     w_chunk[start_byte] := CHR(ORD(w_chunk[start_byte]) & ORD(not_mask));
+	     w_chunk[start_byte] := CHR(tmp_int | ORD(w_chunk[start_byte]));
+
+	     tmp_int := (value >> (bpp - 16 + start_bit - 1));
+	     int_mask := (mask >> (bpp - 16 + start_bit - 1));
+	     not_mask := CHR((~int_mask) & 255);
+	     w_chunk[start_byte + 1] := CHR(ORD(w_chunk[start_byte + 1]) & ORD(not_mask));
+	     w_chunk[start_byte + 1] := CHR(tmp_int | ORD(w_chunk[start_byte + 1]));
+
+	     tmp_int := (value << (24 - bpp - start_bit + 1));
+	     int_mask := (mask << (24 - bpp - start_bit + 1));
+	     not_mask := CHR((~int_mask) & 255);
+	     w_chunk[start_byte + 2] := CHR(ORD(w_chunk[start_byte + 2]) & ORD(not_mask));
+	     
+	     tmp_char := CHR((tmp_int & 255));
+	     w_chunk[start_byte + 2] := CHR(ORD(tmp_char) | ORD(w_chunk[start_byte + 2]));
+    ESAC;
+END;
+
+
+
+#
+# TranslateReadChunk takes a block of 8 goedel numbers which are stored in
+# "bits_pp" bytes. It extracts the bits belonging to a specific goedel number,
+# by calculating the byte the first bit is in and which bit of that byte is
+# the beginning bit.
+# 
+FUNCTION TranslateReadChunk(bits_pp: integer; read_chunk: iobuf; 
+			    bit_mask: integer; value_chunk: OUT BitBuf[1..8]);
+	start_byte: integer;
+	start_bit: integer;
+	length: integer;
+	tmp_int: integer;
+BEGIN
+    FOR adres IN 1..8
+    DO
+	start_byte := (((adres -1) * bits_pp) / 8) + 1;
+	start_bit := (((adres -1) * bits_pp) % 8) + 1;
+	length := (start_bit + bits_pp + 6) / 8;
+		# Tel er zes bij op zodat de lengte minimaal 1 is
+	tmp_int := GetBits(read_chunk, start_byte, start_bit, 
+						   length, bits_pp);
+	value_chunk[adres] := (tmp_int & bit_mask);
+    OD;
+END;
+
+
+
+#
+# Translate2WriteChunk takes a block of 8 bitstrings and put it at 
+# the right place in memory.
+# This function is the reverse of TranslateReadChunk.
+#
+FUNCTION Translate2WriteChunk(bits_pp: integer; value_chunk: BitBuf; 
+			      bit_mask: integer; write_chunk: OUT iobuf[1..bits_pp]);
+
+	start_byte: integer;
+	start_bit: integer;
+	length: integer;
+BEGIN
+    FOR i IN 1..bits_pp
+    DO
+	write_chunk[i] := CHR(0);
+    OD;
+    FOR adres IN 1..8
+    DO
+	start_byte := (((adres -1) * bits_pp) / 8) + 1;
+	start_bit := (((adres -1) * bits_pp) % 8) + 1;
+	length := (start_bit + bits_pp + 6) / 8;
+		# Tel er zes bij op zodat de lengte minimaal 1 is
+	SetBits(write_chunk, value_chunk[adres], start_byte, start_bit, 
+			     length, bits_pp, bit_mask);
+    OD;
+END;
+
+
+
+#
+# Because the value of the successors need not be stored on disk,
+# the bits for the successors have to be added.
+#
+FUNCTION AddSuccBits(chunk: SHARED BitBuf);
+
+BEGIN 
+    FOR i IN 1..8
+    DO
+	chunk[i] <<:= SuccBits;
+    OD;
+END;
+
+
+
+#
+# To avoid that successor bits are stored on disk, they have to 
+# be removed. For the database written to disk, the value of 
+# successors is not needed.
+#
+FUNCTION RemoveSuccBits(chunk: SHARED BitBuf);
+
+BEGIN 
+    FOR i IN 1..8
+    DO
+	chunk[i] >>:= SuccBits;
+    OD;
+END;
+
+
+
+#
+# GetValues retrieves the GTV and the number of successors for 
+# "goedel_adres" from memory.
+#
+FUNCTION GetValues(goedel_adres: IN GoedelNr; bit_chunk: IN iobuf; 
+		   bits_pp: IN integer; bit_mask: integer; unit: OUT ConfigUnit);
+
+	value: integer;
+	place: longint;
+	start_byte: longint;
+	start_bit: integer;
+	length: integer;
+	sign: integer;
+BEGIN
+    IF bits_pp = 8 THEN
+    	value := ORD(bit_chunk[goedel_adres]);
+    ELSE
+        place := (goedel_adres * VAL(longint, bits_pp));
+        start_byte := ((place >> 3) % bits_pp) 
+		# + DetermineBlockPosition(goedel_adres, VAL(longint, bits_pp));
+	        + (goedel_adres >> 3) *  VAL(longint, bits_pp);
+        # start_bit := (place % 8) + 1;
+        start_bit := (place & 7) + 1;
+        length := ((start_bit + bits_pp + 6) >> 3);
+		    # Tel er zes bij op zodat de lengte minimaal 1 is
+        value := GetBits(bit_chunk, start_byte, start_bit, length, bits_pp);
+    FI;
+    value &:= bit_mask;
+    #Bits2Values(value, unit);
+    # inlined:
+    unit.nr_succ := (value & 7);		# 7 = [00000111]
+    sign := (value & 8);			# 8 = [00001000]
+    unit.gtv := (value >> (SignBit + SuccBits));
+
+    IF (sign /= 0) THEN
+       unit.gtv := -unit.gtv;
+    FI;
+END;
+
+
+
+#
+# PutValues stores the GTV and the number of successors for 
+# "goedel_adres" into memory.
+#
+FUNCTION PutValues(goedel_adres: IN GoedelNr; value: IN integer;
+		   bits_pp: IN integer; bit_mask: IN integer; dbp: SHARED iobuf); 
+
+	place: longint;
+	start_byte: integer;
+	start_bit: integer;
+	length: integer;
+BEGIN
+    place := (goedel_adres * VAL(longint, bits_pp));
+    start_byte := ((place >> 3) % bits_pp) 
+		# + DetermineBlockPosition(goedel_adres, VAL(longint, bits_pp));
+	        + ((goedel_adres >> 3) * VAL(longint, bits_pp));
+    # start_bit := ((goedel_adres * VAL(longint, bits_pp)) % 8) + 1;
+    start_bit := ((goedel_adres * VAL(longint, bits_pp)) & 7) + 1;
+    length := ((start_bit + bits_pp + 6) >> 3);
+		# Tel er zes bij op zodat de lengte minimaal 1 is
+    SetBits(dbp, value, start_byte, start_bit, length, bits_pp, bit_mask);
+END;
+
+
+
+#
+# ReadDBPFromDisk is made for debugging.
+# It reads a part of the database from disk and puts it into memory.
+# For creating a new database, the previous database (a size -1 DB)
+# has to be read in. This is done in ReadPreviousDB.
+#
+OPERATION ReadDBPFromDisk(filename: string);
+
+	fd_in: integer;
+	return_value: integer;
+	position: GoedelNr;
+	read_chunk: iobuf;
+	value_chunk: BitBuf;
+	bit_chunk: iobuf;
+	mem_index: GoedelNr;
+BEGIN
+    fd_in := open(filename, RD);
+    IF (fd_in < 0) THEN
+	WriteLine("Process ", MYCPU(),": Error opening inputfile: ", filename); Flush();
+    ELSE
+	position := begin_adres;
+	return_value :=  lseek(fd_in, (begin_adres >> 3)*score_bits_long, SEEKSET);
+	IF (return_value < 0) THEN
+	    WriteLine("Process ", MYCPU(), ": Error on lseek for reading: ", filename); Flush();
+        ELSE
+            WHILE (position <= end_adres)
+            DO		# read a block of 8 goedel numbers
+	        return_value := read(fd_in, read_chunk, score_bits);
+		IF (return_value < 0) THEN
+		    WriteLine("Process ", MYCPU(),": Read error on file: ", filename); Flush();
+		ELSE
+		    TranslateReadChunk(score_bits, read_chunk, 
+				       mask[score_bits], value_chunk);
+		    AddSuccBits(value_chunk);
+		    Translate2WriteChunk(bits_per_position, value_chunk,
+					 mask[bits_per_position], bit_chunk);
+		    #mem_index := DetermineBlockPosition(position, bits_pp_long);
+		    mem_index := ((position >> 3) * bits_pp_long);
+		    FOR i IN 1..bits_per_position
+		    DO		# Check if the end position is already reached
+				# Can be improved. Slows down reading.
+			IF ((mem_index + i - 1) <= (begin_position + nr_bytes)) THEN
+
+			    dbp_mem[mem_index + i - 1] := bit_chunk[i];
+			FI;
+	            OD;
+	            position +:= 8;
+		FI;
+		Flush();
+            OD;
+	    return_value := close(fd_in);
+	    IF (return_value < 0) THEN
+	        WriteLine("Process ", MYCPU(),": Error closing inputfile: ", filename); Flush();
+	    FI;
+	FI;
+    FI;
+    Flush();
+END;
+
+
+
+#
+# ReadPreviousDB reads a part of the previous database 
+# (i.e. the DB with (size - 1)). For every goedel number
+# in the previous DB, the new position (goedel number) has to
+# be determined.
+# 
+OPERATION ReadPreviousDB(filename: IN string; 
+			 b_adres:  IN GoedelNr;
+			 e_adres:  IN GoedelNr;
+			 convert:  IN ConverterObject);
+
+	fd_in: integer;
+	return_value: integer;
+	position: GoedelNr;
+	new_position: GoedelNr;
+	read_chunk: iobuf;
+	value_chunk: BitBuf;
+	index: integer;
+	conf: Configuration;
+	unit: ConfigUnit;
+	first_time: boolean;
+
+	d: diskbuffer;
+BEGIN
+    d.size := NBLOCKS * score_bits_prev_db;
+    d.pos := d.size + 1;
+    d.buf := MakeIOBuf(d.size);
+    IF (b_adres /= NoAdres) THEN
+        fd_in := open(filename, RD);
+        IF (fd_in < 0) THEN
+  	    WriteLine("Process ", MYCPU(),": Error opening inputfile: ", filename); Flush();
+        ELSE
+	    first_time := true;
+	    position := b_adres;
+	    return_value :=  lseek(fd_in, (b_adres >> 3)*score_bits_l_prev_db, SEEKSET);
+	    IF (return_value < 0) THEN
+	        WriteLine("Process ", MYCPU(),": Error on lseek for reading: ", filename); Flush();
+            ELSE
+                WHILE (position <= e_adres )
+                DO
+	            # return_value := read(fd_in, read_chunk, score_bits_prev_db);
+	            buffered_read(fd_in, read_chunk, score_bits_prev_db, d);
+		    IF (return_value < 0) THEN
+		        WriteLine("Process ", MYCPU(),": Read error on file: ", filename); Flush();
+		    ELSE
+		        TranslateReadChunk(score_bits_prev_db, read_chunk, 
+				           mask[score_bits_prev_db], value_chunk);
+			AddSuccBits(value_chunk);
+
+		        IF (first_time = true) THEN	# determine which number in the 
+			    index := (b_adres % 8) + 1;	# block of 8 numbers is the first 
+			    first_time := false;	# goedelnumber of this DB part
+		        ELSE
+		            index := 1;
+		        FI;
+
+	                WHILE ((index <= 8) AND (position <= e_adres))
+	                DO	# process the block of 8 numbers.
+			    convert$DB_Goedel2Config(position, (stones - 1), conf);
+			    convert$DB_Config2Goedel(conf, stones, new_position);
+			    unit.nr_succ := GtvKnown;
+			    PutValues(new_position, value_chunk[index],
+				      bits_per_position, mask[bits_per_position], 
+				      dbp_mem);
+
+			    position +:= 1;
+			    index +:= 1;
+	                OD;
+			Flush();
+		    FI;
+                OD;
+	        return_value := close(fd_in);
+	        IF (return_value < 0) THEN
+	            WriteLine("Process ", MYCPU(),": Error closing inputfile: ", filename); Flush();
+	        FI;
+	    FI;
+        FI;
+    FI;
+END;
+
+FUNCTION concat(s: SHARED string; no: integer);
+	tmp: string[LB(s) .. UB(s)+3];
+BEGIN
+	# turn string s into "s.nn"
+	FOR i IN LB(s) .. UB(s) DO
+		tmp[i] := s[i];
+	OD;
+	tmp[UB(s)+1] := '.';
+	ASSERT(no < 100);
+	tmp[UB(s)+2] := CHR(ORD('0') + no/10);
+	tmp[UB(s)+3] := CHR(ORD('0') + no%10);
+	s := tmp;
+END;
+
+
+#
+# WriteDBPToDisk takes blocks of 8 goedel numbers, removes the successor 
+# bits and writes it to disk.
+#
+OPERATION WriteDBPToDisk(filename: string; partno: integer; onefile: boolean);
+
+	fd_out: integer;
+	return_value: integer;
+	value_chunk: BitBuf[1..8];
+	bit_chunk: iobuf[1..9];
+	w_chunk: iobuf;
+	position: GoedelNr;
+	mem_index: GoedelNr;
+	d: diskbuffer;
+
+
+BEGIN
+    d.pos := 1;
+    d.size := NBLOCKS * 8;
+    d.buf := MakeIOBuf(d.size);
+    onefile := false;	# !! always write to different files
+    IF NOT onefile THEN
+	concat(filename, partno);
+    FI;
+    fd_out := open(filename, WR);
+    IF (fd_out < 0) THEN
+	fd_out := creat(filename, 644B);
+	IF (fd_out < 0) THEN
+	    WriteLine("Process ", MYCPU(),": Error opening ouputfile: ", filename); Flush();
+	    RETURN;
+	FI;
+    FI;
+    position := begin_adres;
+    IF onefile THEN
+         return_value :=  lseek(fd_out, (begin_adres >> 3)*score_bits_long,
+				SEEKSET);
+    ELSE
+	 return_value := 0;
+    FI;
+
+    IF (return_value < 0) THEN
+        WriteLine("Process ", MYCPU(),": Error on lseek for writing: ", filename); Flush();
+    ELSE
+        WHILE (position < end_adres)
+        DO	# write DB in blocks of 8 numbers to disk
+	    # mem_index := DetermineBlockPosition(position, bits_pp_long);
+	    mem_index := ((position >> 3) * bits_pp_long);
+	    FOR i IN 1..bits_per_position
+	    DO	# fill a block with 8 goedel numbers
+		IF ((mem_index + i - 1) <= (begin_position + nr_bytes)) THEN
+		    bit_chunk[i] := dbp_mem[mem_index + i - 1];
+		ELSE	# end of DB is reached, fill with zeros til end
+		    bit_chunk[i] := CHR(0);
+		FI;
+	    OD;
+
+	    TranslateReadChunk(bits_per_position, bit_chunk,
+			       mask[bits_per_position], value_chunk);
+
+	    position +:= 8;
+
+	    RemoveSuccBits(value_chunk);
+	    Translate2WriteChunk(score_bits, value_chunk, 
+				 mask[score_bits], w_chunk);
+
+	    # return_value := write(fd_out, w_chunk, score_bits);
+	    buffered_write(fd_out, w_chunk, score_bits, d);
+	    IF (return_value < 0) THEN
+	        WriteLine("Process ", MYCPU(),": Write error on file: ", filename); Flush();
+	    FI;
+	Flush();
+	OD;
+	flush_diskbuffer(fd_out, d);
+	return_value := close(fd_out);
+	IF (return_value < 0) THEN
+	    WriteLine("Process ", MYCPU(),": Error closing outputfile: ", filename); Flush();
+	FI;
+    FI;
+END;
+
+
+
+#-----------------------------------------------------------------------
+
+
+#
+# Get the information of 'goedel_index' from the database.
+#
+OPERATION Get_DBPart_Element(goedel_index: IN GoedelNr; unit: OUT ConfigUnit);
+BEGIN
+    GetValues(goedel_index, dbp_mem, bits_per_position, 
+	      mask[bits_per_position], unit);
+END;
+
+
+
+#
+# Get only the current game theoretical value of 'goedel_index' from the
+# database.
+#
+OPERATION Get_DBPart_Element_Value(goedel_index: IN GoedelNr; 
+				   element_value: OUT GTV);
+	unit: ConfigUnit;
+BEGIN
+    GetValues(goedel_index, dbp_mem, bits_per_position, 
+	      mask[bits_per_position], unit);
+    element_value := unit.gtv;
+END;
+
+
+
+#
+# Get information of more than one goedelnumber from the database.
+# Currently not used.
+#
+OPERATION Get_DBPart_Elements(goedel_nr_list: IN GoedelAdresList;
+			      element_list: OUT ConfigList);
+
+	list_index: longint;
+	unit: ConfigUnit;
+BEGIN
+    list_index := LB(goedel_nr_list);
+    WHILE ((list_index <= UB(goedel_nr_list)) AND
+	   (goedel_nr_list[list_index] /= EmptySlot)) 
+    DO
+    	    GetValues(goedel_nr_list[list_index], dbp_mem, bits_per_position, 
+		      mask[bits_per_position], unit);
+	    element_list[list_index].goedel_nr := goedel_nr_list[list_index];
+	    element_list[list_index].gtv := unit.gtv;
+	    element_list[list_index].nr_succ := unit.nr_succ;
+	    list_index +:= 1;
+    OD;
+    IF (list_index <= UB(element_list)) THEN
+        element_list[list_index].goedel_nr := EmptySlot;
+    FI;
+END;
+
+
+
+#
+# Set the value of goedelnumber in the database part without any checks.
+#
+OPERATION Set_DBPart_Element(element: IN ElementUnit);
+	value: integer;
+	unit: ConfigUnit;
+BEGIN
+    db_part_ready := false;
+
+    unit.gtv := element.gtv;
+    unit.nr_succ := element.nr_succ;
+    Values2Bits(unit, value);
+    PutValues(element.goedel_nr, value, bits_per_position, 
+	      mask[bits_per_position], dbp_mem);
+END;
+
+
+
+#
+# Check whether a goedelnumber is not known or determined. 
+# This information is taken from the field "nr_succ".
+#
+FUNCTION NotKnownOrDetermined(succ_value: integer): boolean;
+BEGIN
+    RETURN ((succ_value /= GtvKnown) AND
+	    (succ_value > GtvKnown) AND
+	    (succ_value /= GtvDetermined));
+END;
+
+
+
+#
+# Put the value of a goedelnumber and the number of successors
+# in the DB part if this number is not already known or determined.
+# If the value is already known or determined, it is unnecessary
+# to do some extra work.
+#
+OPERATION Put_DBPart_Element(element: IN ElementUnit);
+	value: integer;
+	unit: ConfigUnit;
+BEGIN
+    GetValues(element.goedel_nr, dbp_mem, bits_per_position, 
+	      			 mask[bits_per_position], unit);
+
+    IF (NotKnownOrDetermined(unit.nr_succ)) THEN
+        db_part_ready := false;
+        unit.gtv := element.gtv;
+        unit.nr_succ := element.nr_succ;
+        Values2Bits(unit, value);
+	# WriteLine("goedel ", element.goedel_nr, " becomes " , unit.gtv);
+        PutValues(element.goedel_nr, value, bits_per_position, 
+		  mask[bits_per_position], dbp_mem);
+    ELSE
+	#WriteLine("Warning --> nr_succ already known or determined"); Flush();
+    FI;
+END;
+
+
+
+#
+# Put the value of a goedelnumber in the DB part if this
+# number is not already known or determined.
+# If the value is already known or determined, it is unnecessary
+# to do some extra work.
+#
+OPERATION Put_DBPart_Element_Value(goedel_index: IN GoedelNr; 
+				   element_value: IN GTV);
+	value: integer;
+	unit: ConfigUnit;
+BEGIN
+    GetValues(goedel_index, dbp_mem, bits_per_position, 
+	      mask[bits_per_position], unit);
+
+    IF (NotKnownOrDetermined(unit.nr_succ)) THEN
+        db_part_ready := false;
+        unit.gtv := element_value;
+        Values2Bits(unit, value);
+	# WriteLine("goedel ", goedel_index, " becomes " , unit.gtv);
+        PutValues(goedel_index, value, bits_per_position, 
+		  mask[bits_per_position], dbp_mem);
+    ELSE
+	#WriteLine("Warning --> nr_succ already known or determined");  Flush();
+    FI;
+END;
+
+
+
+#
+# Put information of more than one goedelnumber into the database.
+#
+OPERATION Put_DBPart_Elements(element_list: IN ConfigList);
+
+	list_index: longint;
+	value: integer;
+	unit: ConfigUnit;
+
+BEGIN
+    list_index := LB(element_list);
+    WHILE ((list_index <= UB(element_list)) AND
+	   (element_list[list_index].goedel_nr /= EmptySlot)) 
+    DO
+            GetValues(element_list[list_index].goedel_nr, dbp_mem, 
+		      bits_per_position, mask[bits_per_position], unit);
+
+	    IF (NotKnownOrDetermined(unit.nr_succ)) THEN
+                db_part_ready := false;
+                unit.gtv := element_list[list_index].gtv;
+                unit.nr_succ := element_list[list_index].nr_succ;
+    	        Values2Bits(unit, value);
+    	        PutValues(element_list[list_index].goedel_nr, value, 
+			  bits_per_position, mask[bits_per_position], dbp_mem);
+	    ELSE
+		#WriteLine("Warning --> nr_succ already known or determined"); Flush();
+	    FI;
+	list_index +:= 1;
+    OD;
+END;
+
+
+
+OPERATION Update_DBPart_Element_Value(goedel_index: IN GoedelNr; 
+				     element_value: IN GTV;
+				     optimal: IN boolean;
+			     best_value: OUT GTV): boolean;
+	value: integer;
+	unit: ConfigUnit;
+BEGIN
+    GetValues(goedel_index, dbp_mem, bits_per_position, 
+	      mask[bits_per_position], unit);
+
+    IF (NotKnownOrDetermined(unit.nr_succ)) THEN
+        db_part_ready := false;
+	IF optimal THEN
+	    ASSERT(element_value >= unit.gtv);
+	    unit.gtv := element_value;
+	    unit.nr_succ := GtvKnown;
+        ELSIF element_value > unit.gtv THEN		# !!
+	    unit.gtv := element_value;
+	    unit.nr_succ -:= 1;
+	ELSE
+	    unit.nr_succ -:= 1;
+        FI;
+
+	Values2Bits(unit, value);
+	PutValues(goedel_index, value, bits_per_position, 
+		  mask[bits_per_position], dbp_mem);
+	# WriteLine("goedel ", goedel_index, " becomes " , unit.gtv);
+	best_value := unit.gtv;
+	RETURN unit.nr_succ = GtvKnown;
+    ELSE
+	#WriteLine("Warning --> attempt: nr_succ is < 0"); Flush();
+	RETURN false;
+    FI;
+END;
+
+# 
+# Place the value of the goedelnumber in the DB part.
+# This means that if the value is better than the current
+# value in the database, it is put and the number of
+# successors is decreased by one.
+#
+OPERATION Place_DBPart_Element(element: IN ElementUnit);
+	value: integer;
+	unit: ConfigUnit;
+BEGIN
+    GetValues(element.goedel_nr, dbp_mem, bits_per_position, 
+	      mask[bits_per_position], unit);
+
+    IF (NotKnownOrDetermined(unit.nr_succ)) THEN
+        db_part_ready := false;
+
+        IF element.gtv > unit.gtv THEN	# !!
+	    unit.gtv := element.gtv;
+        FI;
+	unit.nr_succ -:= 1;
+	Values2Bits(unit, value);
+	# WriteLine("goedel ", element.goedel_nr, " becomes " , unit.gtv);
+	PutValues(element.goedel_nr, value, bits_per_position, 
+		  mask[bits_per_position], dbp_mem);
+    ELSE
+	    #WriteLine("Warning --> attempt: nr_succ is < 0"); Flush();
+    FI;
+END;
+
+
+
+# 
+# Place the value of the goedelnumber in the DB part.
+# This means that if the value is better than the current
+# value in the database, it is put and the number of
+# successors is decreased by one.
+#
+OPERATION Place_DBPart_Element_Value(goedel_index: IN GoedelNr; 
+				     element_value: IN GTV);
+	value: integer;
+	unit: ConfigUnit;
+BEGIN
+    GetValues(goedel_index, dbp_mem, bits_per_position, 
+	      mask[bits_per_position], unit);
+
+    IF (NotKnownOrDetermined(unit.nr_succ)) THEN
+        db_part_ready := false;
+        IF element_value > unit.gtv THEN	# !!
+	    unit.gtv := element_value;
+        FI;
+	unit.nr_succ -:= 1;
+	Values2Bits(unit, value);
+	# WriteLine("goedel ", goedel_index, " becomes " , unit.gtv);
+	PutValues(goedel_index, value, bits_per_position, 
+		  mask[bits_per_position], dbp_mem);
+    ELSE
+	#WriteLine("Warning --> attempt: nr_succ is < 0"); Flush();
+    FI;
+END;
+
+
+
+#
+# Place information of more than one goedelnumber into the database.
+#
+OPERATION Place_DBPart_Elements(element_list: IN ConfigList);
+
+	list_index: GoedelNr;
+	value: integer;
+	unit: ConfigUnit;
+BEGIN
+    list_index := LB(element_list);
+    WHILE ((list_index <= UB(element_list)) AND
+	   (element_list[list_index].goedel_nr /= EmptySlot))
+    DO
+        GetValues(element_list[list_index].goedel_nr, dbp_mem, bits_per_position, 
+		                      mask[bits_per_position], unit);
+
+        IF (NotKnownOrDetermined(unit.nr_succ)) THEN
+            db_part_ready := false;
+            IF element_list[list_index].gtv > unit.gtv THEN	# !!
+	        unit.gtv := element_list[list_index].gtv;
+	    FI;
+	    unit.nr_succ -:= 1;
+	    Values2Bits(unit, value);
+	    PutValues(element_list[list_index].goedel_nr, value, 
+		       bits_per_position, mask[bits_per_position], dbp_mem);
+	ELSE
+	    #WriteLine("Warning --> nr_succ already known or determined"); Flush();
+        FI;
+	list_index +:= 1;
+    OD;
+END;
+
+
+ 
+#
+# Set this goedelnumber determined, without any check.
+#
+OPERATION Set_DBPart_Element_Determined(goedel_index: IN GoedelNr);
+
+        value: integer;
+        unit: ConfigUnit;
+BEGIN
+    GetValues(goedel_index, dbp_mem, bits_per_position, 
+              mask[bits_per_position], unit);
+    #db_part_ready := false;       # Is dat hier noodzakelijk?     <------
+    unit.nr_succ := GtvDetermined;
+    Values2Bits(unit, value);
+    PutValues(goedel_index, value, bits_per_position, 
+	      mask[bits_per_position], dbp_mem);
+END;
+
+
+#-----------------------------------------------------------------------
+
+
+#
+# Tell this database part that there are no more new values
+#
+OPERATION SetDBPartReady();
+BEGIN
+    db_part_ready := true;
+END;
+
+
+
+#
+# Tell this database part that there are new values.
+#
+OPERATION SetDBPartNotReady();
+BEGIN
+    db_part_ready := false;
+END;
+
+
+#
+# If there are new values, the answer is false, 
+# else the answer is true.
+#
+OPERATION IsDBPartReady(): boolean;
+BEGIN
+    RETURN db_part_ready;
+END;
+
+
+
+#
+# Tell this database part the current 'unattainable' value
+#
+OPERATION CopyUnattainable(value: integer);
+BEGIN
+    my_unattainable := value;
+END;
+
+
+
+
+END; # implementation DataBasePartObject

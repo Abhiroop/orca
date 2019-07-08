@@ -1,0 +1,112 @@
+MODULE IMPLEMENTATION main;
+
+FROM AvlTree IMPORT AvlTree;
+FROM Finish IMPORT Finish;
+FROM Time IMPORT SysMilli, PrintTime;
+
+FROM AvlTree IMPORT AVL_UPDATE_NEW;
+FROM AvlTree IMPORT AVL_UPDATE_OLD;
+
+FROM AvlTree IMPORT AVL_SEARCH_NOT_OK;
+FROM AvlTree IMPORT AVL_SEARCH_OK;
+
+FROM AvlTree IMPORT AVL_DELETE_NOT_OK;
+FROM AvlTree IMPORT AVL_DELETE_OK;
+
+FROM AvlTree IMPORT UserRecord;
+FROM AvlTree IMPORT OperationRecord;
+
+CONST FALSE = 0;
+CONST TRUE = 1;
+
+CONST KEY_RANGE = 10;
+
+FUNCTION AvlVerify (Tree : SHARED AvlTree);
+
+   NodeAlloc : ARRAY [integer 0..KEY_RANGE] OF integer;
+   rc, i, next, count : integer;
+   ran_u, ran_d : integer;
+   record : UserRecord;
+   retrec : OperationRecord;
+BEGIN
+
+   ran_u := KEY_RANGE/2;	# first update key
+   ran_d := 0;			# first delete key
+
+   i := 0;
+   WHILE (i <= KEY_RANGE) DO
+      NodeAlloc [i] := FALSE;			# no tree entry for <i>
+      i +:= 1;
+   OD;
+
+   count := 0;
+   WHILE (count < 100000) DO
+      NodeAlloc [ran_u] := TRUE;
+      record.key := ran_u;
+      rc := Tree$AvlUpdate (record);
+      IF (rc /= AVL_UPDATE_NEW) AND
+         (rc /= AVL_UPDATE_OLD) THEN
+         WriteLine ("AvlUpdate return code error : ", rc);
+         Finish ();
+      FI;
+      ran_u := (ran_u + 1) % KEY_RANGE;		# next "random" key : worst case update
+
+      NodeAlloc [ran_d] := FALSE;
+      record.key := ran_d;
+      rc := Tree$AvlDelete (record);
+      IF (rc /= AVL_DELETE_OK) AND
+         (rc /= AVL_DELETE_NOT_OK) THEN
+         WriteLine ("AvlDelete return code error : ", rc);
+         Finish ();
+      FI;
+      ran_d := (ran_d + 1) % KEY_RANGE;		# next "random" key : worst case delete
+
+      count +:= 1;
+   OD;
+
+   # check AVL functions
+
+   WriteLine ("check of AVL tree :");
+
+   next := 0;
+   WHILE (next < KEY_RANGE) DO
+      record.key := next;
+      retrec := Tree$AvlSearch (record);
+      IF (retrec.return_code = AVL_SEARCH_OK) THEN
+         IF (NodeAlloc [next] = FALSE) THEN
+            WriteLine ("error for ", next, "(in tree)");
+         FI;
+      ELSE
+         IF (retrec.return_code = AVL_SEARCH_NOT_OK) THEN
+            IF (NodeAlloc [next] = TRUE) THEN
+               WriteLine ("error for ", next, " (not in tree)");
+            FI;
+         ELSE
+            WriteLine ("illegal RETURN code of AvlSearch");
+            Finish ();
+         FI;
+      FI;
+
+      next +:= 1;
+   OD;
+
+   WriteLine ("end check of AVL tree");
+
+
+   RETURN;
+END;	# AvlVerify
+
+PROCESS OrcaMain ();
+start, stop : integer;
+Tree : AvlTree;
+   BEGIN
+      start := SysMilli ();
+      AvlVerify (Tree);
+      stop := SysMilli ();
+
+      Tree$AvlDisplay ();
+      Tree$AvlStatistics ();
+      PrintTime ("AVL", stop - start);
+      Finish ();
+   END;
+END;

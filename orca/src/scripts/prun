@@ -1,0 +1,144 @@
+#!/bin/csh -fe
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+onintr INTERRUPTED
+
+set ORCA_HOME = /usr/proj/orca
+
+set RM		= /bin/rm
+set n_timeout	= 600
+set delta_t	= 1
+set panda_version = 2
+set act		=
+
+set CWD = $cwd
+if ($?PANDA_HOSTS) then
+	set PANDA_HOSTS = ( $PANDA_HOSTS )
+endif
+
+while ($#argv > 0)
+	switch ( $1 )
+case -c:
+		shift;
+		set CWD = $1
+		breaksw
+case -d:
+		shift;
+		set delta_t = $1
+		breaksw
+case -f:
+		shift;
+		set first = $1
+		breaksw
+case -h:
+		shift;
+		set PANDA_HOSTS = `cat $1`
+		breaksw
+case -l:
+		shift;
+		set last = $1
+		breaksw
+case -n:
+		set act = echo
+		breaksw
+case -t:
+		shift;
+		set n_timeout = $1
+		breaksw
+case -1:
+		set panda_version = 1
+		breaksw
+case -2:
+		set panda_version = 2
+		breaksw
+default:
+		break
+endsw
+	shift
+end
+
+if ( $#argv < 2) then
+	echo usage: `basename $0` '{switches}' appl '#cpu' '[arguments]'
+	echo switches:
+	echo '	-c <current working dir>'
+	echo '	-d <timeout check interval [sec]>'
+	echo '	-h <file of hosts>'
+	if ($panda_version == 1) then
+		echo '	-f <first host>		: start on cpu first .. #cpu [default 1]'
+		echo '	-l <last host>		: start on cpu 1 .. last [default #cpu]'
+	else
+		echo '	-f <first host>		: start on cpu first .. #cpu-1 [default 0]'
+		echo '	-l <last host>		: start on cpu 0 .. last-1 [default #cpu]'
+	endif
+	echo '	-t <max nr of timeout checks>'
+	echo '	-1		: panda1.x'
+	echo '	-2		: panda2.x'
+	exit 1
+endif
+
+if (! $?PANDA_HOSTS) then
+	echo "either set environment var PANDA_HOSTS or specify -h host_file"
+	exit
+endif
+
+set FILES	= ''
+
+if ( $1 =~ /* ) then
+    set comm = $1
+else
+    set comm = ./$1
+endif
+
+if ($panda_version == 1) then
+	if (! $?first) set first = 1
+	if (! $?last)  set last  = $2
+else
+	if (! $?first) set first = 0
+	if (! $?last)  set last  = $2
+	@ last = $last - 1
+endif
+
+if (($last - $first) + 1 > $#PANDA_HOSTS) then
+	echo "too few machines available"
+	exit
+endif
+
+$act $RM -f pillow_adm panda_adm
+
+set HOSTFILE = .hostfile$$
+set cpu = $first
+@ usedhosts = ($last - $first) + 1
+while ($cpu <= $last)
+	@ host = ($cpu - $first) + 1
+	set M = $PANDA_HOSTS[$host]
+	set F = .out$$.$cpu
+	echo $PANDA_HOSTS[-$usedhosts] > $HOSTFILE
+
+	if ($act == echo) then
+		echo rsh $M -n cd  $CWD ';' \
+			$ORCA_HOME/bin/watchit -f $HOSTFILE $n_timeout \
+					$delta_t $comm $cpu $argv[2-]
+	else
+		rsh $M -n cd  $CWD ';' \
+			$ORCA_HOME/bin/watchit -f $HOSTFILE $n_timeout \
+					$delta_t $comm $cpu $argv[2-] >&$F &
+	endif
+
+	set FILES = "$FILES $F"
+	@ cpu = $cpu + 1
+end
+
+wait
+
+INTERRUPTED:
+
+if ($act != echo) then
+	foreach f ($FILES)
+		echo ================= $comm `echo $f | sed -e 's/.*\.//'` $argv[2-]
+		cat $f
+	end
+	$RM $FILES
+endif
+$RM $HOSTFILE

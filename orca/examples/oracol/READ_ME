@@ -1,0 +1,2 @@
+Oracol is a chess problem solver. The current problem set is defined in
+the function LoadProblems(), in Board.imp.

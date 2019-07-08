@@ -1,0 +1,15 @@
+OBJECT SPECIFICATION HashTableObject;
+
+
+	FROM TspTypes IMPORT
+		MoveInfo;
+
+	OPERATION Lookup (id : string) : MoveInfo;
+	OPERATION Insert (id : string; move : string; v : integer);
+	OPERATION PrintStatistics ();
+
+	OPERATION Save (name : string);
+	OPERATION Load (name : string);
+
+END;
+

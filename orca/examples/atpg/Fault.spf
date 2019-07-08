@@ -1,0 +1,59 @@
+MODULE SPECIFICATION Fault;
+
+	FROM AtpgTypes IMPORT Possible_Fault;
+
+	FROM Circuit IMPORT Circuit;
+
+	FROM Config IMPORT Config_Rec;
+
+	IMPORT Report;
+
+	IMPORT sema;
+
+	TYPE Fault_Rec = RECORD
+				address: integer;
+				fault: Possible_Fault;
+			 END;
+
+	TYPE Fault_Rec_Set = SET OF Fault_Rec;
+
+	TYPE Partition = ARRAY [integer 0..NCPUS()] OF Fault_Rec_Set;
+
+	FUNCTION Init_Faultset(circuit:Circuit;faultrecset:OUT Fault_Rec_Set);
+
+	# Creates a set which contains all faults that must be tested
+
+	FUNCTION Get_Next_Fault(faultrecset:SHARED Fault_Rec_Set;
+				address:OUT integer;
+				fault:OUT Possible_Fault):boolean;
+
+	# Returns a random element from the faultrecset. This element 
+	# is deleted from the set. If the set is empty this function
+	# returns false else true is returned. 
+
+        FUNCTION Partition_Fault_Set(faultrecset:Fault_Rec_Set;
+                                     size:integer;
+                                     partition:OUT Partition);
+
+
+	# The faultrecset is partitioned into size partitions.
+	# The partitions are disjunct.
+	# It is assured that two faults concerning the same partition
+	# will not be put in the same partition.				
+
+	FUNCTION Drop_Fault(faultrecset:SHARED Fault_Rec_Set;address:integer;
+			    fault:Possible_Fault;report:SHARED Report;
+			    config:Config_Rec;print:SHARED sema);
+
+	# In case the specified fault is present in the faultrecset, it
+	# is deleted from it. 
+
+	FUNCTION Size_Of_Set(faultrecset:Fault_Rec_Set):integer;
+
+	# Returns the number of elements in faultrecset
+
+# DEBUG
+        FUNCTION Print_Set(faultrecset:Fault_Rec_Set);
+# END DEBUG
+
+END; # MODULE SPECIFICATION Fault

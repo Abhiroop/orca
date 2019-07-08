@@ -1,0 +1,31 @@
+# from GVW's Cowichan problem suit. I've adapted this version slightly,
+# but still isn't quite correct
+#
+sentence      -> noun_phrase verb_phrase
+noun_phrase   -> determiner noun_clause
+noun_phrase   -> noun_clause
+noun_clause   -> adjective noun_clause
+noun_clause   -> noun
+verb_phrase   -> verb object_phrase
+verb_phrase   -> verb
+verb_phrase   -> noun
+object_phrase -> prep_phrase noun_phrase
+object_phrase -> noun_phrase
+object_phrase -> noun_phrase object_phrase
+prep_phrase   -> preposition noun_phrase
+
+determiner -> the
+determiner -> to
+adjective -> green
+adjective -> tall
+preposition -> in
+preposition -> with
+verb -> see
+verb -> saw
+verb -> run
+verb -> ran
+noun -> Fred
+noun -> Jane
+noun -> park
+noun -> telescope
+noun -> saw

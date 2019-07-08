@@ -1,0 +1,93 @@
+MODULE IMPLEMENTATION main;
+  IMPORT grid;
+  FROM grid IMPORT color;
+  FROM Math IMPORT PI, cos, sqrt;
+  FROM Time IMPORT SysMilli, PrintTime;
+  FROM args IMPORT Argc, Argv;
+  FROM conversions IMPORT StringToInt, IntToString;
+  FROM distributions IMPORT BLOCK;
+
+  CONST TOLERANCE = 0.001;
+  CONST NCOL = 80;
+  CONST NROW = 482;
+
+  FUNCTION strcat(s1, s2: string): string;
+    s: string[LB(s1) .. UB(s1)+UB(s2)-LB(s2)+1];
+    j: integer;
+  BEGIN
+    FOR i IN LB(s1)..UB(s1) DO s[i] := s1[i]; OD;
+    j := UB(s1)+1;
+    FOR i IN LB(s2)..UB(s2) DO s[j] := s2[i]; j +:= 1; OD;
+    RETURN s;
+  END;
+
+  FUNCTION DoWork(nrow, ncol: integer);
+	g: grid[0..nrow-1, 0..ncol-1];
+	RedMaxDiff, BlackMaxDiff: real;
+	r, omega, stopdiff: real;
+	start, stop: integer;
+	m1, m2, min, max: integer;
+	iter: integer;
+  BEGIN
+	r := 0.5 * (cos(PI/FLOAT(ncol)) + cos(PI/FLOAT(nrow)));
+	omega := 2.0 / (1.0 + sqrt(1.0 - r * r));
+	stopdiff := TOLERANCE / (2.0 - omega);
+	WriteLine("SOR, ", nrow, "x", ncol);
+#	WriteLine("omega = ", omega, ", stopdiff = ", stopdiff);
+#	WriteLine("Starting partitioning ...");
+#	start := SysMilli();
+	g$$partition(nrow, 1);
+#	stop := SysMilli();
+#	WriteLine("timing partitioning = ", FLOAT(stop-start)/1000.0, " sec.");
+#	WriteLine("Starting distribution ...");
+#	start := SysMilli();
+	g$$distribute_on_n(NCPUS(), BLOCK, 1, BLOCK);
+#	stop := SysMilli();
+#	WriteLine("timing distribution = ", FLOAT(stop-start)/1000.0, " sec.");
+#	WriteLine("Starting InitGrid ...");
+#	start := SysMilli();
+	g$InitGrid();
+#	stop := SysMilli();
+#	WriteLine("timing InitGrid = ", FLOAT(stop-start)/1000.0, " sec.");
+#	g$PrintGrid();
+#	WriteLine("Starting UpdateGrid iterations ...");
+	max := 0; min := MAX(integer);
+	start := SysMilli();
+	m1 := start;
+	iter := 0;
+	REPEAT
+		RedMaxDiff := 0.0;
+		BlackMaxDiff := 0.0;
+		iter := iter+1;
+		RedMaxDiff := g$UpdateGrid(red, omega);
+		BlackMaxDiff := g$UpdateGrid(black, omega);
+		m2 := SysMilli();
+		m1 := m2 - m1;
+		IF m1 > max THEN max := m1; FI;
+		IF m1 < min THEN min := m1; FI;
+		m1 := m2;
+	UNTIL (RedMaxDiff < stopdiff) AND (BlackMaxDiff < stopdiff);
+#	g$PrintGrid();
+	stop := SysMilli();
+	WriteLine("    #iterations: ", iter);
+        WriteLine("    average time per iteration (msec): ", FLOAT(stop-start)/FLOAT(iter), " min = ", min, " max = ", max);
+	PrintTime(strcat("SOR-", strcat(strcat(IntToString(nrow), "x"), IntToString(ncol))), stop-start);
+  END;
+
+  PROCESS OrcaMain();
+	nrow, ncol: integer;
+	dummy: integer;
+  BEGIN
+	IF Argc() = 1 THEN
+		nrow := NROW;
+		ncol := NCOL;
+	ELSIF Argc() = 3 THEN
+		nrow := StringToInt(Argv(1), dummy);
+		ncol := StringToInt(Argv(2), dummy);
+	ELSE
+		WriteLine("Usage: ", Argv(0), " <NROW> <NCOL>");
+		RETURN;
+	FI;
+	DoWork(nrow, ncol);
+  END;
+END;

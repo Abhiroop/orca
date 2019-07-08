@@ -1,0 +1,11 @@
+# Allows a point-to-point communication between processes
+# The transmitted data are of type T
+
+GENERIC (TYPE T)
+OBJECT SPECIFICATION GenericPPCom;
+	OPERATION put(e: T);
+	OPERATION block_put(e: T);
+	OPERATION get(e: OUT T);
+	OPERATION block_get(e: OUT T);
+	OPERATION test_empty(): boolean;
+END GENERIC;

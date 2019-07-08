@@ -1,0 +1,53 @@
+ ## ===========================================================================
+ ##
+ ##    File:    worker_p.spf
+ ##    Type:    module specification
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ MODULE SPECIFICATION worker_p ;
+
+ ## ===========================================================================
+ ##
+ ##  What's needed:
+ ##
+ ## ---------------------------------------------------------------------------
+
+
+ FROM barrier IMPORT barrier;
+
+ FROM types_m IMPORT intvec_bin
+		   ,    vec_bin
+		   , intvec_mbin
+		   ,   real_worm
+		   , twovec_worm
+		  ;
+
+ ## ===========================================================================
+ ##
+ ##  Exported Process:
+ ##
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ worker
+
+ PROCESS worker( N        :        integer
+	       ; CR_rec   : SHARED intvec_bin
+	       ; S_intvec : SHARED intvec_mbin
+	       ; U_send   : SHARED    vec_bin
+	       ; S_elt    : SHARED   real_worm
+	       ; CRD      : SHARED twovec_worm
+.ifdef MRUNS
+	       ; nruns    :        integer
+.endif
+.ifdef TIMING
+               ; ready    : SHARED barrier
+.endif
+	       ; the_end  : SHARED barrier
+	      );
+
+ ## ===========================================================================
+
+ END;

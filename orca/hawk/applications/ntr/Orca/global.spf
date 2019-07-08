@@ -1,0 +1,37 @@
+DATA MODULE SPECIFICATION global;
+
+  FROM Math IMPORT PI;
+
+  CONST       ITERS	= 500;
+  CONST       NCHAN 	= 4;
+  CONST       NRANGE 	= 10;
+  CONST       NDOP 	= 512;
+  CONST       NDV2 	= NDOP/2;
+  CONST       MDOP 	= 9;
+  CONST       NTARGETS  = 4;
+  CONST       K0 	= 1;
+  CONST       K1 	= 40;
+
+  CONST       sigma0 	= 1.13;
+  CONST       thresh 	= 2.421;
+  CONST       const2 	= thresh/(FLOAT(NRANGE*(K1-K0+1)-1)+thresh);
+  CONST       const1 	= 2.0*PI/FLOAT(NDOP);
+
+  TYPE complex      = RECORD r,i: real; END;
+  TYPE KReals       = ARRAY[integer K0 .. K1] OF real;
+  TYPE KBooleans    = ARRAY[integer K0 .. K1] OF boolean;
+  TYPE NReals       = ARRAY[integer 1 .. NCHAN] OF real;
+  TYPE NIntegers    = ARRAY[integer 1 .. NCHAN] OF integer;
+  TYPE DComplexs    = ARRAY[integer 1 .. NDOP] OF complex;
+  TYPE DIntegers    = ARRAY[integer 1 .. NDOP] OF integer;
+  TYPE DReals       = ARRAY[integer 1 .. NDOP] OF real;
+  TYPE ThreeDArray  = ARRAY[integer 1 .. NRANGE,
+			    integer 1..NDOP,
+			    integer 1..NCHAN] OF complex;
+
+  w: DReals;
+  twiddles: DComplexs;
+  brt: DIntegers;
+  range0, doppler0: NIntegers;
+  InputData: ThreeDArray;
+END;

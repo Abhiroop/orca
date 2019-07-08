@@ -1,0 +1,137 @@
+#ifndef __PAN_MP_REL_MSG_TICKET_CI__
+#define __PAN_MP_REL_MSG_TICKET_CI__
+
+
+#include <assert.h>
+
+#include "pan_sys_msg.h"
+
+#include "pan_mp_ports.h"
+#include "pan_mp_tickets.h"
+
+
+#define MP_TICKET_INCREMENT	32
+
+
+static pan_mutex_p	mp_ticket_lock;
+static mp_ticket_p	mp_tickets		= NULL;
+static mp_ticket_p	mp_ticket_freelist	= NULL;
+static int		mp_ticket_total		= 0;
+
+
+#ifndef NDEBUG
+static mp_ticket_p
+mp_ticket_locate(mp_ticket_p list, mp_ticket_p elt)
+{
+    while (list != NULL) {
+	if (list == elt) {
+	    return elt;
+	}
+	list = list->next;
+    }
+    return NULL;
+}
+#endif
+
+
+static void
+mp_ticket_add(pan_mutex_p lock)
+{
+    int i;
+    int prev_total;
+
+    assert(mp_ticket_freelist == NULL);
+
+    prev_total = mp_ticket_total;
+
+    mp_ticket_total += MP_TICKET_INCREMENT;
+    if (mp_ticket_total > SHRT_MAX - MP_MAX_PORT_VALUE) {
+	pan_panic("mp_ticket_total > SHRT_MAX - MP_MAX_PORT_VALUE");
+    }
+    mp_tickets = pan_realloc(mp_tickets, mp_ticket_total * sizeof(mp_ticket_t));
+
+    mp_ticket_freelist = &mp_tickets[prev_total];
+    for (i = prev_total; i < mp_ticket_total - 1; i++) {
+	mp_tickets[i].next = &mp_tickets[i+1];
+    }
+    mp_tickets[mp_ticket_total - 1].next = NULL;
+
+    for (i = prev_total; i < mp_ticket_total; i++) {
+	mp_tickets[i].arrived = pan_cond_create(lock);
+    }
+}
+
+
+STATIC_CI mp_ticket_p
+mp_ticket_get(void)
+{
+    mp_ticket_p t;
+
+    if (mp_ticket_freelist == NULL) {
+	mp_ticket_add(mp_ticket_lock);
+    }
+
+    t = mp_ticket_freelist;
+    mp_ticket_freelist = mp_ticket_freelist->next;
+
+    t->flags = MP_FREE;
+
+    return t;
+}
+
+
+STATIC_CI void
+mp_ticket_clear(mp_ticket_p p)
+{
+    p->next = mp_ticket_freelist;
+    mp_ticket_freelist = p;
+}
+
+
+STATIC_CI int
+mp_ticket_id(mp_ticket_p ticket)
+{
+    assert((ticket - &mp_tickets[0]) < mp_ticket_total);
+    assert(mp_ticket_locate(mp_ticket_freelist, ticket) == NULL);
+    return (ticket - &mp_tickets[0]) + MP_MAX_PORT_VALUE;
+}
+
+
+STATIC_CI mp_ticket_p
+mp_ticket(int ticket_id)
+{
+    assert(ticket_id - MP_MAX_PORT_VALUE < mp_ticket_total);
+    assert(mp_ticket_locate(mp_ticket_freelist,
+			&mp_tickets[ticket_id - MP_MAX_PORT_VALUE]) == NULL);
+    return &mp_tickets[ticket_id - MP_MAX_PORT_VALUE];
+}
+
+
+static void
+mp_ticket_cleanup(void)
+{
+    int i;
+
+    for (i = 0; i < mp_ticket_total; i++) {
+	pan_cond_clear(mp_tickets[i].arrived);
+    }
+    pan_free(mp_tickets);
+}
+
+
+STATIC_CI void
+mp_ticket_start(pan_mutex_p lock)
+{
+    mp_ticket_lock = lock;
+    mp_ticket_add(lock);
+}
+
+
+STATIC_CI void
+mp_ticket_end(void)
+{
+    mp_ticket_cleanup();
+}
+
+
+#endif

@@ -1,0 +1,12 @@
+MODULE SPECIFICATION trace;
+
+  # Non-generic part of interface to the trace package.
+
+  TYPE event_type = integer;
+
+  FUNCTION new_thread(buf_size: integer;
+		      name: string);
+
+  FUNCTION set_level(level: integer): integer;
+
+END;

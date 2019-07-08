@@ -1,0 +1,28 @@
+MODULE SPECIFICATION Misc;
+ 
+FROM Types IMPORT DataRecord,BoardType,SaveType,Path,MoveArray;
+
+	FUNCTION ThinkMove(dr : SHARED DataRecord;
+			   color : integer; move : integer;
+			   save : SHARED SaveType);
+	FUNCTION UnthinkMove(dr : SHARED DataRecord;
+			     color : integer; save : SaveType);
+	FUNCTION Val(piece : integer) : integer;
+	FUNCTION PrintMoves(movelist,vallist : SHARED MoveArray);
+	FUNCTION ShowMove(move : integer);
+	FUNCTION Owner(field : integer) : integer;
+	FUNCTION OnBoard(x : integer; y : integer) : boolean;
+	FUNCTION Other(color : integer) : integer;
+	FUNCTION MoveCode(castle,ep,prom : integer;
+			  xfrom,yfrom,xto,yto : integer) : integer;
+	FUNCTION Check(dr : SHARED DataRecord; color : integer) : boolean;
+	FUNCTION Pinned(dr : SHARED DataRecord; color : integer;
+			x,y : integer; dx,dy : OUT integer) : boolean;
+	FUNCTION SearchKing(b : SHARED BoardType; color : integer;
+			    x : OUT integer; y : OUT integer);
+	FUNCTION AddMove(move : integer; path : Path) : Path;
+	FUNCTION AllocMove(move : integer) : Path;
+	FUNCTION Min(op1,op2 : integer) : integer;
+	FUNCTION Max(op1,op2 : integer) : integer;
+
+END;

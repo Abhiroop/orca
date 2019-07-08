@@ -1,0 +1,204 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT IMPLEMENTATION ConverterObject;
+
+FROM	AwariTypes	IMPORT ManyStones, Stones,
+				PitsPerBoard, AllPits, Configuration;
+FROM	AwariTypes	IMPORT BinomiumType;
+FROM	BinomiumObject	IMPORT	Init_Binomium;
+
+	# ConverterObject object fields
+	binomium:	BinomiumType[0..(ManyStones + PitsPerBoard)][0..ManyStones];
+	size:		integer;
+
+
+# ------------------------------------------------------------------------
+# The next four conversions and operations are used in RetroGradeAnalysis:
+# ------------------------------------------------------------------------
+
+
+OPERATION Init(n: IN integer;
+	       k: IN integer); 
+BEGIN
+  Init_Binomium(binomium, n, k);
+END;
+
+
+FUNCTION permute(config: IN Configuration): Configuration;
+	tmp: Configuration;
+BEGIN
+	tmp := config;
+	tmp[1].contents := config[1].contents;
+	tmp[2].contents := config[12].contents;
+	tmp[3].contents := config[2].contents;
+	tmp[4].contents := config[11].contents;
+	tmp[5].contents := config[3].contents;
+	tmp[6].contents := config[10].contents;
+	tmp[7].contents := config[4].contents;
+	tmp[8].contents := config[9].contents;
+	tmp[9].contents := config[5].contents;
+	tmp[10].contents := config[8].contents;
+	tmp[11].contents := config[6].contents;
+	tmp[12].contents := config[7].contents;
+	RETURN tmp;
+END;
+
+FUNCTION unpermute(config: IN Configuration): Configuration;
+	tmp: Configuration;
+BEGIN
+	tmp := config;
+	tmp[1].contents := config[1].contents;
+	tmp[2].contents := config[3].contents;
+	tmp[3].contents := config[5].contents;
+	tmp[4].contents := config[7].contents;
+	tmp[5].contents := config[9].contents;
+	tmp[6].contents := config[11].contents;
+	tmp[7].contents := config[12].contents;
+	tmp[8].contents := config[10].contents;
+	tmp[9].contents := config[8].contents;
+	tmp[10].contents := config[6].contents;
+	tmp[11].contents := config[4].contents;
+	tmp[12].contents := config[2].contents;
+	RETURN tmp;
+END;
+
+
+
+OPERATION Goedel2Config(goedel_code: longint; 
+			configuration: OUT Configuration);
+  # This conversion is used in forward and backward retrograde analysis;
+  # it uses its own 'size' field.
+
+  nr_stones: integer;
+  cont: Stones;
+  bin: longint;
+
+BEGIN
+  nr_stones := size;
+  FOR i IN 1..PitsPerBoard 
+  DO
+    cont := 0;
+    DO
+      bin := binomium[(nr_stones+PitsPerBoard-i)][nr_stones];
+      IF bin > goedel_code THEN EXIT; FI;
+      cont +:= 1;
+      goedel_code -:= bin;
+      nr_stones -:= 1;
+    OD;
+    configuration[i].contents := cont;
+  OD;
+  configuration[AllPits].contents := nr_stones;
+  # configuration := unpermute(configuration);
+END;
+
+
+
+OPERATION Config2Goedel(configuration: Configuration; 
+			goedel_code: OUT longint);
+  # This conversion is used in forward and backward retrograde analysis;
+  # it uses its own 'size' field.
+
+  nr_stones, 
+  in_stones: integer;
+
+BEGIN
+  # configuration := permute(configuration);
+  goedel_code := 0;
+  nr_stones := size;
+  FOR i IN 1..PitsPerBoard
+  DO
+    in_stones := configuration[i].contents;
+    WHILE (in_stones /= 0) 
+    DO
+      goedel_code +:= binomium[(nr_stones+PitsPerBoard-i)][nr_stones];
+      in_stones -:= 1;
+      nr_stones -:= 1;
+    OD;
+  OD;
+END;
+
+
+
+OPERATION Set_Size(newsize: integer);
+BEGIN
+  size := newsize;
+END;
+
+
+
+OPERATION Get_Size(): integer;
+BEGIN
+  RETURN(size);
+END;
+
+
+
+# --------------------------------------------------------
+# The next two conversions are used in DataBasePartObject:
+# --------------------------------------------------------
+
+OPERATION DB_Goedel2Config(goedel_code: longint;
+			   db_size: integer;
+			   configuration: OUT Configuration);
+  # This conversion is used when reading and writing the database to disk;
+  # it uses the given size field instead of its own 'size' field. This is
+  # necessary since the values of these fileds differ.
+
+  nr_stones: integer;
+
+BEGIN
+  nr_stones := db_size;
+  FOR i IN 1..PitsPerBoard 
+  DO
+    configuration[i].contents := 0;
+
+    WHILE (binomium[(nr_stones+PitsPerBoard-i)][nr_stones] <= goedel_code)
+    DO
+      configuration[i].contents +:= 1;
+      goedel_code -:= binomium[(nr_stones+PitsPerBoard-i)][nr_stones];
+      nr_stones -:= 1;
+    OD;
+  OD;
+  configuration[AllPits].contents := nr_stones;
+  # configuration := unpermute(configuration);
+END;
+
+
+
+OPERATION DB_Config2Goedel(configuration: Configuration;
+			   db_size: integer;
+			   goedel_code: OUT longint);
+  # This conversion is used when reading and writing the database to disk;
+  # it uses the given size field instead of its own 'size' field. This is
+  # necessary since the values of these fileds differ.
+
+  nr_stones, 
+  in_stones: integer;
+
+BEGIN
+  # configuration := permute(configuration);
+  goedel_code := 0;
+  nr_stones := db_size;
+  FOR i IN 1..PitsPerBoard
+  DO
+    in_stones := configuration[i].contents;
+    WHILE (in_stones /= 0) 
+    DO
+      goedel_code +:= binomium[(nr_stones+PitsPerBoard-i)][nr_stones];
+      in_stones -:= 1;
+      nr_stones -:= 1;
+    OD;
+  OD;
+END;
+
+
+
+
+
+BEGIN
+  size := 20;	# Default
+END; # ConverterObject

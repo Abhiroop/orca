@@ -1,0 +1,301 @@
+MODULE IMPLEMENTATION Functions;
+
+FROM Types IMPORT BRC_FUC;
+FROM GlobalVars IMPORT nbody, dtout, dtime, tstop, maxmybody;
+IMPORT Node;
+FROM Node IMPORT alloc_vect, ChangeSummaryArray, NodeTypeArray;
+FROM Grav IMPORT hackgrav;
+FROM Util IMPORT pranset, timer_stop_and_print,timer_clear_and_start;
+IMPORT IntObject, Reducer; 
+FROM Reducer IMPORT sync;
+FROM LocalMemory IMPORT LocalMemoryType;
+FROM vectmath IMPORT Vectmath, SETVS, SUBVSame, NDIM, ADDVS;
+
+FROM Time	IMPORT	SysMilli, PrintTime;
+IMPORT RtsStats;
+
+
+# set default parameter values
+
+FUNCTION set_params(A, B, randx: OUT integer);
+BEGIN
+  pranset(A,B,randx);
+END;
+
+
+
+# initialize global data
+# initialize local data
+
+FUNCTION local_init( Local: SHARED LocalMemoryType);
+BEGIN
+    Local.nstep := 0;
+    Local.tnow  := 0.0;
+    Local.tout  := Local.tnow + dtout;
+END;
+
+
+
+# put initial list of bodies assigned to the processor into mybodytab
+
+FUNCTION find_my_initial_bodies( b: SHARED Reducer;
+                                 ProcessId: integer;
+                                 Local: SHARED LocalMemoryType);
+    extra, offset, nprocs : integer;
+BEGIN
+
+     nprocs := NCPUS();
+     Local.mybody.mynbody := nbody / nprocs;
+     extra         := nbody % nprocs;
+
+     IF ProcessId < extra THEN
+         Local.mybody.mynbody +:= 1;
+         offset := Local.mybody.mynbody * ProcessId;
+     ELSIF ProcessId >= extra THEN
+         offset := Local.mybody.mynbody * ProcessId + extra;
+     FI;
+
+     alloc_vect(maxmybody, Local.mybody.mybodytab);
+
+     FOR i IN 0..Local.mybody.mynbody-1 DO
+         Local.mybody.mybodytab[i] :=  offset + i;
+     OD;
+#     sync(b);
+END;
+
+
+
+# Compute the initial size of the root of the tree; only done before
+# first time step
+
+FUNCTION setbound( Local: SHARED LocalMemoryType;
+		   allnodes: SHARED Node;
+		   b: SHARED Reducer;
+		   rsize : OUT real;
+		   rmin : SHARED Vectmath);
+    side, Posi : real;
+    p : integer;
+    Pos: Vectmath;
+BEGIN
+    SETVS(Local.min,  1.0E+99);
+    SETVS(Local.max, -1.0E+99);
+
+    # compute min and max for my bodies
+
+    FOR pidx IN 0..Local.mybody.mynbody-1 DO
+	p := Local.mybody.mybodytab[pidx];
+	allnodes$Pos(p, Pos);
+        FOR i IN 0..NDIM-1 DO
+	    Posi := Pos[i];
+            IF Posi < Local.min[i] THEN
+                Local.min[i] := Posi; 
+            FI;
+            IF Posi > Local.max[i] THEN
+                Local.max[i] := Posi;
+            FI;
+        OD;
+    OD;
+
+    # compute global min and max
+
+    b$minmax( Local.max, Local.min);
+    b$wait_m( Local.max, Local.min);
+
+    SUBVSame( Local.max, Local.min);
+    side := 0.0;
+    FOR i IN 0..NDIM-1 DO
+        IF side < Local.max[i] THEN
+            side := Local.max[i];
+        FI;
+    OD;
+    ADDVS(rmin, Local.min, -side/100000.0);
+    rsize := 1.00002 * side;
+    SETVS(Local.min,  1.0E+99);
+    SETVS(Local.max, -1.0E+99);
+
+END;
+
+
+
+# used to reinitialize different (global) variables
+# between each time step
+
+FUNCTION Housekeep(Local: SHARED LocalMemoryType);
+BEGIN
+    Local.myn2bcalc := 0;
+    Local.mynbccalc := 0;
+    Local.myselfint := 0;
+END;
+
+
+
+FUNCTION ComputeForces( Local: SHARED LocalMemoryType;
+                        allnodes : NodeTypeArray;
+			rsize : real;
+			root: integer;
+			updates: SHARED ChangeSummaryArray
+			);
+    p : integer;
+BEGIN
+    FOR pidx IN 0..Local.mybody.mynbody-1 DO
+	p := Local.mybody.mybodytab[pidx];
+	updates[pidx].cost := 0;
+        hackgrav(pidx, p, Local, allnodes, rsize, root, updates);
+        Local.myn2bcalc +:= Local.myn2bterm; 
+        Local.mynbccalc +:= Local.mynbcterm;
+
+        # if we missed self-int, count another goofup
+
+        IF Local.skipself=false THEN
+            Local.myselfint +:= 1;
+        FI;
+    OD;
+END;
+
+
+# generate Plummer model initial conditions for test runs, scaled to
+# units such that M = -4E = G = 1 (Henon, Hegge, etc). See Aarseth,
+# SJ, Henon, M, & Wielen, R (1974) Astr & Ap, 37, 183.
+# [only run on processor 0]
+
+
+FUNCTION create_arr(n: integer; a: OUT ChangeSummaryArray[0..n]);
+BEGIN
+END;
+
+
+ # advance N-body system one time-step
+
+FUNCTION stepsystem(ProcessId: integer; b: SHARED Reducer;
+                    Local: SHARED LocalMemoryType;
+		    allnodes: SHARED Node; rsize : SHARED real;
+		    rmin : SHARED Vectmath;
+		    turn : SHARED IntObject);
+    side : real;
+    t : real;
+    start, load, calc, update: integer;
+    body: NodeTypeArray;
+    updates: ChangeSummaryArray;
+.ifdef ASYNC_UPDATE
+    root: integer;
+.endif
+BEGIN
+    timer_clear_and_start(t);
+
+    start := SysMilli();
+
+  # start at same time
+  # load bodies into tree
+
+# .ifdef SEQUENTIAL_MAKETREE
+.ifdef SEQUENTIAL_UPDATE
+    allnodes$await_token(ProcessId);
+.endif
+# .endif
+
+    allnodes$maketree(ProcessId, Local.mybody, Local.tree, rmin, rsize);
+    sync(b);		# Ensure everybody has inserted their bodies
+
+    Housekeep(Local);
+
+    allnodes$find_my_bodies(BRC_FUC, ProcessId, Local.mybody);
+
+    create_arr(Local.mybody.mynbody-1, updates);
+    allnodes$Body(body);
+    load := SysMilli();
+
+.ifdef ASYNC_UPDATE
+    root := allnodes$G_root();
+    sync(b);		# Ensure everybody has read all bodies
+    ComputeForces(Local, body, rsize, root, updates);
+.else
+    ComputeForces(Local, body, rsize, allnodes$G_root(), updates);
+    sync(b);		# Ensure everybody is done computing
+.endif
+
+    calc := SysMilli();
+
+.ifdef SEQUENTIAL_UPDATE
+    allnodes$await_token(ProcessId);
+.endif
+    allnodes$advance(Local.mybody, Local.min, Local.max, Local.nstep, updates, ProcessId);
+
+  # compute global min and max
+
+ #   WriteLine("Before minmax");    
+    b$minmax( Local.max, Local.min);
+    b$wait_m( Local.max, Local.min);
+ #   WriteLine("After minmax");    
+    SUBVSame( Local.max, Local.min);
+    side := 0.0;
+    FOR i IN 0..NDIM-1 DO
+        IF side < Local.max[i] THEN
+            side := Local.max[i];
+        FI;
+    OD;
+    ADDVS(rmin, Local.min, -side/100000.0);
+    rsize := 1.00002 * side;
+    SETVS(Local.min,  1.0E+99);
+    SETVS(Local.max, -1.0E+99);
+    Local.nstep +:= 1;
+    Local.tnow  +:= dtime;
+
+    update := SysMilli();
+
+    IF MYCPU() = 0 THEN
+	WriteLine("Load phase ", FLOAT(load-start)/1000.0,
+		  "; Calculate phase ", FLOAT(calc-load)/1000.0,
+		  "; update phase ", FLOAT(update - calc)/1000.0);
+    FI;
+
+    timer_stop_and_print( b, t, allnodes);
+
+END;
+
+
+
+
+# main task for each processor
+
+FUNCTION SlaveStart(Local: SHARED LocalMemoryType; 
+		    b :SHARED Reducer;
+		    allnodes: SHARED Node;
+		    turn : SHARED IntObject);
+    ProcessId : integer;
+    rsize : real;
+    rmin : Vectmath;
+    tnow : real;
+    i: integer;
+    start: integer;
+BEGIN
+    ProcessId := MYCPU();
+    find_my_initial_bodies( b, ProcessId, Local);
+    setbound(Local, allnodes, b, rsize, rmin);
+    start := SysMilli();
+
+  # main loop
+
+    tnow := 0.0;
+    i := 0;
+    WHILE tnow < tstop + 0.1 * dtime DO
+	IF i = 3 THEN
+		IF ProcessId = 0 THEN
+			WriteLine("Timing starts now");
+		FI;
+		RtsStats.reset_stats();
+		start := SysMilli();
+	FI;
+	i +:= 1;
+        stepsystem( ProcessId, b, Local,
+	        allnodes, rsize, rmin,
+	        turn);
+	tnow +:= dtime;
+    OD;
+    IF ProcessId = 0 THEN
+	PrintTime("Barnes", SysMilli()-start);
+    FI;
+END;
+
+
+
+END;

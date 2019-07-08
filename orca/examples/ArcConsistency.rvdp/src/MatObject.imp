@@ -1,0 +1,61 @@
+OBJECT IMPLEMENTATION MatObject;
+
+FROM InOut IMPORT WriteString, WriteLn;
+FROM Types IMPORT Vali;
+x: LineVal;
+
+OPERATION init(N, a : integer);
+tmp : LineVal[0..N - 1][0..a - 1];
+BEGIN
+    FOR i IN 0 .. N  - 1 DO
+      FOR j IN 0 .. a - 1 DO
+        tmp[i][j] := true;
+      OD;
+    OD;
+    x := tmp;
+END;
+
+OPERATION getvalue(): LineVal;
+BEGIN
+    RETURN x;
+END;
+
+OPERATION assign(i, j : integer; v : boolean);
+BEGIN
+    x[i][j] := v;
+END;
+
+OPERATION test(i, j : integer) : boolean;
+BEGIN
+    RETURN x[i][j];
+END;
+
+
+OPERATION change(list_change : Vali; poz_change, i : integer);
+BEGIN
+    #WriteLine("CPU ", MYCPU(), ": domain$change: ", poz_change);
+    FOR k IN 1 .. poz_change
+    DO
+	x[i][list_change[k]] := false;
+    OD;
+END;
+
+
+OPERATION print(N, a: integer);
+BEGIN
+	FOR i IN 0 .. N - 1
+	DO
+		FOR j IN 0 .. a - 1 
+		DO
+			IF x[i][j]
+			THEN
+				WriteString("1");
+			ELSE
+				WriteString("0");
+			FI;
+		OD;
+		WriteLn();
+	OD;
+END;
+
+END;

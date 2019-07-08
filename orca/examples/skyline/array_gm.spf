@@ -1,0 +1,62 @@
+ ## ===========================================================================
+ ##
+ ##    File:    array_m.spf
+ ##    Type:    generic module specification
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ GENERIC( TYPE entry_pt) 
+ MODULE SPECIFICATION array_gm ;
+
+ ##
+ ##  The instantiated module defines a one-dimensional array type `array_gt'
+ ##  employing the parametrized type `entry_pt' as element type.
+ ##
+ ##  The function `set_bounds' that is also defined, allows one to arbitrarily
+ ##  (re-)set the upper and lower boundaries of variables of the array type at
+ ##  places where is no other way that integrates naturally with other function
+ ##  calls.
+ ##
+ ##  The lack of an Orca-native general method to (re-)initialize boundaries
+ ##  of arrays, necessitated the devise of this module. It partly compensates
+ ##  the nuisance of having to create yet another function analoguous to 
+ ##  `set_bounds' for every array that requires re-setting of bounds at places 
+ ##  that do not allow a more natural integration of this re-initialization
+ ##  with existing functions.
+ ##
+
+ ## ===========================================================================
+ ## 
+ ##  Exported Types:
+ ##
+ ## ---------------------------------------------------------------------------
+
+ TYPE array_gt = ARRAY [ integer ] OF entry_pt ;
+
+
+ ## ===========================================================================
+ ## 
+ ##  Exported Functions:
+ ##
+ ## ---------------------------------------------------------------------------
+ ## 
+ ##  @ set_bounds     - Empty function, its purpose is to (re-)initialize ..
+ ##
+ ##    lb : integer   - the lower- ..
+ ##    ub : integer   - and upper bound ..
+ ##     a : array_gt  - of an array variable.
+ ##
+ ##                     of which the contents will be undefined upon return.
+ ## 
+
+ FUNCTION set_bounds( lb :     integer
+                    ; ub :     integer
+                    ;  a : OUT array_gt[ lb .. ub ]
+                   ); 
+
+ ## ===========================================================================
+
+ END
+ GENERIC ;

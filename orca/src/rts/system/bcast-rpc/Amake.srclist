@@ -1,0 +1,16 @@
+RTS_BCASTRPC = {
+	$PWD/args.c,
+	$PWD/fork.c,
+	$PWD/main.c,
+	$PWD/message.c,
+	$PWD/obj_init.c,
+	$PWD/operation.c,
+	$PWD/print.c,
+	$PWD/scheduler.c,
+	$PWD/unix.c,
+	$PWD/alloc.c,
+	$PWD/time.c,
+	$PWD/cp.c,
+	$PWD/wakeup.c,
+	$PWD/trace_server.c,
+};

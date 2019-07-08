@@ -1,0 +1,19 @@
+MODULE SPECIFICATION TspFunctions;
+
+FROM TspTypes IMPORT
+		TourArray, ProblemSpecification;
+
+FUNCTION AppendString (str1 : string; str2 : string) : string;
+FUNCTION distance_EUC_2D (x1 : integer;
+		y1 : integer;
+		x2 : integer;
+		y2 : integer) : integer;
+FUNCTION distance_MAN_2D (x1 : integer;
+		y1 : integer;
+		x2 : integer;
+		y2 : integer) : integer;
+#FUNCTION TourConsistent (t : TourArray;
+#		spec : ProblemSpecification) : boolean;
+#FUNCTION TourValue (tour : TourArray; spec : ProblemSpecification) : integer;
+
+END;

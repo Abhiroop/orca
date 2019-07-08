@@ -1,0 +1,62 @@
+#-----------------------------------------------#
+# Author : H. Staalman 				#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION RetrogradeAnalysis;
+
+FROM	AwariTypes		IMPORT	Configuration, ConfigUnit, GoedelNr, GtvDetermined, 
+					ElementUnit, Draw, Side;
+FROM	InOut			IMPORT	Flush;	#, ReadChar, WriteString, ReadInt;
+FROM	Debug			IMPORT	Print_ConfigUnit, Print_Board;
+FROM	DataBaseModule		IMPORT	
+					#Place_DB_Element, Place_DB_Element_Value,
+					#Get_DB_Elements, Place_DB_Elements, Put_DB_Elements, 
+					Get_DBPartObject_LB, Get_DBPartObject_UB;
+FROM	DataBaseTypes		IMPORT	DataBaseObject, AdresTable;
+IMPORT	DBMetaDataObject;
+IMPORT	ConverterObject;
+
+
+FUNCTION Set_Remaining_Configurations_To_Draw(database: SHARED DataBaseObject;
+					      dbmetadata: SHARED DBMetaDataObject;
+					      converter: IN ConverterObject;
+					      cpu_table: IN AdresTable);
+
+  configunit: ConfigUnit;
+  configuration: Configuration;
+
+  DBPartObject_LB,
+  DBPartObject_UB: GoedelNr;
+  myplace: integer;
+  this_element: ElementUnit;
+
+
+BEGIN
+  Get_DBPartObject_LB(cpu_table, DBPartObject_LB);
+  Get_DBPartObject_UB(cpu_table, DBPartObject_UB);
+  myplace := MYCPU();
+
+  # iterate through whole database part and check wether the examined
+  # configuration is not yet determined; if not, it must be a draw
+  FOR goedel_index IN DBPartObject_LB..DBPartObject_UB
+  DO
+    #Get_DB_Element(database, cpu_table, goedel_index, configunit);
+    database[myplace]$Get_DBPart_Element(goedel_index, configunit);
+    IF (configunit.nr_succ /= GtvDetermined)
+       THEN
+	 #configunit.nr_succ := GtvDetermined;
+	 #configunit.gtv := Draw;
+	 #Put_DB_Element(database, cpu_table, goedel_index, configunit);
+
+         this_element.goedel_nr := goedel_index;
+         this_element.gtv := Draw;
+         this_element.nr_succ := GtvDetermined;
+         database[myplace]$Put_DBPart_Element(this_element);
+    FI;
+  OD;
+END;
+
+
+END; # RetrogradeAnalysis

@@ -1,0 +1,95 @@
+#-----------------------------------------------#
+# Author : H. Staalman				#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION BoardOperations;
+
+# This module contains all routines related to board operations, i.e. 
+# operations which are involved during playing an Awari game, like sowing
+# stones, remove captured stones, mirroring a configuration etc.
+
+FROM	AwariTypes	IMPORT	PitNr, Configuration, SuccessorList, Stones, Side;
+
+
+FUNCTION Init_Configuration(init_config: SHARED Configuration);
+  # initialise a configuration; all fields are set to zero.
+
+
+FUNCTION Mirror_Configuration(original_config: IN Configuration;
+			      mirror_config: SHARED Configuration);
+  # mirror a configuration in the diagonal
+
+
+FUNCTION Sow_Stones(start_config: IN Configuration;
+		    start_pit: IN PitNr; 
+		    end_config: SHARED Configuration;
+		    end_pit: OUT PitNr);
+  # sow the stones from start_pit; spread its contents out on/over(?) the board 
+
+
+FUNCTION Count_Nr_Stones_On_Board(current_config: IN Configuration): Stones;
+  # give the total sum of all the stones on the board
+
+
+FUNCTION Is_Legal_Successor(configuration: IN Configuration;
+			    successor_configuration: IN Configuration): boolean;
+  # checks wether the given configuration could be a legal successor; the 
+  # successors are checked for the number of stones in the various pits
+
+
+FUNCTION Is_Legal_Predecessor(configuration: IN Configuration;
+			      predecessor_configuration: IN Configuration): boolean;
+  # checks wether the given configuration could be a legal predecessor
+
+
+FUNCTION Empty_Hit_Pits(start_config: IN Configuration; 
+			end_pit: IN PitNr;
+			end_config: SHARED Configuration;
+			hit_stones: OUT Stones);
+  # capture stones starting at the end_pit (remove captured stones)
+
+
+
+FUNCTION Check_For_Immobile_Opponent(successor_list: IN SuccessorList;
+				     nr_successors: IN integer): boolean;
+  # checks wether all successors leave the opponent without stones
+
+
+FUNCTION At_Side(pit: IN PitNr):Side;
+  # returns the side of the pit
+
+
+FUNCTION Is_Empty_Side(configuration: IN Configuration; 
+		       side: IN Side): boolean;
+  # checks the contents of all the pits on a given side; whether all are 0
+
+
+FUNCTION Is_Hit(configuration: IN Configuration; 
+		pit: IN PitNr): boolean;
+  # checks the contents of the pit; whether it is equal to 2 or 3
+
+
+FUNCTION Is_Empty(configuration: IN Configuration; 
+		  pit: IN PitNr): boolean;
+  # checks the contents of the pit; whether it is 0
+
+
+FUNCTION Is_Possible_Sowed_Pit(configuration: IN Configuration; 
+			       pit: IN PitNr): boolean;
+  # checks the contents of the pit; whether it is > 0
+
+
+FUNCTION Move_Stone(configuration: SHARED Configuration; 
+		    from_pit: IN PitNr;
+		    to_pit: IN PitNr);
+  # Move a stone's from one pit to another
+
+
+FUNCTION Map2PitNr(pit: IN integer): PitNr;
+  # Map from integer with range 0..11 to PitNr range 1..12
+
+
+
+END; # BoardOperations

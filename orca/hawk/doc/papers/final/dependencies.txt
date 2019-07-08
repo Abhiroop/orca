@@ -1,0 +1,10 @@
+void ShufflePDGConstructor(instance_p instance, void **args) {
+    int i, source, dest;
+    int *s=((int *)(args[1]));
+
+    for each partition source of instance
+        for each element i in source {
+            dest = e2p(instance,s[i]);
+            AddDependency(instance, shuffle, source, dest);
+        }
+}

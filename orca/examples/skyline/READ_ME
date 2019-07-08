@@ -1,0 +1,4 @@
+Skyline solves a matrix equation for skyline matrices. 
+
+We used an input set produced with the following command:
+gen_skyline -a 25 3500 > inp3500.25

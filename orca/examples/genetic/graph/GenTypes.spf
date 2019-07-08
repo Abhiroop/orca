@@ -1,0 +1,21 @@
+MODULE SPECIFICATION GenTypes;
+
+
+FROM CromoVector IMPORT population;
+
+TYPE configuration = RECORD
+	nb_generations: integer;
+	nb_individuals: integer;
+	migration_rate: integer;
+	nb_migrators: integer;
+	cross_probab: real;
+	mutation_probab: real;
+	nb_slaves: integer;
+END;
+
+# instantiate generic point to point link
+OBJECT PPCom = NEW GenericPPCom(population);
+
+TYPE VecPPCom = ARRAY [integer] OF PPCom;
+
+END;

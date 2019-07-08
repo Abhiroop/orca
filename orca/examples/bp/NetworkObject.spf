@@ -1,0 +1,43 @@
+OBJECT SPECIFICATION NetworkObject;
+
+FROM BpTypes	IMPORT ArrayType;
+
+OPERATION PrintNetwork();
+OPERATION NumberOfWeights()	: integer;
+OPERATION WeightIndex(		layer: integer; 
+				sunit: integer; 
+				dunit: integer)
+				: integer;
+OPERATION ActivationIndex(	layer: integer;
+				unit: integer)
+				: integer;
+OPERATION NumberOfNeurons()	: integer;
+OPERATION SetNumLayers(		nl: integer)
+				: integer;
+OPERATION SetNumUnits(		layer: integer; 
+				nu: integer)
+				: integer;
+OPERATION SetLearningRate(	lr: real)
+				: integer;
+OPERATION GenerateWeights()	: integer;
+OPERATION NumUnits(		layer: integer)
+				: integer;
+OPERATION NumLayers()		: integer;
+OPERATION GetLearningRate()	: real;
+OPERATION SetSeed(		s: integer);
+OPERATION Noise()		: integer;
+OPERATION SetNoiseThreshold(	threshold: real)
+				: integer;
+OPERATION SetNoiseProportion(	proportion: integer)
+				: integer;
+OPERATION UpdateWeights(	DeltaWeights: ArrayType)
+				: integer;
+OPERATION GetWeight(		layer: integer; 
+				SourceUnit:integer; 
+				DestUnit: integer)
+				: real;
+OPERATION GetBias(		layer: integer; 
+				Unit:integer)
+				: real;
+# END OBJECT SPECIFICATION
+END;  

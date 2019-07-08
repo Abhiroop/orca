@@ -1,0 +1,22 @@
+echo 'newgraph border clip X 3.8'
+echo 'xaxis min 0 max 35 label : number of CPUs'
+echo 'yaxis min 0 max 100 label : execution time (seconds)'
+echo 'newcurve linetype solid marktype none label : 1 CPU per worker (DP-1)'
+echo 'pts '
+cat fft.tp.plot
+echo 'newcurve linetype dotted marktype circle label : 2 CPUs per worker (DP-2)'
+echo 'pts '
+cat fft.2.plot
+echo 'newcurve linetype dashed marktype diamond label : 4 CPUs per worker (DP-4)'
+echo 'pts '
+cat fft.4.plot
+echo 'newcurve linetype longdash marktype triangle label : 8 CPUs per worker (DP-8)'
+echo 'pts '
+cat fft.8.plot
+echo 'newcurve linetype dotdash marktype x label : 16 CPUs per worker (DP-16)'
+echo 'pts '
+cat fft.16.plot
+echo 'newcurve linetype none marksize 1.5 4.5 gmarks -1 -1 -1 1 1 1 1 -1 -1 -1 marktype general_nf label : pure data parallel'
+echo 'pts '
+cat fft.dp.plot
+echo 'legend defaults x 35 y 95 hjr vjt'

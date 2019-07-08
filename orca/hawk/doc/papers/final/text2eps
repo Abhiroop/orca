@@ -1,0 +1,13 @@
+#!/usr/local/bin/esh
+if test ! -d eps
+   then mkdir eps
+fi
+
+for i
+do if test ! -r ${i%.txt}.txt; then echo "$i: no such file"; exit 1; fi;
+   name=${i%.txt};
+   text2ps < $name.txt > $name.ps
+   ps2epsi $name.ps eps/$name.eps
+   /usr/bin/rm -f $name.ps
+done
+exit 0;

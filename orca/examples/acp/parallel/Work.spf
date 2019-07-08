@@ -1,0 +1,34 @@
+# ========================================================================
+# == File:      Work.spf	  					==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  The Work Object specification				==
+# ========================================================================
+
+OBJECT SPECIFICATION Work;
+
+FROM Types IMPORT int_arr_t;
+
+# ========================================================================
+# == operations								==
+# ========================================================================
+
+OPERATION init(
+	nslaves: integer			# nr of slaves 
+);
+
+OPERATION idle_workers_inc();
+
+OPERATION idle_workers_dec();
+
+OPERATION Work_for(
+	n, 					# work for node n	
+	nslaves: integer			# total nr of slaves
+): boolean;					# is there still work?
+
+OPERATION assign(
+	a : int_arr_t; 				# nr of updated edges per node
+	nslaves : integer			# total nr of slaves
+);
+
+END;

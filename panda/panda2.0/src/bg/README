@@ -1,0 +1,16 @@
+- Termination on Amoeba doesn't work. Capability already gone on seq. Don't
+  know how to solve this
+
+- Have to change all names to names with prefix pan_bg_.
+
+- Cleanup list pools
+
+- Go through all XXX
+
+- Make local delivery sequencer reliable, i.e. wait for history to have
+  space. Does this conflict with asynchronous send?
+
+- Distributed history, on machine that is originator?
+
+- remove ticks_run, ticks_release.
+

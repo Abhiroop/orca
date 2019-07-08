@@ -1,0 +1,31 @@
+OBJECT SPECIFICATION Jobs;
+
+FROM Types IMPORT JobType,History;
+
+	OPERATION NewSignature() : integer;
+	OPERATION AddIdle(cpu : integer);
+	OPERATION AllowJobs() : boolean;
+	OPERATION PrintJobs();
+	OPERATION AddJob(job : JobType);
+	OPERATION GetJob(cpu: integer; signature : integer; job : OUT JobType) : boolean;
+	OPERATION NrJobs() : integer;
+	OPERATION JobKill(signature : integer) : integer;
+	OPERATION JobUpdate(signature : integer; val : integer);
+	OPERATION InitJobs();
+	OPERATION InitVar();
+	OPERATION EmptyTree();
+	OPERATION AddSign(parent,signature,level : integer);
+	OPERATION MurderRecur(signature : integer);
+	OPERATION IsVictim(signature : integer) : boolean;
+	OPERATION Murdered(signature : integer);
+	OPERATION StopSlaves();
+	OPERATION WaitAcks(slaves : integer);
+	OPERATION SlaveAck();
+	OPERATION SlaveContinue() : boolean;
+	OPERATION StartSlaves();
+	OPERATION WaitStart();
+	OPERATION PrintInfo();
+	OPERATION GrabLock();
+	OPERATION ReleaseLock();
+
+END;

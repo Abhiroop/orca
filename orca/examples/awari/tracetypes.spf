@@ -1,0 +1,14 @@
+MODULE SPECIFICATION tracetypes;
+	TYPE pollevent =
+		RECORD
+			dummy: integer;
+		END;
+	TYPE pollend =
+		RECORD
+			dummy: integer;
+		END;
+	TYPE backdone =
+		RECORD
+			dummy: integer;
+		END;
+END;

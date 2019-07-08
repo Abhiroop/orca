@@ -1,0 +1,139 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION asp;
+	FROM RowCollection IMPORT RowCollection, RowType;
+	IMPORT IntObject;
+	FROM Time IMPORT SysMilli, PrintTime;
+	FROM Finish IMPORT Finish;
+	FROM args IMPORT Argc, Argv;
+	FROM conversions IMPORT StringToInt;
+
+	CONST N = 768;
+
+	TYPE DistTab = ARRAY[integer] OF RowType;
+
+	FUNCTION DoIteration(C: SHARED DistTab; RowK: RowType;
+			lb, ub, k, n: integer);
+		tmp: integer;
+	BEGIN  # update the values of rows C[lb] .. C[ub].
+		FOR i IN lb .. ub DO
+			IF i /= k THEN  # Skip C[k], as it won't change.
+				FOR j IN 1 .. n DO
+					# See if path i->k->j is better than
+					# current path i->j.
+					tmp := C[i][k] + RowK[j];
+					IF tmp < C[i][j] THEN
+						C[i][j] := tmp;
+					FI;
+				OD;
+			FI;
+		OD;
+	END;
+
+	FUNCTION ComputeRows(C: SHARED DistTab; RowkColl: SHARED RowCollection;
+				lb, ub, n: integer);
+		RowK: RowType;
+	BEGIN  # Body of slave processes.
+		FOR k IN 1 .. n DO  # do n iterations
+			IF (k >= lb) AND (k <= ub) THEN
+				# I have row k; add it to RowkColl.
+				RowK := C[k];
+				RowkColl$AddRow(k, RowK);
+			ELSE
+				# Someone else computed row k; wait for it.
+				RowK := RowkColl$AwaitRow(k);
+			FI;
+			DoIteration(C, RowK, lb, ub, k, n);
+		OD;
+	END;
+
+	FUNCTION InitializeTable(lb, ub, n: integer; C: OUT DistTab[lb..ub][1..n]);
+		# CONST Inf = 100000;  # infinity
+#PATCH
+	BEGIN
+		# Initially, C[i,j] =
+		#    0, if i=j,
+		#    length of direct path from i to j, if one exists,
+		#    infinite otherwise.
+		#auto:
+#PATCH
+FOR i IN lb .. ub DO
+	FOR j IN 1..n DO
+		IF i = j THEN
+			C[i][j] := 0;
+		ELSE 
+			C[i][j] := i+j;
+		FI;
+	OD;
+OD;
+
+	END;
+
+	# Description of slave processes.
+	PROCESS slave(RowkColl : SHARED RowCollection;
+			lb, ub, n: integer; turn, go: SHARED IntObject);
+		C: DistTab;
+	BEGIN
+		# WriteLine(MYCPU(), " N ", n, " lb ", lb ," ub ", ub);
+		go$AwaitValue(1);
+		InitializeTable(lb, ub, n, C);
+		ComputeRows(C, RowkColl, lb, ub, n);
+		turn$AwaitValue(lb);  # Wait until it's my turn to print results
+		# FOR i IN lb .. ub DO
+		#	 FOR j IN 1 .. n DO
+		#		 # Write(C[i][j], "  ");
+		#	 OD;
+		#	 # WriteLine();
+		# OD;
+		turn$assign(ub+1);  # Allow next slave to print
+	END;
+
+
+
+	# Description of master process
+	PROCESS OrcaMain();
+		RowkColl: RowCollection;
+		nslaves: integer;
+		lb, ub: integer;
+		n: integer;
+		turn: IntObject; # used to coordinate printing
+		go: IntObject;
+		start, stop: integer;
+	BEGIN
+		IF Argc() = 1 THEN
+			n := N;
+		ELSIF Argc() = 2 THEN
+			n := StringToInt(Argv(1), lb);
+		FI;
+		IF (Argc() > 2) OR (n <= 0) THEN
+			WriteLine("Usage: ", Argv(0), " <N>");
+			RETURN;
+		FI;
+		WriteLine("N = ", n);
+
+		Strategy( RowkColl, 1, 0);
+		Strategy( turn, 1, 0);
+		Strategy( go, 1, 0);
+
+		RowkColl$init(n);
+		turn$assign(1); # initialize turn
+		go$assign(0);
+		nslaves := NCPUS();
+		IF nslaves > n THEN nslaves := n; FI;
+		lb := 1;
+		FOR i IN 0 .. nslaves-1 DO
+			ub := lb + (n-lb+1) / (nslaves-i) - 1;
+#			WriteLine("fork slave on ", nslaves-i-1);
+			FORK slave(RowkColl, lb, ub, n, turn, go) ON(nslaves-i-1);
+			lb := ub+1;
+		OD;
+		start := SysMilli();
+		go$assign(1);	# start slaves
+		turn$AwaitValue(n+1);
+		stop := SysMilli();
+		PrintTime("asp", stop - start);
+		Finish();
+	END;
+END;

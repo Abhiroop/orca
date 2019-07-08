@@ -1,0 +1,9 @@
+OBJECT SPECIFICATION grid[integer, integer];
+
+TYPE color = (red, black);
+
+   OPERATION InitGrid(); 
+   OPERATION UpdateGrid(c: color; omega: real): real; 
+   OPERATION PrintGrid();
+
+END; 

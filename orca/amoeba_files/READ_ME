@@ -1,0 +1,43 @@
+
+		ORCA FOR AMOEBA
+
+Date: Wed Sep 10 14:25:35 MET DST 1997
+
+This directory contains an implementation of the Orca language for Amoeba,
+either running on SPARC or Intel 80386/80486/Pentium.
+
+This Orca distribution should be installed in /profile/module/orca, which can
+be achieved by extracting the tar-file in /profile/module.
+
+This file thus is /profile/module/orca/READ_ME.
+
+The Orca language is described in /profile/module/orca/doc/refman.ps.
+
+The compilation command 'oc_panda' is described in
+/profile/module/orca/man/oc_panda.n. The files in /profile/module/orca/man
+are cat-able.
+
+The /profile/module/orca/examples directory contains some example Orca
+programs.
+
+This Orca version requires a recent version of the Amoeba GNU C compiler.
+This can be obtained from the amoeba FTP site at
+
+	/home/amoeba5.3/thirdp/gcc.am.tar.Z.
+
+This file contains both the 80386 and the SPARC version of gcc.
+It should be extracted in /profile/module, thereby creating a directory gcc.
+
+
+Please send questions or bug reports to ceriel@cs.vu.nl.
+
+IMPORTANT NOTE: we have found that there sometimes are some problems with
+the Amoeba Ethernet drivers for Intel processors. If you have problems,
+please try the -pan_chksum option. If that helps, you have the problem,
+for which we have no fix.
+
+--
+Ceriel Jacobs					Voice: +31 20 444 7759
+Dept. of Mathematics and Computer Science	Fax:   +31 20 444 7653
+Vrije Universiteit, De Boelelaan 1081a		Email: ceriel@cs.vu.nl
+1081 HV Amsterdam, The Netherlands		http://www.cs.vu.nl/~ceriel

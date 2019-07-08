@@ -1,0 +1,49 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: barrier.imp,v 1.4 1995/07/31 09:03:54 ceriel Exp $
+
+OBJECT IMPLEMENTATION barrier;
+
+hit      : integer;
+released : integer;
+N        : integer;
+
+
+OPERATION ack();
+BEGIN
+    GUARD hit      = N DO   released +:= 1;
+			    IF released = N
+			    THEN hit := 0;
+			    FI;
+		       OD;
+END;
+
+
+OPERATION done();
+BEGIN
+    GUARD released = N DO   hit +:= 1;
+			    IF hit = N
+			    THEN released := 0;
+			    FI;
+		       OD;
+END;
+
+
+FUNCTION sync(b: SHARED barrier);
+BEGIN
+    b$done();
+    b$ack();
+END;
+
+
+OPERATION init(n_workers : integer);
+BEGIN
+    N := n_workers;
+    released := N;
+    hit      := 0;
+END;
+
+END;
+

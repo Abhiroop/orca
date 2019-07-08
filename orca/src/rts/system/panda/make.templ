@@ -1,0 +1,164 @@
+# To create various versions, redefine on the command line:
+#
+# Compilation:
+#       EXT_FLAGS    : extra flags for the C compiler
+#       DEFINES      : extra flags for the C preprocessor
+#	INCLUDES     : -I options to find include files
+#
+# Installation:
+# Use this file as a template for a Makefile for a specific architecture.
+# This generated Makefile resides in the INSTALL directory.
+#	INSTALL      : the directory where the lib*.a file is maintained
+#       CONFMAKEFILE : the path name of the generated file that contains
+#                      the dependencies
+#
+# General:
+#	ORCA_HOME    : the root of the Orca tree
+
+					# Standard programs
+AR		= ar
+ARFLAGS		= r
+CHMOD		= chmod
+CHMODFLAGS	= ug+rw
+RANLIB		= ranlib
+TAGS		= etags
+RM		= /bin/rm
+EX		= ex
+MAKEDEPEND	= makedepend
+
+CC		= gcc
+
+CPPFLAGS = \
+		$(INCLUDES) \
+		$(DEFINES)
+
+CFLAGS		= \
+		$(EXT_FLAGS)
+
+
+					# set FORCE to ALWAYS if you want to
+					# recompile everything
+FORCE		=
+
+					# This module <-------------
+MODULE		= system
+
+PWD             = $(ORCA_HOME)/src/rts/system/panda
+INSTALL		= .			# Must choose some default...
+
+CONFMAKEFILE	= $(INSTALL)/Makefile.$(MODULE)
+
+TARGETLIB =	lib$(MODULE).a
+TARGET		= $(INSTALL)/$(TARGETLIB)
+LIB_TARGET	= $(TARGET)
+
+
+
+					# The source files <------
+SRC		= \
+		manager.c \
+		account.c \
+		Finish.c \
+		invocation.c \
+		rts_init.c \
+		continuation.c \
+		Time.c \
+		obj_tab.c \
+		rts_internals.c \
+		main.c \
+		process.c \
+		rts_object.c \
+		unix.c \
+		fork_exit.c \
+		proxy.c \
+		rts_trace.c \
+		fragment.c \
+		msg_marshall.c \
+		rts_util.c \
+		thrpool.c \
+		rts_comm.c \
+		trc.c
+
+PWD_SRC		= $(SRC:%.c=$(PWD)/%.c)
+
+OBJ_DIR		= ${MODULE}_obj
+OBJECTS		= $(SRC:%.c=${OBJ_DIR}/%.o)
+
+O_FILES		= $(SRC:%.c=%.o)
+
+LIB_OBJECTS	= $(SRC:%.c=$(LIB_TARGET)(%.o))
+
+# two possible ways of compiling: either with .o files in a sub-directory
+# or with rules for making directly into the lib...a. The latter is more
+# space-efficient, but also slower.
+# Choose "target" and "depend" if you want the sub-directory version,
+# "lib_target" and "lib_depend" if you want the direct version.
+
+default:	target
+
+ALWAYS::
+
+target:		${OBJ_DIR} ${TARGET}
+
+${OBJ_DIR}/%.o:	${PWD}/%.c $(FORCE)
+		${COMPILE.c} ${PWD}/$*.c
+		@/bin/mv $*.o ${OBJ_DIR}/$*.o
+		@-${CHMOD} ${CHMODFLAGS} ${OBJ_DIR}/$*.o
+
+${TARGET}: 	${OBJECTS}
+		@-${AR} ${ARFLAGS} ${TARGET} ${OBJECTS}
+		@-${RANLIB} ${TARGET}
+		@-${CHMOD} ${CHMODFLAGS} ${TARGET}
+
+${OBJ_DIR}::
+		@if test \! -d $@ ; \
+		then \
+			mkdir $@ ; \
+			${CHMOD} ug+rwx $@ ; \
+		fi
+
+depend:
+		@/bin/cp ${PWD}/make.templ ${CONFMAKEFILE}
+		${MAKEDEPEND}	-f${CONFMAKEFILE} \
+				${CPPFLAGS} \
+				${PWD_SRC}
+		@-(echo '%s/^[A-Za-z_][A-Za-z_0-9]*\.o:/$${OBJ_DIR}\/&'; \
+		   echo wq) | ${EX} - ${CONFMAKEFILE}
+		@-${CHMOD} ${CHMODFLAGS} ${CONFMAKEFILE}
+		@-${RM} -f ${CONFMAKEFILE}.bak
+
+clean:		
+		-$(RM) -f $(OBJECTS) $(O_FILES) *.bak
+
+# Make rules for making directly into the lib...a
+
+$(LIB_TARGET)(%.o) : $(PWD)/%.c $(FORCE)
+		$(COMPILE.c) -o $% $(PWD)/$*.c
+		@-$(AR) $(ARFLAGS) $(LIB_TARGET) $%
+		@-$(RM) -f $%
+
+lib_target:	$(LIB_OBJECTS)
+		@-$(RANLIB) $(LIB_TARGET)
+		@-$(CHMOD) $(CHMODFLAGS) $(LIB_TARGET)
+
+lib_depend:		
+		/bin/cp $(PWD)/make.templ $(CONFMAKEFILE)
+		${MAKEDEPEND}	-f${CONFMAKEFILE} \
+				${CPPFLAGS} \
+				${PWD_SRC}
+		@-(echo '%s/^[A-Za-z_][A-Za-z_0-9]*\.o/$$(TARGET)(&)'; \
+		   echo wq) | ${EX} - ${CONFMAKEFILE}
+		@-$(CHMOD) $(CHMODFLAGS) $(CONFMAKEFILE)
+		@-${RM} ${CONFMAKEFILE}.bak
+
+lib_clean:	clean
+		-$(AR) d $(LIB_TARGET) $(O_FILES)
+
+.PRECIOUS:	$(TARGET)
+
+
+tags:	
+		$(TAGS) -t $(SRC)
+
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.

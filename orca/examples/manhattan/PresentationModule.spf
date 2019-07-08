@@ -1,0 +1,37 @@
+MODULE SPECIFICATION PresentationModule;
+	
+	FROM TspTypes IMPORT 
+			ImprovementStatus, 
+			NodeIndex, 
+			Node, 
+			NodeArray, 
+			TourArray, 
+			NodeSubset, 
+			DistanceMatrix, 
+			ProcessorStatusType,
+			NodeDistribution;
+
+	
+	FUNCTION PrintDistribution (n : NodeSubset);
+
+	FUNCTION PrintImprovementStatus (s : ImprovementStatus);
+	FUNCTION PrintMessage (message : string);
+	FUNCTION PrintSubMessage (message : string);
+	FUNCTION PrintMessageInt (message : string; val : integer);
+	FUNCTION PrintMessageReal (message : string; val : real);
+	FUNCTION StoreMessage (m : string);
+	FUNCTION PrintStatusReport (prod_stat : ProcessorStatusType;
+			       eval_stat : ProcessorStatusType;
+			       no_of_jobs : integer;
+				improved : integer;
+			       no_of_solved : integer;
+			       best_value : integer);
+
+	FUNCTION Error (message : string);
+	FUNCTION Warning (message : string);
+
+	FUNCTION StartFlow ();
+	FUNCTION PrintInFlow (s : string);
+	FUNCTION StopFlow ();
+
+END;

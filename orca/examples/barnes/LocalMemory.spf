@@ -1,0 +1,58 @@
+MODULE SPECIFICATION LocalMemory;
+
+FROM vectmath IMPORT Vectmath, matrix;
+TYPE IntArray = ARRAY[integer] OF integer;
+
+TYPE tree_t = RECORD
+	myncell:   integer;	# num cells allocated to the processor 
+	mycelltab: IntArray;	# array of cellptrs allocated to the processor 
+	mynleaf:   integer;	# number of leaves allocated to the processor 
+	myleaftab: IntArray;	# array of leafptrs allocated to the processor 
+	mynumcell: integer;	# num. of cells used for this proc
+	mynumleaf: integer;	# num. of leaves used for this proc
+    END;
+
+TYPE mybody_t = RECORD
+	workMin : integer;	# interval of cost to be treated by a proc
+	workMax : integer;
+	mynbody : integer;	# num bodies allocated to the processor 
+	mybodytab : IntArray;	# array of bodies allocated / processor 
+    END;
+
+TYPE LocalMemoryType = RECORD
+  tnow : real;		# current value of simulation time 
+  tout : real;		# time next output is due 
+  nstep : integer;	# number of integration steps so far 
+
+  tree: tree_t;		# cells and leaves
+  mybody: mybody_t;	# my bodies
+
+  min : Vectmath;	# min and max of coordinates for each proc 
+  max : Vectmath;
+
+  myn2bcalc : integer;	# body-body force calculations for each processor 
+  mynbccalc : integer;	# body-cell force calculations for each processor 
+  myselfint : integer;	# count self-interactions for each processor 
+  myn2bterm : integer;	# count body-body terms for a body 
+  mynbcterm : integer;	# count body-cell terms for a body 
+  skipself : boolean;	# true if self-interaction skipped OK 
+  pskip : integer;	# body to skip in force evaluation 
+  pos0 : Vectmath;	# point at which to evaluate field 
+  phi0 : real;		# computed potential at pos0 
+  acc0 : Vectmath;	# computed acceleration at pos0 
+  dr : Vectmath;	# data to be shared 
+  drsq : real;		# between gravsub and subdivp 
+  pmem : integer;	# remember particle data 
+
+  mymtot : real;	# total mass of N-body system 
+  myetot : ARRAY[integer 0..2] OF real;	# binding, kinetic, potential energy 
+
+  myketen : matrix; # kinetic energy tensor 
+  mypeten : matrix;	 # potential energy tensor 
+  mycmphase : ARRAY[integer 0..1] OF Vectmath;  # center of mass coordinates 
+  myamvec : Vectmath;	 # angular momentum vector 
+END;
+
+
+END;
+

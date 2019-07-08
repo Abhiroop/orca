@@ -1,0 +1,14 @@
+1.4| .distr|
+1.11| alloc.3|
+1.11| Malloc.c|
+1.8| No_Mem.c|
+1.8| Realloc.c|
+1.7| Salloc.c|
+1.4| Srealloc.c|
+1.14| alloc.h|
+1.9| botch.c|
+1.10| clear.c|
+1.5| proto.make|
+1.11| st_alloc.c|
+1.9| std_alloc.c|
+1.2| Amake.srclist|

@@ -1,0 +1,5 @@
+MODULE SPECIFICATION HashFunction;
+
+FUNCTION Hash (s : string; i : integer) : integer;
+
+END;

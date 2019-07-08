@@ -1,0 +1,41 @@
+OBJECT SPECIFICATION TourObject;
+
+	IMPORT Random;
+	IMPORT SpecificationObject;
+	FROM TspTypes IMPORT 
+			NodeSubset,
+			ValueArray;
+	FROM TourModule IMPORT
+		Tour;
+
+
+	OPERATION Initialize (nodes : NodeSubset; 
+			s : SpecificationObject);
+	OPERATION SetLower (l : integer);
+	OPERATION SetUpper (u : integer);
+	OPERATION FromStringInt (s : string; val : integer);
+
+	OPERATION ChangeNodes (nodes : NodeSubset);
+	OPERATION BestInsert (nodes : NodeSubset);
+	OPERATION BestInsertArray (nodes : ValueArray);
+	OPERATION BestRemove (nodes : NodeSubset);
+	OPERATION Clear ();
+	OPERATION UndoSwap ();
+	OPERATION SwapRandom (r : Random);
+	
+	OPERATION SetTourConditional (cond : boolean; nt : Tour);
+	OPERATION Improve ();
+	OPERATION Value () : integer;
+	OPERATION Print ();
+	OPERATION Consistent () : boolean;
+
+	OPERATION NoOfNodes () : integer;
+
+	OPERATION Nodes_Array () : ValueArray;
+	OPERATION Nodes_Set () : NodeSubset;
+	
+	OPERATION GenerateID ();
+	OPERATION Id () : string;
+END;
+
+

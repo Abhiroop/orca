@@ -1,0 +1,50 @@
+latex2e=latex
+
+if test ! -r $1.tex ; then
+echo "$1.tex: no such file"
+exit 1
+fi
+
+if test ! -f $1.aux 
+  then > $1.aux
+fi
+
+cp $1.aux __$1.aux__
+# run latex2e
+echo ""
+echo "latex2e $1"
+$latex2e $1 
+if test $? -ne 0; then
+exit 1
+fi
+
+# check if citations have changes
+grep citation __$1.aux__ > __$1.citations.old__
+grep citation $1.aux > __$1.citations.new__
+diff __$1.citations.old__ __$1.citations.new__ > __$1.citations__
+
+# if so, run bibtex
+if test -s __$1.citations__ ; then 
+echo ""
+echo "bibtex $1"
+bibtex $1
+if test $? -ne 0; then
+exit 1
+fi
+cp $1.aux __$1.aux__
+echo ""
+echo "latex2e $1"
+$latex2e $1
+fi
+
+# check if labels have changed. If so rerun latex2e
+diff  __$1.aux__  $1.aux > __$1.labels__
+while test -s __$1.labels__ ; do
+cp $1.aux __$1.aux__
+echo ""
+echo "latex2e $1"
+$latex2e $1
+diff  __$1.aux__  $1.aux > __$1.labels__
+done
+
+rm -f __$1.citations.old__ __$1.citations.new__ __$1.labels__ __$1.aux__ __$1.citations__

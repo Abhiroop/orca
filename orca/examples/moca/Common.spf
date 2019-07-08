@@ -1,0 +1,73 @@
+MODULE SPECIFICATION Common;
+
+CONST	KINS	= 200;		# Dimension of kinetic arrays.
+CONST	MION	= 4096;		# Max. number of ions.
+CONST	MREC	= 2048;		# Max. number of pairs of particles
+				# closer than reaction radius.
+
+CONST	NFIELD	= 6;		# Number of external electric fields.
+CONST	NTRACK	= 10;		# Number of tracks.
+CONST	ISEED	= 554321;	# Seed for function 'RAN'.
+
+
+TYPE	Kind1Type	= (x, s, q);
+TYPE	Kind2Type	= (sh, th, sm, tm);
+
+TYPE	IntArrayType	= ARRAY [integer] OF integer;
+TYPE	RealArrayType	= ARRAY [integer] OF real;
+TYPE	IntKinsType	= ARRAY [integer 0 .. KINS] OF integer;
+TYPE	RealKinsType	= ARRAY [integer 0 .. KINS] OF real;
+TYPE	IntMrecType	= ARRAY [integer 1 .. MREC] OF integer;
+TYPE	RealMrecType	= ARRAY [integer 1 .. MREC] OF real;
+
+TYPE	IntMrecArray	= ARRAY [integer] OF IntMrecType;
+TYPE	RealMrecArray	= ARRAY [integer] OF RealMrecType;
+TYPE	NTYPInfType	= ARRAY [integer] OF IntArrayType;
+TYPE	StringType	= ARRAY [integer 1 .. 80] OF char;
+TYPE	EfieldType	= ARRAY [integer 1 .. 12] OF real;
+TYPE	RealTableType	= ARRAY [integer 1 .. 3] OF real;
+TYPE	IntRecordType	= ARRAY [integer, integer] OF integer;
+TYPE	RealRecordType	= ARRAY [integer, integer] OF real;
+
+TYPE	IntKind2Type	= ARRAY [Kind2Type sh .. tm] OF IntKinsType;
+TYPE	RealKind2Type	= ARRAY [Kind2Type sh .. tm] OF RealKinsType;
+TYPE	CombiType	= ARRAY [Kind1Type x .. q,
+				 Kind2Type sh .. tm] OF real;
+
+TYPE	SqArrayType	= ARRAY [integer 1 .. 2,
+				 integer 1 .. 2] OF longreal;
+
+TYPE	PosArrayType	= ARRAY [integer] OF RECORD
+				X, Y, Z : real;
+			  END;
+
+TYPE	ParTypType	= ARRAY [integer] OF RECORD
+				NPAR, NTYP : integer;
+			  END;
+
+TYPE	InfoType	= ARRAY [integer] OF RECORD
+				POS : PosArrayType;
+				IQ  : RealArrayType;
+			  END;
+
+TYPE	DataType	= ARRAY [integer 1 .. NTRACK] OF RECORD
+				Nion0  : integer;
+				Coords : PosArrayType[1 .. MION / 2];
+			  END;
+
+TYPE	ConstType	= RECORD
+			      RNAME                  : StringType;
+			      IFIL, IOUT, IOUT2      : string;
+			      MAX, NCPUS, IDIS,
+			      NREP, NRPSC, K0, KD,
+			      IKMAX, RAND, MINELTS,
+			      OPTELTS, EXTRA, PERC   : integer;
+			      TAUMAX, DPL, DEL, UPL,
+			      UEL, RONS, RRION, RPM,
+			      DL2PL, DL2EL, FACEF,
+			      ETERM, TUN, TMAX, TK0  : real;
+			      DAT                    : DataType;
+			      EFIELD                 : EfieldType;
+			      BETA                   : SqArrayType;
+			  END;
+END;

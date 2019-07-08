@@ -1,0 +1,3 @@
+TSP solves a traveling salesman problem using a branch-and-bound algorithm.
+
+We used a 19-city problem for performance measurements.

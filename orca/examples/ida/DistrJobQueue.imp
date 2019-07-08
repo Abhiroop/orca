@@ -1,0 +1,46 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+GENERIC
+MODULE IMPLEMENTATION DistrJobQueue;
+
+    FUNCTION AddJob(q : SHARED queue; job : T);
+    BEGIN
+    	q[MYCPU()]$AddJob(job);
+	q[NCPUS()]$Announce();
+    END;
+
+    FUNCTION GetJob(q : SHARED queue; job : OUT T) : boolean;
+    cpu, me, step : integer;
+    BEGIN
+    	me := MYCPU();
+
+	REPEAT
+	    # check local job queue first
+    	    IF q[me]$GetJob(job) THEN
+    	        RETURN true;
+    	    FI;
+
+    	    # check other job queues; for scalabilty check log(n) queues
+    	    cpu := me;
+	    step := 1;
+	    WHILE step < NCPUS() DO
+    	        cpu +:= step;
+    	        IF cpu >= NCPUS() THEN
+    		    cpu -:= NCPUS();
+    	        FI;
+    	        IF q[cpu]$TryGetJob(job) THEN
+    		    RETURN true;
+    	        FI;
+		step *:= 2;
+    	    OD;
+
+	    # No job found, so globally announce I'm idle.
+	    q[NCPUS()]$Idle();
+	UNTIL q[NCPUS()]$AllDone();
+
+    	RETURN false;
+    END;
+
+END GENERIC;

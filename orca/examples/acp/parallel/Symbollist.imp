@@ -1,0 +1,186 @@
+# ========================================================================
+# == File:      Symbollist.imp  					==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Implementation of symbol list. 				==
+# ========================================================================
+
+MODULE IMPLEMENTATION Symbollist;
+
+FROM StringObject IMPORT compare_string;
+FROM Types IMPORT symbol_name_t;
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+
+#
+# create() : create the list
+#
+FUNCTION create_sl(
+	sl      : SHARED symbollist_t
+) : boolean;					# succes?
+
+BEGIN
+	sl.head := NIL;
+	sl.tail := NIL;
+	sl.nr_elts := 0;
+	RETURN true;
+END;
+
+
+#
+# delete() : delete the list
+#
+FUNCTION delete_sl(
+	sl      : SHARED symbollist_t
+);
+	old_elt : symlist_elt_t;		# element to be deleted
+BEGIN
+	FOR i IN 1..sl.nr_elts DO
+		old_elt := sl.head;
+		sl.head := sl[sl.head].next;
+		DELETENODE(sl, old_elt);
+	OD;
+END;
+
+
+#
+# insert_key() : insert element in the list
+#
+FUNCTION insert_elt_sl(				
+	sl      : SHARED symbollist_t;
+	key 	: symbol_name_t			# key to be inserted
+) : boolean;					# succes?
+
+	new_elt, ptr : symlist_elt_t;		# pointers to elements
+	cmp : 	  integer;
+BEGIN
+	new_elt := ADDNODE(sl);
+	sl[new_elt].next := NIL;
+	sl[new_elt].key := key;
+	
+	# is the list empty 
+	IF sl.nr_elts = 0 THEN
+		sl.head := new_elt;
+		sl.tail := new_elt;
+		sl[sl.tail].next := NIL;
+		sl.nr_elts +:= 1;
+		RETURN true;
+	FI;
+
+	ptr := sl.head;
+
+	# should we insert as first element?
+	cmp := compare_string(sl[ptr].key, key);
+	IF (cmp = 0) THEN RETURN true; FI;	# no double elements
+	IF (cmp > 0) THEN
+		sl[new_elt].next := sl.head;
+		sl.head := new_elt;
+		sl.nr_elts +:= 1;
+		RETURN true;
+	FI;
+
+	# insert at correct position
+	WHILE (sl[ptr].next /= NIL) DO
+		cmp := compare_string(sl[sl[ptr].next].key, key);
+		IF (cmp = 0) THEN RETURN true; FI; # no doubles
+		IF (cmp > 0) THEN
+			sl[new_elt].next := sl[ptr].next;
+			sl[ptr].next := new_elt;
+			sl.nr_elts +:= 1;
+                	RETURN true;
+		FI;
+		ptr := sl[ptr].next;
+        OD;
+	
+	# insert as new tail
+	sl[sl.tail].next := new_elt;
+	sl.tail := new_elt;
+	sl.nr_elts +:= 1;
+
+	RETURN true;
+END;
+
+
+#
+# num_elts() : return number of elements in the list
+#
+FUNCTION num_elts_sl(				
+	sl      : symbollist_t
+) : integer;					# nr of elements in list
+
+BEGIN
+	RETURN sl.nr_elts;
+END;
+
+
+#
+# give_ith_elt() : return info on ith element in the list
+#
+FUNCTION give_ith_elt_sl(
+	sl      : symbollist_t;
+	index : integer; 			# index in the list
+	key   : OUT symbol_name_t		# key on position i
+) : boolean;
+
+	ptr : symlist_elt_t;			# pointer to element 
+BEGIN
+	IF ((index < 1) OR (index > sl.nr_elts)) THEN
+		RETURN false;
+	FI;
+	
+	ptr := sl.head;
+	
+	FOR i IN 1..(index-1) DO
+		ptr := sl[ptr].next;
+	OD;
+	
+	key := sl[ptr].key;
+	RETURN true;
+END;
+	
+
+#
+# is_in() : check is an element is in the list
+#
+FUNCTION is_in_sl(
+	sl      : symbollist_t;
+	key   : symbol_name_t; 			# is this key in the list
+	index : OUT integer			# position in the list
+) : boolean;					# is in list or not?
+
+	ptr : symlist_elt_t;			# pointer to element
+	cmp : integer;				# result of comparison
+BEGIN
+	ptr := sl.head;
+
+	FOR i IN 1.. sl.nr_elts DO
+		cmp := compare_string(sl[ptr].key, key);
+
+		#list is sorted, so check if we can break
+		IF (cmp > 0) THEN
+			RETURN false;
+		FI;
+	
+		IF (cmp = 0) THEN
+			index := i;
+			RETURN true;
+		FI;
+		ptr := sl[ptr].next;
+	OD;
+	RETURN false;
+END;
+
+
+FUNCTION copy_sl(
+	dest : SHARED symbollist_t;
+	src  : symbollist_t);
+BEGIN
+	dest.head := src.head;
+	dest.tail := src.tail;
+	dest.nr_elts := src.nr_elts;
+END;	
+		
+END;

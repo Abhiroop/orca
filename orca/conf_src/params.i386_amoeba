@@ -1,0 +1,39 @@
+# platform-dependent macros
+
+# platform
+OS		= amoeba
+PROC		= i80386
+BINSUF		= sol2
+
+AMCONF		= $(AMOEBA_HOME)/conf/amoeba
+
+AMOEBA_GNU      = $(AMCONF)/i80386.gnu-2
+TOOLSET         = $(AMOEBA_GNU)/toolset
+AMOEBA_BIN      = $(AMOEBA_HOME)/bin.sun4/gnu
+
+AMCFLAGS        = -mam_i80386 -G $(AMOEBA_BIN)
+AMCDEFINES      = -Di80386 -DAMOEBA -nodeps -fno-builtin \
+                  -I$(AMOEBA_HOME)/src/h \
+                  -I$(AMOEBA_HOME)/src/h/posix \
+                  -I$(AMOEBA_HOME)/src/h/toolset/gnu-2
+
+# C compiler
+CC		= $(TOOLSET)/do_gcc $(AMCFLAGS) $(AMCDEFINES)
+EXT_FLAGS	= -O2 -ansi -pedantic -g
+LD              = $(TOOLSET)/do_ld $(AMCFLAGS) $(AMOEBA_GNU)/lib/head/head.o
+LDFLAGS		= -lsoft
+
+# archiver
+AR 		= $(TOOLSET)/do_ar $(AMCFLAGS)
+ARFLAGS		= crs
+RANLIB		= :
+
+# lint
+LINT		= /usr/bin/lint
+LINTFLAGS	=
+LINTPREF	= llib-l
+LINTSUF		= ln
+LINTMKLIB	= -C$(LIBNAM)
+
+# dependency generator
+MAKEDEPEND	= /usr/openwin/bin/makedepend

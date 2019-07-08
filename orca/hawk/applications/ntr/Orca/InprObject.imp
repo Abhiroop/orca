@@ -1,0 +1,156 @@
+OBJECT IMPLEMENTATION InprObject[integer N1..M1, integer N2..M2];
+
+FROM global IMPORT NReals, KReals, DComplexs, KBooleans, NTARGETS, MDOP,
+                   NCHAN, NDOP, NDV2, NRANGE, brt, K0, K1, w, twiddles,
+		   InputData, complex;
+FROM Math IMPORT sqrt;
+
+  TYPE eltp = RECORD
+	inpr: DComplexs;
+	mag: KReals;
+	det: KBooleans;
+  END;
+
+  el: eltp;
+
+FUNCTION NSums(r1, r2: SHARED NReals);
+BEGIN
+  FOR i IN 1 .. NCHAN DO
+    r1[i] := r1[i]+r2[i];
+  OD;
+END;
+
+PARALLEL OPERATION[ch, k] init();
+BEGIN
+  FOR i IN 1 .. NDOP DO
+      el.inpr[i].r := InputData[k,i,ch].r;
+      el.inpr[i].i := InputData[k,i,ch].i;
+  OD;
+END;
+
+PARALLEL OPERATION[ch, k] doppler();
+  ijDiff: integer;
+  stride: integer;
+  powerOfW: integer;
+  sPowerOfW: integer;
+  first: integer;
+  pw, t: complex;
+  ii, jj: complex;
+  n, j: integer;
+BEGIN
+
+  FOR i IN 1 .. NDOP DO
+      el.inpr[i].r := el.inpr[i].r*w[i];
+      el.inpr[i].i := el.inpr[i].i*w[i];
+  OD;
+
+  # Bit reverse step
+
+  FOR i IN 1 .. NDOP DO
+    j := brt[i];
+    IF i < j THEN
+    	t := el.inpr[j];
+	el.inpr[j] := el.inpr[i];
+	el.inpr[i] := t;
+    FI;
+  OD;
+
+  # butterfly computations
+
+  ijDiff := 1;
+  stride := 2;
+  sPowerOfW := NDV2;
+  FOR stage IN 1..MDOP DO
+    first := 1;
+    powerOfW := 1;
+    WHILE powerOfW <= NDV2 DO
+      pw := twiddles[powerOfW];
+      n := first;
+      WHILE n <= NDOP DO
+	j := n + ijDiff;
+	jj := el.inpr[j];
+	ii := el.inpr[n];
+	t.r := jj.r * pw.r - jj.i * pw.i;
+	t.i := jj.r * pw.i + jj.i * pw.r;
+	el.inpr[j].r := ii.r - t.r;
+	el.inpr[j].i := ii.i - t.i;
+	el.inpr[n].r := ii.r + t.r;
+	el.inpr[n].i := ii.i + t.i;
+	n +:= stride;
+      OD;
+      first +:= 1;
+      powerOfW +:= sPowerOfW;
+    OD;
+    ijDiff := stride;
+    stride := stride << 1;
+    sPowerOfW := sPowerOfW >> 1;
+  OD;
+
+  FOR i IN K0..K1 DO
+      el.inpr[i].r := el.inpr[i].r/FLOAT(NDOP);
+      el.inpr[i].i := el.inpr[i].i/FLOAT(NDOP);
+      el.mag[i] := sqrt(el.inpr[i].r*el.inpr[i].r + el.inpr[i].i*el.inpr[i].i);
+  OD;
+END;
+
+
+PARALLEL OPERATION[ch, k] psum(): REDUCE NReals WITH NSums;
+  x: NReals;
+BEGIN
+  FOR i IN 1 .. NCHAN DO x[i] := 0.0; OD;
+  FOR i IN K0..K1 DO
+	x[ch] +:= el.mag[i];
+  OD;
+  RETURN x;
+END;
+
+
+PARALLEL OPERATION[ch, k] cfar(LocalThresh: IN NReals);
+BEGIN
+  FOR i IN K0..K1 DO
+    el.det[i] := el.mag[i] > LocalThresh[ch];
+  OD;
+END;
+
+OPERATION PrintDetChannel0();
+BEGIN
+  WriteLine("Narrowband Tracking Radar");
+  WriteLine(NCHAN, " channels, ", NRANGE, " range cells");
+  WriteLine(NDOP, " Doppler Cells ", NTARGETS, " targets");
+
+  WriteLine();
+
+  FOR j IN 1..NRANGE DO
+    FOR k IN K0..K1 DO
+      IF el[1,j].det[k]
+        THEN Write("1");
+        ELSE Write("0");
+      FI;
+    OD;
+    WriteLine();
+  OD;
+END;
+
+OPERATION PrintInpr();
+BEGIN
+  WriteLine("Inpr:");
+  FOR i IN 1..8 DO
+      FOR j IN 1..NRANGE DO
+          Write(el[1,j].inpr[i].r," ");
+      OD;
+      WriteLine();
+  OD;
+END;
+
+OPERATION PrintMag();
+BEGIN
+  WriteLine("Mag:");
+  FOR i IN 1..8 DO
+      FOR j IN 1..NRANGE DO
+          Write(el[1,j].mag[i]," ");
+      OD;
+      WriteLine();
+  OD;
+END;
+
+END;

@@ -1,0 +1,136 @@
+OBJECT IMPLEMENTATION Work;
+
+FROM Types IMPORT Vali, BoolArray, ConMatrix, RelationIndex;
+FROM Graph IMPORT GenerateConstraints;
+
+x, aux: BoolArray;
+busy: integer;
+constraint: ConMatrix;
+const_ready: boolean;
+ 
+OPERATION init_const(max_rel: RelationIndex; nr_connections, nr_vars: integer;
+                             seed: integer);
+ 
+c: ConMatrix[0 .. nr_vars - 1][0 .. nr_vars - 1];
+
+BEGIN
+    GenerateConstraints(ORD(max_rel), nr_connections, nr_vars, c, seed);
+    constraint := c;
+    const_ready := true;
+END;
+ 
+OPERATION get_const() : ConMatrix;
+BEGIN
+    GUARD const_ready
+    DO
+	RETURN constraint;
+    OD;
+END;
+
+ 
+OPERATION init(n, nslaves : integer ; YesOrNo : boolean);
+tmp : BoolArray [ 0..n-1];
+BEGIN
+    FOR i IN 0 .. n - 1
+    DO
+	tmp[i] := YesOrNo;
+    OD;
+    x := tmp;
+    busy := nslaves;	# Initially everybody is working
+    const_ready := false;
+END;
+
+
+OPERATION Vote(i : integer; YesOrNo: boolean);
+BEGIN
+    x[i] := YesOrNo;
+END;
+
+
+OPERATION lista_work(N, cpu : integer; processor : Vali) : BoolArray;
+tmp : BoolArray[0..N-1];
+BEGIN
+    FOR i IN 0 .. N - 1
+    DO
+	IF x[i] AND (processor[i] = cpu)
+	THEN
+	    tmp[i] := true;
+	    x[i] := false;
+	ELSE
+	    tmp[i] := false;
+	FI;
+    OD;
+    RETURN tmp;
+END;
+
+
+OPERATION Announce(i, n : integer) ;
+BEGIN
+    FOR j IN 0 .. n - 1
+    DO
+	IF (i /= j) AND (constraint[i][j] /= NOCONSTRAINT)
+	THEN
+	    x[j] := true;           
+	FI;
+    OD;
+END;
+
+
+FUNCTION new_work( N, cpu : integer; processor : Vali; x: BoolArray): boolean;
+BEGIN
+    FOR i IN 0 .. N - 1
+    DO
+	IF (processor[i] = cpu) AND x[i]
+	THEN
+	    RETURN true;
+	FI;
+    OD;
+    RETURN false;
+END;
+
+
+FUNCTION any_work(N: integer; x: BoolArray): boolean;
+BEGIN
+    FOR i IN 0 .. N-1
+    DO
+	IF x[i]
+	THEN
+	    RETURN true;
+	FI;
+    OD;
+    RETURN false;
+END;
+
+
+OPERATION Work_for(N, cpu : integer; processor : Vali): boolean;
+BEGIN
+    GUARD new_work( N, cpu, processor, x)
+    DO
+	busy +:= 1;
+	RETURN true;
+    OD;
+
+    GUARD (busy = 0) AND NOT any_work(N, x)
+    DO
+	RETURN false;
+    OD;
+END;
+
+
+OPERATION Ready();	# Has to be called prior to Work_for :-(
+BEGIN
+    busy -:= 1;
+END;
+
+
+OPERATION Test(i : integer) : boolean;
+BEGIN
+    RETURN x[i];
+END;
+
+OPERATION GetValue(): BoolArray;
+BEGIN
+    RETURN x;
+END;
+
+END;

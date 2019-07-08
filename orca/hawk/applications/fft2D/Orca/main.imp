@@ -1,0 +1,68 @@
+MODULE IMPLEMENTATION main;
+  FROM global	IMPORT	N, LOGN, iters;
+  FROM Time	IMPORT	SysMilli, PrintTime;
+  		IMPORT	fft;
+  FROM distributions
+		IMPORT	BLOCK;
+
+  FUNCTION prperf(ts, fs: integer);
+    tsecs, fsecs, secs, flops, mflops: real;
+    tpercent, fpercent: integer;
+  BEGIN
+    tsecs := FLOAT(ts)/(1000.0 * FLOAT(iters));
+    fsecs := FLOAT(fs)/(1000.0 * FLOAT(iters));
+    secs := tsecs + fsecs;
+
+    tpercent := TRUNC(100.0 * tsecs/secs + 0.5);
+    fpercent := 100 - tpercent;
+
+    flops := 10.0 * FLOAT(N) * FLOAT(N) * FLOAT(LOGN);
+    mflops := (flops / 1000000.0) / secs;
+    WriteLine("**************************************");
+    WriteLine("2D FFT(", N, "x", N, ")");
+    WriteLine("**************************************");
+    WriteLine("Time per input image:");
+    WriteLine("tpose   : ", tsecs, " (", tpercent, "%)");
+    WriteLine("ffts    : ", fsecs, " (", fpercent, "%)");
+    WriteLine("Total   : ", secs, " seconds");
+    WriteLine();
+    WriteLine("mflops/s: ", mflops);
+    PrintTime("FFT-2D", TRUNC(secs * 1000.0));
+  END;
+
+  FUNCTION DoWork();
+    a: fft[1..N];
+    fsecs: integer;
+    tsecs: integer;
+    s1, s2: integer;
+  BEGIN
+    a$$partition(NCPUS());
+    a$$distribute_on_n(NCPUS(), BLOCK);
+    fsecs := 0;
+    tsecs := 0;
+    FOR k IN 1..iters DO
+      WriteLine("Iteration: ", k);
+      a$dgen();
+      s1 := SysMilli();
+      a$cffts();
+      s2 := SysMilli();
+      fsecs +:= s2 - s1;
+      a$tpose();
+      s1 := SysMilli();
+      tsecs +:= s1 - s2;
+      a$cffts();
+      s2 := SysMilli();
+      fsecs +:= s2 - s1;
+      a$tpose();
+      s1 := SysMilli();
+      tsecs +:= s1 - s2;
+      a$chkmat();
+    OD;
+    prperf(tsecs, fsecs);
+  END;
+
+  PROCESS OrcaMain();
+  BEGIN
+    DoWork();
+  END;
+END;

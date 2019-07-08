@@ -1,0 +1,18 @@
+PROCESS Worker(in, out: SHARED JobQueue; proclist: ProcessorList);
+	
+fft: FFT[0 .. size - 1]; 	# a partitioned object
+job, result: Job_T;
+
+BEGIN
+	fft$$partition(BLOCKWISE);
+	fft$$distribution(proclist);
+
+	WHILE in$GetJob(job) DO				# retrieve a job from the input queue
+		fft$Initialize(job);			# use it to initialize the object
+		FOR i IN 1 .. log2(size) DO
+			fft$Compute_phase(i);		# invoke data parallel operation
+		OD;
+		result := fft$Get();			# get the result
+		out$AddJob(result);			# put the result in the output queue
+	OD;	
+END;

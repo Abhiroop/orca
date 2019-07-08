@@ -1,0 +1,33 @@
+#-----------------------------------------------#
+# Author : H. Staalman				#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION BackwardRA;
+
+# The backward retrograde analysis algorithm is defined in this module.
+# It is invoked by the worker[s] right after the forward pass.
+
+
+FROM   DataBaseTypes	IMPORT	DataBaseObject, AdresTable;
+IMPORT ConverterObject;
+IMPORT DBMetaDataObject;
+IMPORT buffer;
+IMPORT terminate;
+IMPORT barrier;
+IMPORT IntObject;
+
+FUNCTION Backward(database: SHARED DataBaseObject;
+		 dbmetadata: SHARED DBMetaDataObject;
+		 converter: IN ConverterObject;
+		 cpu_table: IN AdresTable;
+		 bufs:	    SHARED buffer.buffers;
+		 term:	    SHARED terminate;
+		 bar:	    SHARED barrier;
+		 go:		SHARED IntObject;
+		 nworkers:      integer;
+		 totwaiting:	SHARED integer;
+		 totwaitforinput: SHARED integer);
+
+END; # BackwardRA

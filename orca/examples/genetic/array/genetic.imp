@@ -1,0 +1,219 @@
+MODULE IMPLEMENTATION genetic;
+
+	FROM GenTypes IMPORT VecPPCom, configuration;
+	IMPORT Random;
+	FROM BoolVector IMPORT BoolMatrix;
+	FROM IntMatrix IMPORT IntMatrix, DynIntMatrix, MakeAdjMatrix;
+	FROM CromoVector IMPORT individual, population, DynPopulation;
+	FROM Finish IMPORT Finish;
+	IMPORT IntObject;
+	FROM Time IMPORT SysMilli, PrintTime;
+	FROM args IMPORT Argc, Argv;
+	FROM input_data IMPORT read_configuration, print_configuration,
+				read_matrix, print_matrix;
+	FROM output_solution IMPORT choose_solution, write_solution;
+	FROM genfunct IMPORT equalize_01, calc_fsum, 
+		select, crossover, mutation, fitness, quicksort;
+	FROM matrixfunct IMPORT test_symmetric, evaluation, heuristic;
+	FROM firstgen IMPORT first_generation;
+	IMPORT sem;
+
+	CONST MaxNCPUS=64;	# max nb. of CPUS; used for VecPPCom tailoring
+
+PROCESS worker(A: IntMatrix; config: configuration; nb_nodes: integer;
+			symmetric: boolean;
+			Com: SHARED VecPPCom;
+			WorkersActive: SHARED IntObject;
+			go: SHARED IntObject; printer: SHARED sem);
+
+# local data of the worker
+	Pop: population;
+	crt_generation: integer;
+	s1, s2: integer;
+	p1, p2: integer;
+	fit_sum: integer;
+	seed: integer;
+	CONST delta = 100;
+	tmppop: population;
+	r: Random;
+
+BEGIN
+	go$AwaitValue(1);
+
+printer$P();
+	WriteLine("***Process*** ", MYCPU());
+printer$V();
+
+	# seed := SysMilli()*(delta + MYCPU());
+	seed := delta+ MYCPU();
+	r$init(seed);
+	tmppop := DynPopulation(nb_nodes, config.nb_migrators);
+	crt_generation := 0;
+	first_generation(Pop, config, A, symmetric, nb_nodes, r);
+	FOR i IN 0..config.nb_generations-1 DO
+
+	   fit_sum := calc_fsum(Pop, config);
+	   FOR j IN 0..config.nb_individuals/2-1 DO
+
+# parent selection
+		p1 := select(Pop, config, fit_sum, r);
+		REPEAT
+			p2 := select(Pop, config, fit_sum, r);
+		UNTIL p2 /= p1;
+
+# sons are in the second half of the population array
+		s1 := 2*j+config.nb_individuals;
+		s2 := 2*j+1+config.nb_individuals;
+
+		crossover(config, nb_nodes, Pop[p1].cromozom, 
+		  Pop[p2].cromozom, Pop[s1].cromozom,
+		  Pop[s2].cromozom, r);
+		mutation(Pop[s1].cromozom, config, nb_nodes, r);
+		equalize_01(Pop[s1].cromozom, nb_nodes, r);
+		heuristic(A, nb_nodes, Pop[s1].cromozom);
+		evaluation(A, symmetric, nb_nodes, Pop[s1]);
+		mutation(Pop[s2].cromozom, config, nb_nodes, r);
+		equalize_01(Pop[s2].cromozom, nb_nodes, r);
+		heuristic(A, nb_nodes, Pop[s2].cromozom);
+		evaluation(A, symmetric, nb_nodes, Pop[s2]);
+	   OD;
+
+#
+# remove # in the next cycle, for applying heuristic to the best
+# individuals
+#
+#	   FOR j IN 0..config.nb_individuals/2-1 DO
+#		heuristic(G, nb_nodes, Pop[j].cromozom);
+#		evaluation(G, symmetric, nb_nodes, Pop[j]);
+#	   OD;
+	   quicksort(Pop, 0, 2*config.nb_individuals-1);
+	   fitness(Pop, config);
+	   crt_generation +:=1;
+	   IF (i+1)%config.migration_rate = 0 THEN
+	      	IF config.nb_slaves>1 THEN
+		   FOR k IN 0..config.nb_migrators-1 DO
+			tmppop[k] := Pop[k];
+		   OD;
+	      	   Com[MYCPU()]$put(tmppop);
+	      	   IF NOT Com[(MYCPU()-1+config.nb_slaves)%config.nb_slaves]$test_empty() THEN
+			Com[(MYCPU()-1+config.nb_slaves)%config.nb_slaves]$get(tmppop);
+			FOR k IN 0..config.nb_migrators-1 DO
+			   Pop[2*config.nb_individuals-config.nb_migrators+k] := 
+				tmppop[k];
+			OD;
+	  		quicksort(Pop, 0, 2*config.nb_individuals-1);
+			fitness(Pop, config);
+	           FI;
+	      	FI;
+	   FI;
+# if the optimum has been obtained
+	   IF Pop[0].eval = 0 THEN
+		printer$P();
+		WriteLine("***Process*** ", MYCPU(), " generation nb= ", crt_generation);
+		write_solution (nb_nodes, Pop[0]);
+		printer$V();
+		EXIT;
+ 	   FI;
+	   IF WorkersActive$value() /= NCPUS() THEN 
+		EXIT; 
+	   FI;
+        OD;
+	FOR k IN 0..config.nb_migrators-1 DO
+		tmppop[k] := Pop[k];
+	OD;
+      	Com[MYCPU()]$put(tmppop);
+	WorkersActive$dec();
+END;
+
+
+PROCESS OrcaMain();
+	# local data of the Main
+		G: BoolMatrix; A: IntMatrix;
+		config: configuration;
+		nb_nodes: integer;
+		tmppop: population;
+		solution: individual;
+		symmetric: boolean;
+		maxdegree: integer;
+		start, stop: integer;
+
+	# (shared) objects
+		Com: VecPPCom[0..MaxNCPUS-1];
+		WorkersActive: IntObject;	# for termination detection
+		go: IntObject;			# for start synchronization
+		printer: sem;
+
+BEGIN
+	IF Argc() /= 2 THEN
+	  WriteLine("Usage: ", Argv(0), " name of the matrix file");
+	  RETURN;
+	FI;
+	WriteLine ("Main started");
+
+# init config
+	IF NOT read_configuration (config) THEN
+		WriteLine("Error configuration file read");
+		RETURN;
+	FI;	
+	print_configuration(config);
+	config.nb_individuals /:= NCPUS();
+	IF config.nb_individuals%2 /= 0 THEN
+		config.nb_individuals +:= 1;
+	FI;
+	WriteLine();
+	WriteLine("Sub-population size= ", config.nb_individuals);
+
+	WriteLine();
+	WriteLine("Matrix file name: ", Argv(1));
+
+# init graph
+	IF NOT read_matrix (Argv(1), nb_nodes, maxdegree, G) THEN
+		WriteLine("Error matrix file read");
+		RETURN;
+	FI;
+	WriteLine("Number of Nodes= ", nb_nodes);
+#	print_matrix (nb_nodes, G);
+	WriteLine ();
+	symmetric := test_symmetric(G, nb_nodes);
+	IF symmetric THEN
+		WriteLine ("symmetric matrix");
+	ELSE
+		WriteLine ("non-symmetric matrix");
+	FI;
+	A := DynIntMatrix(nb_nodes, maxdegree+1);
+	MakeAdjMatrix (G, nb_nodes, A); 
+
+# init communication buffer Com
+	tmppop := DynPopulation(nb_nodes, config.nb_migrators);
+
+	FOR i IN 0..config.nb_slaves-1 DO
+		Com[i]$put(tmppop);
+		Com[i]$get(tmppop);
+	OD;	
+
+# start slaves
+		start := SysMilli();
+		WorkersActive$assign(NCPUS());
+		go$assign(0);
+		FOR i IN 0 .. NCPUS()-1 DO
+			FORK worker(A, config, nb_nodes, symmetric, Com, WorkersActive, go, printer) ON (i);
+		OD;
+		go$assign(1);
+		WorkersActive$AwaitValue(0);
+		stop := SysMilli();
+		choose_solution(Com, nb_nodes, config, solution);
+		WriteLine("Result = ");
+		write_solution(nb_nodes, solution);
+		PrintTime("Genetic, array version", stop-start);
+		WriteLine("Job done!!!");
+		Finish();
+	END;
+END;
+
+
+
+
+
+
+
+

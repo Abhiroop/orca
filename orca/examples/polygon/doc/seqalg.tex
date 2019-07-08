@@ -1,0 +1,122 @@
+\sectionLabel{Sequential Algorithms}
+
+Several sequential programs for solving the polygon overlay problem
+were developed in order to try out and refine different algorithms.
+Only the simplest and fastest algorithms are discussed here.
+
+
+\subsection{All Against All}
+
+This method checks every polygon of the A map with all the polygons
+of the B map.
+To do so, each B polygon is checked against all polygons of the A map.
+This method is the most straightforward algorithm to solve
+the polygon overlay problem, and is easy to implement.
+Unfortunately it one of the slowest.
+Its time complexity is typically of order $O ( n_A \cdot n_B )$, where
+$n_A$ and $n_B$ denote the number of polygons in the A, respectively B,
+map.
+
+
+\subsectionLabel{The Sort-and-Delete Method}
+
+In the previous method, many checks are done of
+polygons that do not overlap and therefore produce no resulting
+polygons.
+In order to reduce these unnecessary checks the Sort-and-Delete
+method exploits the geographical-locality of the maps.
+
+Geographical-locality means that a polygon from the A map
+can only overlap with a polygon from the B map if they both
+lie in the same area.
+To make use of this fact, the polygons of the B map are
+sorted on their upper-left-corner (first sort on the x- and
+than on the y-coordinate).
+If a polygon of the A map is being checked against the
+polygons of the B map, then this process can be stopped when
+the lower right corner of the A polygon is smaller than the
+upper left corner of the B polygons.
+In other words it is useless to search any further if an area
+is entered where there is no chance to find an overlap.
+
+Each time when there is a new polygon taken from the A map
+there is an area in the beginning of the B map where there
+are no overlaps possible.
+To be able to skip polygons of the B map whilst checking, it is
+necessary to sort the polygons of the A map too on their 
+upper-left-corner.
+Now there are two options to find out what to skip in the
+B map.
+
+In the first option it is necessary to sort the B map also
+on the lower-right corner.
+The map can be represented as a double linked list.
+Now the search in the B map can start at the point where the
+right-lower corners of the B polygons are larger than the
+left-upper corner of the A polygon.
+In other words the search can start there where it becomes
+possible to find an overlap.
+Note that the starting point, when checking a new A polygon,
+is always the same as the previous point or further on in
+the B map, because the A map is sorted.
+
+The second option makes use of the definition that the map
+may not contain any holes or overlapping polygons.
+Each time a polygon of the A map is being checked against
+the polygons of the B map and an overlap is found,
+then the surface that is overlapped is subtracted from the
+surface of the B polygon.
+If all the surface of this B polygon is overlapped it can be
+deleted from the B map.
+
+It is clear that the second option is better, because
+it requires less sorting, and often a polygon in the B map is
+taken out sooner than the same polygon is skipped when applying
+the first option.
+
+There is one final optimization that can be done.
+Instead of stopping when the lower-right-corner of the A
+polygon is smaller than the upper-left corners of the B
+polygons, it is possible to stop when the surface of the A
+polygon as been given away.
+Just like a record is kept of the surfaces of the B polygons,
+a record can be kept of the surface of an A polygon.
+Now each time an overlay is found the surface of the A
+polygon is also reduced with the surface of the overlap.
+If the surface of the A polygon has dropped to zero, then it
+is useless to search any further and the next A polygon can
+be taken from the map.
+Stopping when the surface is zero always happens at the
+same time or mostly sooner as in the case where is checked
+whether the border has been past.
+Also the checks in the improved version are only done when
+an overlap has been found, instead of before each check.
+
+The Sort-and-Delete method incorporates the above mentioned
+optimizations as follows.
+Both the A an B map are sorted on the upper-left-corner.
+A record of the surface area is kept of the B polygons and
+the current A polygon.
+When an overlap is found, both the surfaces of the
+concerning A polygon and B polygon are reduced with the
+surface of the overlap.
+If the surface of the B polygon is zero, then the polygon is
+deleted from the B map.
+If the surface from the A polygon is zero, then the search
+proceeds with the next A polygon.
+
+The Sort-and-Delete method has a typical time complexity of order
+$O ( n_A \log n_B )$, where $n_A$ and $n_B$ denote the number of polygons
+in the A, respectively B, map.
+It must be stated tough, that there are exceptional input maps that result
+in checking all against all polygons, see
+\refByCapt{worst case}.
+
+\begin{figure}[hbtp]
+  \begin{centering}
+    \hspace{0cm}
+    \epsffile{worstCase.eps}
+    \refAndCapt{worst case}
+  \end{centering}
+\end{figure}
+

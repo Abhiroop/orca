@@ -1,0 +1,12 @@
+OBJECT SPECIFICATION TourCollectionObject;
+	
+	FROM CollectionTypes IMPORT
+		TourCollection;
+
+
+	OPERATION Initialize (nd : NodeDistribution; spec : SpecificationObject);
+	OPERATION Improve ();
+	OPERATION NewDistribution (nd : NodeDistribution);
+
+END;
+

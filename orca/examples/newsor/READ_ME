@@ -1,0 +1,4 @@
+SOR (Successive Overrelaxation) is a well-known iterative method for solving
+discretized Laplace equations on a grid.
+
+For performance measurements, we used a 964x4000 grid as input.

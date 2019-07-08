@@ -1,0 +1,206 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/******************************************************************************
+ *
+ *    Implementation of the orderer thread.
+ *    Messages for this group are received here; the network layer performs
+ *    an upcall to deliver group msgs in the ordered buffer. The ordering is
+ *    enforced with help of the sequence numbers. Out-of-order messages are
+ *    buffered, retransmit of missing messages from the sequencer is requested.
+ *
+ *    At the site of the sequencer's, things go differently; the sequencer
+ *    puts ordered messages directly in their slot in the ordered buffer.
+ *    Reliability is also done by the sequencer: if the member has missed
+ *    messages (because its ordered buffer was full), then the sequencer
+ *    delivers copies of late msgs before a new msg is delivered.
+ *
+ ******************************************************************************/
+
+
+#ifndef __PAN_GRP_BBB_CI__
+#define __PAN_GRP_BBB_CI__
+
+#include <assert.h>
+
+#include "pan_sys.h"
+
+#include "grp_global.h"
+#include "grp_stats.h"
+
+#include "grp_bb.ci"
+#include "grp_bbb.h"
+
+
+
+
+/* Retrial of GRP_BB_REQ ?
+ *
+ * Requirement: the caller must hold pan_grp_upcall_lock.
+ */
+static boolean
+bb_is_data_retrial(pan_group_p g, grp_hdr_p hdr)
+{
+    assert(hdr->type == GRP_BB_REQ);
+    assert(pan_grp_me != g->seq);
+
+    if (hdr->sender == pan_grp_me) {
+	pan_panic("BB data request arrived within home orderer\n");
+	return FALSE;		/*NOTREACHED*/
+    } else {
+	return ! bbb_is_unused(g->bb_buf, hdr->sender, hdr->messid);
+    }
+}
+
+
+/* Member receives GRP_BB_REQ message.
+ * Store the request in the BB buffer.
+ *
+ * Requirement: the caller must hold pan_grp_upcall_lock.
+ */
+STATIC_CI void
+bb_store_data(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr)
+{
+    boolean r;
+    pan_fragment_p cp_frag;
+
+    assert(hdr->sender != pan_grp_me);
+    assert(pan_grp_me != g->seq);
+
+    if (bb_is_data_retrial(g, hdr)) {
+				/* BB request frag arrived again or early. */
+					STATDISCARD(g, DX_BB_RETRIAL, 1);
+	return;
+    }
+
+    if (! bbb_acceptable(g->bb_buf, hdr->sender, hdr->messid)) {
+				/* BB buffer overflow. Discard frag. */
+					STATDISCARD(g, DX_BB_B, 1);
+    } else {
+				/* Error if this is a retrial */
+	assert(bbb_is_unused(g->bb_buf, hdr->sender, hdr->messid));
+
+	cp_frag = pan_fragment_create();
+	pan_fragment_copy(frag, cp_frag, 0);
+	r = bbb_put(g->bb_buf, hdr->sender, hdr->messid, cp_frag);
+	assert(r);
+    }
+}
+
+
+/* Member received GR_BB_ACPT msg. Collect the corresponding bb data fragment.
+ *
+ * Requirement: the caller must hold pan_grp_upcall_lock.
+ */
+STATIC_CI pan_fragment_p
+bb_collect_data(pan_group_p g, grp_hdr_p acpt)
+{
+    pan_fragment_p frag;
+
+
+    assert(pan_grp_me != g->seq);
+    if (acpt->sender == pan_grp_me) {
+			    /* ignore data fragment, complete msg is
+			     * picked up by the fragmentation layer */
+	frag = pan_grp_get_home_bb_data(g, acpt);
+
+    } else {
+			    /* BB ack; check for the data part */
+				    STATDISCARD(g, DX_BB_ACCEPT, 1);
+	if (bbb_is_written(g->bb_buf, acpt->sender, acpt->messid)) {
+	    frag = bbb_get(g->bb_buf, acpt->sender, acpt->messid);
+	} else {
+			    /* BB data message failed; calling function
+			     * will ask rexmit */
+	    return NULL;
+	}
+	assert(bbb_is_read(g->bb_buf, acpt->sender, acpt->messid));
+    }
+
+    assert(((grp_hdr_p)pan_fragment_header(frag))->messid == acpt->messid);
+    assert(((grp_hdr_p)pan_fragment_header(frag))->sender_id == acpt->sender_id);
+    return frag;
+}
+
+
+/* A GRP_BB_ACPT arrived via the data channel.
+ * This must be a retransmit: at the first attempt, bb messages arrive as
+ * GRP_BB_REQ via the data channel and a GRP_BB_ACPT via the control channel.
+ *
+ * Requirement: the caller must hold pan_grp_upcall_lock.
+ */
+STATIC_CI void
+bb_handle_rexmit(pan_group_p g, grp_hdr_p hdr)
+{
+    pan_fragment_p bb_frag;
+
+    assert(hdr->sender != pan_grp_me);	/* Seq resends cntrl accept */
+    assert(pan_grp_me != g->seq);
+    assert(hdr->flags & HDR_is_rexmit);
+
+    if (bbb_is_unused(g->bb_buf, hdr->sender, hdr->messid)) {
+			/* Restore BB buffer invariants */
+	bbb_advance(g->bb_buf, hdr->sender, hdr->messid);
+
+    } else {
+			/* Data frag already arrived, discard it. */
+	assert(bbb_is_written(g->bb_buf, hdr->sender, hdr->messid));
+	bb_frag = bbb_get(g->bb_buf, hdr->sender, hdr->messid);
+	pan_fragment_clear(bb_frag);
+				STATDISCARD(g, DX_BB_REXMIT, 1);
+    }
+
+    assert(bbb_is_read(g->bb_buf, hdr->sender, hdr->messid));
+}
+
+
+STATIC_CI void
+bb_handle_pb_messid(pan_group_p g, grp_hdr_p hdr)
+{
+    bbb_advance(g->bb_buf, hdr->sender, hdr->messid);
+}
+
+
+STATIC_CI void
+bb_handle_own_bb_messid(pan_group_p g, grp_hdr_p hdr)
+{
+    bbb_advance(g->bb_buf, hdr->sender, hdr->messid);
+}
+
+
+STATIC_CI void
+bb_buf_start(pan_group_p g, short int *bb_start)
+{
+    int i;
+
+    for (i = 0; i < pan_grp_nr; i++) {
+	bbb_start(g->bb_buf, i, bb_start[i]);
+    }
+}
+
+
+STATIC_CI void
+bb_buf_create(pan_group_p g)
+{
+    if (g->seq == pan_grp_me) {
+	g->bb_buf = bbb_create(pan_grp_home_ord_buf_size, pan_nr_platforms());
+    } else {
+	g->bb_buf = bbb_create(pan_grp_ord_buf_size, pan_nr_platforms());
+    }
+}
+
+
+STATIC_CI void
+bb_buf_clear(pan_group_p g)
+{
+    int n;
+
+    n = bbb_clear(g->bb_buf);
+				STATDISCARD_CLEANUP(g, DX_BB_B, n);
+}
+
+
+#endif

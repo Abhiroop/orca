@@ -1,0 +1,80 @@
+DATA MODULE IMPLEMENTATION global;
+
+  FROM Math IMPORT cos, sin, PI;
+  FROM MiscUtil IMPORT gauss1;
+
+FUNCTION GenBitReverseTable();
+  j,k: integer;
+
+BEGIN
+    j := 1;
+    brt[1] := j;
+    FOR i IN 2..NDOP DO
+      k := NDV2;
+      WHILE (k < j) DO
+        j := j-k;
+        k := k >> 1;
+      OD;
+      j := j+k;
+      brt[i] := j;
+    OD;
+END;
+
+FUNCTION GenWTable();
+  w, pt: complex;
+
+BEGIN
+  w.r := cos(PI/FLOAT(NDV2));
+  w.i := -sin(PI/FLOAT(NDV2));
+  twiddles[1].r := 1.0;
+  twiddles[1].i := 0.0;
+  pt.r := 1.0;
+  pt.i := 0.0;
+  FOR i IN 2..NDV2 DO
+    twiddles[i].r := pt.r * w.r - pt.i * w.i;
+    twiddles[i].i := pt.r * w.i + pt.i * w.r;
+    pt := twiddles[i];
+  OD;
+END;
+
+FUNCTION dgen();
+  arg2: real;
+  arg1: real;
+  a: integer;
+  range, doppler: integer;
+BEGIN
+  a := 11111111;
+  FOR i IN 1..NCHAN DO
+    FOR k IN 1..NDOP DO
+      FOR j IN 1..NRANGE DO
+          InputData[j,k,i].r := gauss1(a,0.0,sigma0);
+          InputData[j,k,i].i := gauss1(a,0.0,sigma0);
+  OD; OD; OD;
+
+  arg1 := 2.0 * PI / FLOAT(NDOP);
+  FOR m IN 1..NTARGETS DO
+     range := range0[m]; 
+     doppler := doppler0[m];
+     FOR i IN 1..NCHAN DO
+       FOR k IN 1..NDOP DO
+           arg2 := arg1 * FLOAT((k-1) * doppler);
+	   InputData[range,k,i].r := InputData[range,k,i].r + cos(arg2);
+	   InputData[range,k,i].i := InputData[range,k,i].i + sin(arg2);
+      OD;
+     OD;
+  OD;
+END;
+
+BEGIN
+  FOR i IN 1..NTARGETS DO
+	range0[i] := 2*i + 1;
+	doppler0[i] := 6 + (i-1) * 10;
+  OD;
+  GenBitReverseTable();
+  GenWTable();
+  # Hamming window
+  FOR k IN 1..NDOP DO 
+     w[k] := 0.54 + 0.46*cos(const1*(FLOAT(k-1)-0.5*FLOAT(NDOP-1))); 
+  OD;
+  dgen();
+END;

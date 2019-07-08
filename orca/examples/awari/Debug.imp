@@ -1,0 +1,161 @@
+#-----------------------------------------------#
+# Author : H. Staalman  			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION Debug;
+
+FROM	AwariTypes	IMPORT	PitsPerSide, PitsPerBoard, Side, PitName, PitNr,
+				CapturePit, Ord, EnumName, 
+				Configuration, ConfigUnit, ElementUnit;
+FROM	InOut		IMPORT	WriteString, WriteChar, WriteInt, WriteLn;
+
+
+
+FUNCTION Print_Pit(configuration: IN Configuration;
+		   pit: IN PitName);
+BEGIN
+  IF (Ord(pit) >= 1) AND (Ord(pit) <= PitsPerBoard)
+     THEN
+       WriteString(EnumName(pit));
+       WriteString(":[");
+       WriteInt(configuration[Ord(pit)].contents);
+       WriteString("]");
+     ELSE
+       WriteLine("Sirius bug: Illegal pit[PitName] in 'Print_Pit()'");
+  FI;
+END;
+
+
+FUNCTION Print_Pit_Contents(configuration: IN Configuration;
+			    pit: IN PitName);
+BEGIN
+  IF (Ord(pit) >= 1) AND (Ord(pit) <= PitsPerBoard)
+     THEN
+       WriteString(EnumName(pit));
+       WriteString(":[");
+       WriteInt(configuration[Ord(pit)].contents);
+       WriteString("]");
+     ELSE
+       WriteLine("Sirius bug: Illegal pit[PitName] in 'Print_Pit_Contents()'");
+  FI;
+END;
+
+
+
+FUNCTION Print_Pit_Nr(configuration: IN Configuration;
+		      pit_nr: IN PitNr);
+BEGIN
+  IF (pit_nr >= 1) AND (pit_nr <= PitsPerSide)
+     THEN
+       WriteChar(CHR(ORD('A')+pit_nr-1));
+       WriteString(":[");
+       WriteInt(configuration[pit_nr].contents);
+       WriteString("]");
+  ELSIF (pit_nr > PitsPerSide) AND (pit_nr <= PitsPerBoard)
+     THEN
+       WriteChar(CHR(ORD('a')+pit_nr-(PitsPerSide+1)));
+       WriteString(":[");
+       WriteInt(configuration[pit_nr].contents);
+       WriteString("]");
+  ELSIF (pit_nr=13)
+     THEN
+       WriteString("Cap:[-");
+       WriteInt(configuration[CapturePit].contents);
+       WriteString("..");
+       WriteInt(configuration[CapturePit].contents);
+       WriteString("]");
+  ELSE WriteLine("Sirius bug: Illegal pit[PitName] in 'Print_Pit_Nr()'");
+  FI;
+END;
+
+
+FUNCTION Print_Pit_Nr_Contents(configuration: IN Configuration;
+			       pit_nr: IN PitNr);
+BEGIN
+  IF (pit_nr >= 1) AND (pit_nr <= PitsPerSide)
+     THEN
+       WriteChar(CHR(ORD('A')+pit_nr-1));
+       WriteString(":[");
+       WriteInt(configuration[pit_nr].contents);
+       WriteString("]");
+  ELSIF (pit_nr > PitsPerSide) AND (pit_nr <= PitsPerBoard)
+     THEN
+       WriteChar(CHR(ORD('a')+pit_nr-(PitsPerSide+1)));
+       WriteString(":[");
+       WriteInt(configuration[pit_nr].contents);
+       WriteString("]");
+  ELSIF (pit_nr=13)
+     THEN
+       WriteString("Cap:[-");
+       WriteInt(configuration[pit_nr].contents);
+       WriteString("..");
+       WriteInt(configuration[pit_nr].contents);
+       WriteString("]");
+  ELSE WriteLine("Sirius bug: Illegal pit[PitName] in 'Print_Pit_Nr()'");
+  FI;
+END;
+
+
+
+FUNCTION Print_Side(configuration: IN Configuration;
+		    side: IN Side);
+BEGIN
+  CASE (side) OF
+    North => FOR i IN 1..PitsPerSide
+	     DO
+	       Print_Pit_Nr(configuration, (PitsPerBoard+1-i)); WriteString(" ");
+	     OD;|
+    South => FOR i IN 1..PitsPerSide
+	     DO
+	       Print_Pit_Nr(configuration, i); WriteString(" ");
+	     OD;|
+    ELSE     WriteLine("Sirius bug: Illegal side[Side] in 'Print_Side()'");
+  ESAC;
+END;
+
+
+
+FUNCTION Print_Sides(configuration: IN Configuration;
+		     start_side: IN Side);
+BEGIN
+  CASE (start_side) OF
+    North => Print_Side(configuration, North); WriteLn();
+	     Print_Side(configuration, South);|
+    South => Print_Side(configuration, South); WriteLn();
+	     Print_Side(configuration, North);|
+    ELSE     WriteLine("Sirius bug: Illegal side[Side] in 'Print_Sides()'");
+  ESAC;
+END;
+
+
+
+FUNCTION Print_Board(configuration: IN Configuration;
+		     start_side: IN Side);
+BEGIN
+  Print_Sides(configuration, start_side);
+  Print_Pit_Nr(configuration, CapturePit);
+END;
+
+
+
+FUNCTION Print_ElementUnit(element: IN ElementUnit);
+BEGIN
+  WriteLine("goedel_nr:", element.goedel_nr);
+  WriteLine("gtv      :", element.gtv);
+  WriteLine("nr_succ  :", element.nr_succ);
+END;
+
+
+
+FUNCTION Print_ConfigUnit(configuration: IN ConfigUnit);
+BEGIN
+  WriteLine("gtv    :", configuration.gtv);
+  WriteLine("nr_succ:", configuration.nr_succ);
+END;
+
+
+
+
+END; # Debug

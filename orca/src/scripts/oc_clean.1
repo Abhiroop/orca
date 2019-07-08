@@ -1,0 +1,22 @@
+.\"
+.\" (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+.\" For full copyright and restrictions on use see the file COPYRIGHT in the
+.\" top level of the Orca distribution.
+.\"
+.\" $Id: oc_clean.1,v 1.2 1998/10/27 15:43:18 ceriel Exp $
+.TH OC_CLEAN 1
+.ad
+.SH NAME
+oc_clean \- clean up after Orca compilation
+.SH SYNOPSIS
+.B oc_clean
+.SH DESCRIPTION
+This command removes the intermediate files that are the result of an Orca
+compilation.
+It removes the
+.I .oc_driver
+directory,
+the database files, and any .c, .o, .h, .gc or .gh file that is the result
+of an Orca compilation.
+.SH "SEE ALSO"
+oc(1)

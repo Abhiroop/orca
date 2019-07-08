@@ -1,0 +1,4 @@
+MODULE SPECIFICATION FastPrimes;
+
+PROCESS OrcaMain();
+END;

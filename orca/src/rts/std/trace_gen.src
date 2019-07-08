@@ -1,0 +1,33 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Orca distribution.
+ */
+
+/* Interface from Orca generic trace_gen module to the trace routines. */
+
+#include <orca_types.h>
+
+static int _concat(_concat(trc_,trace_gen),_evno);
+
+void
+_concat(_concat(f_,trace_gen),__event)(t_trace_gen__T cht_trace_gen__T(NOTHING,*)v_user_info) {
+#ifdef TRACING
+	trc_event(_concat(_concat(trc_,trace_gen),_evno),
+		  (void *) (cht_trace_gen__T(&,NOTHING)v_user_info));
+#endif
+}
+
+void
+(_concat(_concat(ini_,trace_gen),__trace_gen))(void) {
+#ifdef TRACING
+	if (td_trace_gen__T.td_flags & DYNAMIC) {
+		m_liberr("TRACE error", "tracing with dynamic type not allowed");
+	}
+	_concat(_concat(trc_,trace_gen),_evno) =
+		trc_new_event(c_trace_gen__level,
+			      td_trace_gen__T.td_size, 
+			      &(((char *)c_trace_gen__name->a_data)[1]),
+			      &(((char *)c_trace_gen__fmt->a_data)[1]));
+#endif
+}

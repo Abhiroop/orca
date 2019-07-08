@@ -1,0 +1,19 @@
+DATA MODULE SPECIFICATION DistanceTable;
+ 
+  FROM Consts IMPORT MAXSZ;
+
+  TYPE IntArray = ARRAY[integer 0..MAXSZ-1, integer 0..MAXSZ-1] OF integer;
+
+  TYPE DistTab =
+	RECORD
+		NrTowns_min_1: integer;
+		dst: IntArray;
+		order: IntArray;
+  		limit: boolean;
+	END;
+
+  distance: DistTab;
+  init_succeeded: boolean;
+  maxhops: integer;
+
+END;

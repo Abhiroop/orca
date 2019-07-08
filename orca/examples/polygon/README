@@ -1,0 +1,198 @@
+23-11-95
+
+Directory/file information:
+---------------------------
+.:
+doc/		Report about solving the Overlay problem.
+src/		C and Orca code.
+box/		Polygonmaps used for measurements.
+
+src:
+parOrca/	Parallel Orca versions to solve the Overlay problem.
+seqC/		Sequential C version to solve the Overlay problem.
+seqOrca/	Sequential Orca version to solve the Overlay problem.
+tools/		Contains 'boxMaker' program for generating input maps.
+
+Program use:
+------------
+
+- boxMaker:
+    Generating polygon maps.
+
+    boxMaker -zx sizeX, -zy sizeY, -n nrOfInitBoxes, [-m maxSurface],
+	 [-cx scaleX], [-cy scaleY], [-s seedNumber]
+
+    -zx sizeX        : Defines the x size of the outer box. sizeX must be an
+		       integer.
+    -zy sizeY        : Defines the y size of the outer box. sizeY must be an
+                       integer.
+    -n nrOfInitBoxes : Gives the number of boxes to start with. The number of
+		       boxes after generation can be larger due to holes between
+		       boxes during generation. nrOfInitBoxes must be an
+		       integer.
+    -m maxSurface    : This option limits the surface of each box to maxSurface.
+		       There is no limit if this option is omitted.
+		       maxSurface must be an integer.
+    -s seedNumber    : If this option is present it will give "seedNumber" as
+                       seed to the random generator instead of the time.
+
+  Typical use of boxMaker:
+    boxmaker -zx 2000 -zy 2000 -n 38500 -s 1 > zx2000zy2000n38500s1.box
+
+    This case it results in a map of size 2000x2000 and contains about
+    400000 polygons.  "-s 1" will cause the program to always generate
+    the same map.
+
+
+- seqCLSDOverlay:
+    Sequential C version solving the problem with the Sort-and-Delete method.
+
+    With 'make' several program versions can be made:
+      seqCLSDOverlay
+      seqCLSDOverlay.panda
+      seqCLSDNoOutOverlay
+      seqCLSDNoOutOverlay.panda
+    The extension ".panda" means that the program runs with panda and is
+    suitable for parallel execution. Without the extension it is a
+    version that runs under UNIX and simulates parallelism.
+    "NoOut" in the name means that no resulting map is written to file.
+    This option is available because input and output is unacceptably
+    slow on Amoeba (at the moment).
+
+    seqCLSDOverlay boxFileA boxFileB resultingBoxfile [allocMB]
+                     |         |           |             |
+                     |         |           |             + To reserve Mega Bytes
+                     |         |           |               This is a hack for
+                     |         |           |               amoeba.
+                     |         |           + Name of the file to put the
+                     |         |             resulting polygon map in.
+                     |         + Name of file containing the B-map.
+                     + Name of file containing the A-map.
+    
+    The allocMB value is neccecary when lots of storage is needed.
+    Amoeba has got problems if only small parts of memory are allocated
+    at once. Then it is impossible to allocate all the available memory.
+    By setting the 'allocMB' value the program allocates that memory all
+    at once, so that Orca control's the memory.
+        
+  Typical use of seqCLSDOverlay:
+    ax -m zooseq seqCLSDNoOutOverlay.panda A.box B.box Out 100
+
+    Now A.box and B.box are overlayed. No output is generated. Out is here a
+    dummy parameter. 100MB will be reserved on the processor (must be zooseq).
+    If no 100MB is available then the program stops with an error.
+    The method makes use of the Sort-and-Delete method.
+
+- seqLSDOverlay:
+    Sequential Orca version solving the problem with the Sort-and-Delete method.
+
+    With 'make' several program versions can be made:
+      seqLSDOverlay
+      seqLSDOverlay.panda
+      seqLSDOverlay.panda.trace
+      seqLSDOnceInOverlay
+      seqLSDOnceInOverlay.panda
+      seqLSDOnceInOverlay.panda.trace
+      seqLSDOnceInNoOutOverlay
+      seqLSDOnceInNoOutOverlay.panda       
+      seqLSDOnceInNoOutOverlay.panda.trace
+    The extension ".panda" means that the program runs with panda and is
+    suitable for parallel running. Without that extension the program is a
+    version that runs under UNIX and simulates parallelism.
+    The extension ".trace" denotes that during execution trace files are
+    generated, which can be visualized with "upshot".
+    "NoOut" in the name means that no resulting map is written to file.
+    This is because input and output is unacceptably slow under Amoeba
+    (at this moment).
+    "OnceIn" in the name will cause the program to only read in the box files
+    once (in the beginning). The reading time will not be included in the
+    measurements.
+
+    The program expects the following parameters on standard input:
+    (at the time of creating this program, commmandline options where not
+    available under Orca.)
+    - filename of map A
+    - filename of map B
+    - filename to put the resulting map in.
+    - number of Mega Bytes to reserve on the processor (hack for amoeba).
+    - number of times to repeat the measurement.
+
+  Typical use of seqLSDOverlay:
+    echo A.box B.box Out 100 1 | gax seqLSDOnceInNoOutOverlay.panda 1
+
+- parAllOverlay:
+    Parallel Orca version solving the problem patchwise or data-parallel.
+
+    With 'make' several program versions can be made.
+    The most important versions (which are used in the results of the report)
+    are:
+      parDivideBCastLSDOnceInNoOutOverlay.panda
+      parPatchDFLSDOnceInNoOutOverlay.panda
+    There are more versions available. They have been used during testing and
+    during evaluating the 'best' method.
+      
+   Like above the extension ".panda" can be omitted or ".trace" can be added.
+   "OnceIn" an "NoOut" have the same meaning as stated above.
+
+   "Divide" is the old term for "Data-Parallel Overlay"
+
+    The program expects the following parameters on standard input:
+    - filename of map A
+    - filename of map B
+    - filename to put the resulting map in.
+    - The number of Mega Bytes to reserve on the Master processor (hack for
+      amoeba, see seqCLSDOverlay). This makes it possible to run large problem
+      sizes. (process 0 should run on 'zooseq' for large problem sizes).
+    - number of Mega Bytes to reserve on the Worker processors (hack for amoeba)
+      Makes it possible to run large problem sizes.
+    - bcastBufSize: Only used with BCast(Data-Parallel Overlay) otherwise a
+      dummy value. Denotes the number of buffers in the B-map queue between
+      the master and workers. [see Report Section 6.1]. A good value is 10.
+      The buffer-space will help to send B-parts to the workers while they are
+      still sorting the A-map. It also helps during the distribution and
+      sorting of the B map as the sorting at the worker side, per part,
+      takes longer as the length of the sorted part increases. When the B-queue
+      fills up, the number of polygons per buffer is increased.
+    - initSendSize: Only used with BCast(Data-Parallel Overlay)otherwise a
+      dummy value. this is the initial size of a B boxList broadcast to all
+      workers. (the size is the number of polygons). A good value is 1000.
+    - maxSendSize: Maximum number of polygons (both A and B) send at once to
+      a worker. A good (and large) value that gives no problems is 60000.
+    - maxReceiveSize: Maximum buffer size for the packages which are send back
+      to the master. (the size is the number of polygons). A good value is
+      1000, this will cause the workers to send the results during calculation,
+      so that not all the results are send at the end, and cause collision.
+    - Strategy call for queues. If this value is "M" then the queues are all
+      placed on the master processor. If the value is "W" then each queue
+      is placed on the concerning worker. Default is 'M' (decreases the time
+      to send, master doesn't have to do an RPC).
+    - If this value is 'M' than a worker is also started on the master
+      processor. Otherwise the master and each worker are all started on a
+      different processor. (I use mostly an 'M', then the communication
+      (which is the bottleneck) is not interrupted by a contact-switch).
+    - number of times to repeat the measurement.
+    - variable number of integers denoting which number of processors
+      should be used in each measurement. (note: the number of measurements
+      done in total is the number of repetitions times the number of integers
+      given here).
+
+  Typical use of 'parAllOverlay':
+    echo A.box B.box Out 100 16 10 1000 60000 1000 M W 2 2 3 4
+    | gax parDivideBCastLSDOnceInNoOutOverlay.panda 4
+
+    Data-Parallel Overlay. (Sort-and-Delete)
+    repeats 2 times: - 1 Master 1 Worker     (2 processors)
+                     - 1 Master 2 Workers    (3 processors)
+                     - 1 Master 3 Workers    (4 processors)
+
+    echo A.box B.box Out 100 16 -1 -1 60000 1000 M M 6 1 2 3 4
+    | gax parPatchDFLSDOnceInNoOutOverlay.panda 4
+
+    Patchwise Overlay. (Sort-and-Delete, Duplicate-and-Filter)
+    repeats 6 times: - 1 Master 1 Worker     (1 processors)
+                     - 1 Master 2 Workers    (2 processors)
+                     - 1 Master 3 Workers    (3 processors)
+                     - 1 Master 4 Workers    (4 processors)
+
+
+

@@ -1,0 +1,6 @@
+OBJECT SPECIFICATION TicketObject;
+
+OPERATION init(v: integer);
+OPERATION NextTicket(): integer;
+
+END;

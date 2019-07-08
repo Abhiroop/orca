@@ -1,0 +1,14 @@
+PARALLEL OPERATION[row, col] UpdateGrid(c:color): REDUCE real WITH max;
+       avg, diff: real;
+    BEGIN
+       diff := 0.0;
+       IF iscolor(row,col)=c AND row>n AND col>m 
+                             AND row<N AND col<M THEN
+             avg := (G[row-1,col] + G[row+1,col] 
+                    + G[row,col-1] + G[row,col+1])/4.0;
+             diff := ABS(avg - G[row,col]);
+             G[row,col] := G[row,col] + OMEGA * (avg - G[row,col]);
+       FI;
+       RETURN diff;
+    END;
+END;

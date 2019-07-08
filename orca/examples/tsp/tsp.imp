@@ -1,0 +1,259 @@
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION tsp;
+	FROM Finish IMPORT Finish;
+	FROM DistanceTable IMPORT init_succeeded, distance, maxhops;
+	FROM TspTypes IMPORT PathType, JobType, IntArray;
+	IMPORT IntObject;
+	IMPORT MinObject;
+	FROM Time IMPORT SysMilli, PrintTime;
+	FROM Consts IMPORT Inf, MaxQueueSize;
+
+	# Instantiate the GenericJobQueue type.
+.ifdef BOUNDED_QUEUE
+	OBJECT TspQueue = NEW BoundQueue(JobType, MaxQueueSize);
+.else
+	OBJECT TspQueue = NEW GenericJobQueue(JobType);
+.endif
+
+	FUNCTION tsp(path: SHARED PathType;
+		     present: longint;
+		     minimum: SHARED MinObject;
+.ifdef REDUCE_MIN_READS
+		     min: integer;
+.endif
+		     len: integer;
+		     hops: integer;
+		     lowerbnd: integer;
+		     lows: IntArray): integer;
+		me: integer;
+.ifndef REDUCE_MIN_READS
+		min: integer;
+.endif
+
+	BEGIN	# Search a TSP subtree that starts with initial route
+		# in 'path', with its last city in 'me'.
+.ifndef REDUCE_MIN_READS
+		min := minimum$minval();
+.endif
+		me := ORD(path[hops]);
+		IF hops = distance.NrTowns_min_1 THEN
+		    len +:= distance.dst[me, 0];
+		    IF len < min THEN
+			# Found a full route better than current best route.
+			# Update minimum, using indivisible "min" operation
+			# WriteLine("CPU ", MYCPU(), " found path with length ", len);
+			min := minimum$min(len, path);
+		    FI;
+		ELSE
+		    # "path" really is a partial route.
+		    # For each city not yet in the path, try it if the
+		    # lowerbound plus the length so far is less than the
+		    # minimum.
+		    hops +:= 1;
+		    FOR city IN 1 .. distance.NrTowns_min_1 DO
+			IF ((present & (1 << city)) = 0) AND
+			   (len+distance.dst[me,city]+(lowerbnd-lows[city]) < min) THEN
+			    path[hops] := CHR(city);
+			    min := tsp(	path,
+					present|(1<<city),
+					minimum,
+.ifdef REDUCE_MIN_READS
+					min,
+.endif
+					len+distance.dst[me, city],
+					hops,
+					lowerbnd-lows[city],
+					lows);
+			FI;
+		    OD;
+		FI;
+		RETURN min;
+	END;
+
+	FUNCTION lowerbound(job: JobType; hops: integer; lows: SHARED IntArray): integer;
+		v, sav_j_i, low, lowin, lowin2: integer;
+
+	BEGIN	# Find a lowerbound for the rest of the path of job 'job'.
+		# Also compute the contribution of each city to this
+		# lowerbound, so that it can be adjusted as cities are added
+		# to the path.
+		low := 0;
+		lows[0] := 0;
+		FOR i IN 1..distance.NrTowns_min_1 DO
+		    IF ((job.present & (1 << i)) = 0) THEN
+			lowin := Inf;
+			FOR j IN 0..distance.NrTowns_min_1 DO
+			    IF ((job.present & (1 << j)) = 0) OR
+			        (j = ORD(job.path[hops]))
+			    THEN
+				# j is a city from which we could go to city i.
+				# Note that the case j = i can happen, but
+				# distance[i, i] = Inf.
+				v := distance.dst[j,i];
+				lowin2 := Inf;
+				FOR k IN 0..distance.NrTowns_min_1 DO
+				    IF (j /= k) AND
+				       (((job.present & (1 << k)) = 0) OR
+				        (k = 0)) THEN
+					# from city i, we could go to k.
+					IF distance.dst[i,k] < lowin2 THEN
+					    lowin2 := distance.dst[i,k];
+					FI;
+				    FI;
+				OD;
+				v +:= lowin2;
+				IF v < lowin THEN 
+				    lowin := v;
+				    sav_j_i := v - lowin2;
+				FI;
+			    FI;
+			OD;
+			IF lowin = Inf THEN
+			    lows[i] := Inf;
+			    low := Inf;
+			ELSE
+			    lows[i] := sav_j_i;
+			    low +:= lowin >> 1;
+			FI;
+		    ELSE
+			lows[i] := 0;
+		    FI;
+		OD;
+		RETURN low;
+	END;
+
+	FUNCTION distributor(job: SHARED JobType;
+			     min: SHARED MinObject;
+			     hops: integer;
+			     q: SHARED TspQueue);
+		city, me: integer;
+	BEGIN
+		# Generate all the jobs for the workers. 
+		# A job is an initial path of "maxhops" hops.
+		# Also keep track of the length of the initial path.
+		IF hops = maxhops-1 THEN
+			q$AddJob(job); # send this path to worker
+		ELSE
+			me := ORD(job.path[hops]);
+			hops +:= 1;
+			FOR i IN 0 .. distance.NrTowns_min_1 DO
+				city := distance.order[me,i];
+				IF ((job.present & (1 << city)) = 0) AND
+				   (distance.dst[me,city] < Inf) THEN
+					job.present |:= 1 << city;
+					job.path[hops] := CHR(city);
+					job.len +:= distance.dst[me,city];
+					distributor(job, min, hops, q);
+					job.present &:= ~(1 << city);
+					job.len -:= distance.dst[me,city];
+				FI;
+			OD;
+		FI;
+	END;
+
+	FUNCTION GenerateJobs(q: SHARED TspQueue; min: SHARED MinObject);
+		job: JobType;
+	BEGIN
+		job.path[0] := CHR(0);  # start with city 0
+		job.present := (1 << 0);
+		job.len := 0;
+		distributor(job, min, 0, q);
+		q$NoMoreJobs();
+	END;
+
+	# Description of the worker processes.
+	PROCESS worker(minimum: SHARED MinObject; q: SHARED TspQueue;
+		      WorkersActive: SHARED IntObject);
+		job: JobType;
+		min: integer;
+		njobs, refused: integer;
+		lowerbnd: integer;
+		lows: IntArray;
+	BEGIN
+		njobs := 0;
+		refused := 0;
+		# WriteLine("worker running on cpu ", MYCPU());
+		WHILE q$GetJob(job) DO
+			lowerbnd := lowerbound(job, maxhops-1, lows);
+			min :=  minimum$minval();
+			# WriteLine(MYCPU(), " got job ", job.len , " lowerbound ", lowerbnd, " minimum ", min);
+			njobs +:= 1;
+			IF job.len + lowerbnd > min THEN
+				refused +:= 1;
+			ELSE
+			    job.len := tsp(job.path, job.present, minimum,
+.ifdef REDUCE_MIN_READS
+					   min,
+.endif
+					   job.len, maxhops-1, lowerbnd, lows);
+			FI;
+		OD;
+		WorkersActive$dec();
+		# WriteLine(MYCPU(), ": ignored ", refused, " jobs (", njobs, " total)");
+		# WriteLine("worker terminates");
+	END;
+
+	# Description of the manager process
+	PROCESS OrcaMain();
+		minimum: MinObject;
+		q: TspQueue;
+		WorkersActive: IntObject;
+		start, stop: integer;
+		path: PathType;
+		len: integer;
+	BEGIN
+		IF NOT init_succeeded THEN
+			WriteLine("Initialization failed");
+			RETURN;
+		FI;
+			
+		minimum$assigni(Inf);
+		IF distance.limit THEN
+		    Read(start);
+		    FOR i IN 0..distance.NrTowns_min_1 DO
+			Read(stop);
+			path[i] := CHR(stop);
+		    OD;
+		    WriteLine("Previously set limit = ", start);
+		    start := minimum$min(start, path);
+		FI;
+.ifdef REDUCE_MIN_READS
+		WriteLine("Version with cached copy of minimum");
+.else
+		WriteLine("Version that reads minimum object for all tsp() calls");
+.endif
+		WorkersActive$assign(NCPUS());
+		FOR i IN 1 .. NCPUS() - 1  DO
+			FORK worker(minimum, q, WorkersActive) ON(i);
+		OD;
+.ifdef BOUNDED_QUEUE
+		FORK worker(minimum, q, WorkersActive) ON(0);
+.endif
+		# WriteLine("start generating");
+		start := SysMilli();
+		GenerateJobs(q, minimum);
+.ifndef BOUNDED_QUEUE
+		FORK worker(minimum, q, WorkersActive) ON(0);
+.endif
+		WorkersActive$AwaitValue(0);
+		stop := SysMilli();
+		WriteLine("minimum = ", minimum$minval());
+		path := minimum$minpath();
+		len := distance.dst[ORD(path[distance.NrTowns_min_1]), ORD(path[0])];;
+		Write("Path = ");
+		FOR i IN 0 .. distance.NrTowns_min_1 DO
+			Write(ORD(path[i]), " ");
+			IF i > 0 THEN
+				len +:= distance.dst[ORD(path[i-1]), ORD(path[i])];
+			FI;
+		OD;
+		WriteLine(ORD(path[0]));
+		IF len /= minimum$minval() THEN
+			WriteLine("Sanity check failed!");
+		FI;
+		PrintTime("TSP", stop-start);
+		Finish();
+	END;
+END;

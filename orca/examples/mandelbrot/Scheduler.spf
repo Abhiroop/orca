@@ -1,0 +1,34 @@
+OBJECT SPECIFICATION Scheduler;
+#
+# Program:	Mandelbrot
+# File:		Scheduler.spf
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	Job Manager for the workers.
+#
+#
+
+FROM Job IMPORT request_t, job_t;
+
+FUNCTION GetWork(work : SHARED Scheduler; 
+		job: OUT job_t;
+		r: SHARED request_t): boolean;
+# Tries to obtain a new job for a worker. If there is, it returns true;
+# If not, it blocks until:
+# 1) GiveWork() supplies a new request ('req_data' will then be updated and 
+# true returned along with a new job), OR 
+# 2) NoMoreWork() is called. It then returns false.
+
+OPERATION GiveWork(req_data: IN request_t);
+# used by the controller to announce the type of work 2b done 
+# 'req_data' describes the request.
+
+OPERATION NoMoreWork();
+# used by the controller to announce that no more work needs to be done.
+
+OPERATION AllIdle();
+# used by the controller wait until all workers are idle.
+
+OPERATION Init(n: IN integer);
+# used to initialize the scheduler. 'n' is the number of workers.
+
+END;

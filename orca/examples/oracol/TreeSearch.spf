@@ -1,0 +1,23 @@
+MODULE SPECIFICATION TreeSearch;
+
+FROM Types IMPORT DataRecord,EvalType,Path;
+
+IMPORT TransTable,KillerTable,Jobs,Stack;
+
+	PROCESS Slave(problem : integer; transtable : SHARED TransTable;
+		      killertable : SHARED KillerTable;
+		      jobs : SHARED Jobs;
+		      stack : SHARED Stack);
+
+	FUNCTION Search(dr : SHARED DataRecord;
+			transtable : SHARED TransTable;
+		 	killertable : SHARED KillerTable;
+			jobs : SHARED Jobs;
+			stack : SHARED Stack;
+			color : integer; level : integer;
+			alpha : integer; beta : integer;
+			depth : integer; lmove : integer;
+			bp : OUT Path) : EvalType;
+
+END;
+

@@ -1,0 +1,143 @@
+# The module Types contains all frequently used type definitions.
+
+MODULE SPECIFICATION Types;
+
+FROM Const IMPORT WHITE,BLACK,HSIZE,VSIZE,PAWN,KING,MAXLEVEL;
+
+	# The Chess Board
+	TYPE BoardType =  ARRAY [integer 0 .. 7] OF
+			  ARRAY [integer 0 .. 7] OF integer;
+
+	# The Evaluation Function returns a record consisting of two
+	# fields : realval and expval. The first one gives the tactical
+	# score of the current position. The second one gives the threats
+	# imposed by the last move.
+	TYPE EvalType = RECORD
+			  realval : integer;
+			  expval : integer;
+			END;
+
+	# A matrix containing random numbers is used to identify each
+	# legal position with a (hopefully) unique number.
+	TYPE MatrixType = ARRAY [integer WHITE .. BLACK] OF
+			  ARRAY [integer 0 .. HSIZE * VSIZE - 1] OF
+			  ARRAY [integer PAWN .. KING] OF integer;
+
+	# The history of a position is the sequence of moves that transforms
+	# the initial position into the current position.
+	TYPE History = ARRAY [integer 0 .. MAXLEVEL + 1] OF integer;
+
+	# Each problem consists of a initial position and the color to move.
+	TYPE Problem = RECORD
+			boardstring : string;
+			color : integer;
+		       END;
+
+	TYPE ProblemArray = ARRAY [integer 1 .. 10] OF Problem;
+
+	TYPE MoveArray =  ARRAY [integer 1 .. 100] OF integer;
+
+	TYPE IntSet = SET OF integer;
+ 
+	# When we try a move, some information must be saved to undo the move.
+	TYPE SaveType = RECORD
+			   xfrom : integer;
+			   yfrom : integer;
+			   fromval : integer;
+			   xto : integer;
+			   yto : integer;
+			   toval : integer;
+			   promotion : boolean;
+			   enpassant : boolean;
+			   castle : boolean;
+			END;
+
+	TYPE MoveNode = NODENAME OF Path;
+
+	TYPE Path = GRAPH
+			first : MoveNode;
+			len : integer;
+		    NODES
+			piece : char;
+			move : integer;
+			next : MoveNode;
+		    END;
+
+	# Each job is a record containing information for the slave to
+	# evaluate a subtree properly.
+	TYPE JobType = RECORD
+			priority : integer;
+			method : integer;
+			signature : integer;
+			level : integer;
+			color : integer;
+			alpha : integer;
+			beta : integer;
+			depth : integer;
+			move : integer;
+			index : integer;
+			history : History;
+			mate : boolean;
+			iter : integer;
+		       END;
+
+	TYPE JobNode = NODENAME OF JobGraph;
+
+	# This graph contains all jobs to be done in parallel.
+	TYPE JobGraph = GRAPH
+			  first : JobNode;
+			  nr : integer;
+			NODES
+			  job : JobType;
+			  next : JobNode;
+			END;
+
+	TYPE SignNode = NODENAME OF SignGraph;
+
+	# This graph contains the signature hierarchy.
+	TYPE SignGraph = GRAPH
+			   root : SignNode;
+			 NODES
+			   sign : integer;
+			   level : integer;
+			   sibling : SignNode;
+			   child : SignNode;
+			 END;
+
+	# This record contains all information about evaluated subtrees.
+	TYPE ResultRecord = RECORD
+				signature : integer;
+				value : EvalType;
+				lmove : integer;
+				index : integer;
+				path : Path;
+				nodes : integer;
+				transpos : integer;
+				killers :integer;
+				kills : integer;
+			    END;
+
+	# The type DataRecord is the main datastructure containing a lot of
+	# "global" variables.
+	TYPE DataRecord = RECORD
+			   b : BoardType;	# playing board
+			   signature : integer; 
+			   bval : integer;	# material balance
+			   mate : boolean;	# is it a mate problem ?
+			   method : integer;    # search method
+			   player : integer;	# the player first to move
+			   history : History;
+			   kpos : ARRAY [integer 0 .. 1] OF integer;
+				# the positions of the king
+			   checked : boolean;	# is it a check position ?
+			   pinned : boolean;	# is this piece pinned ?
+			   threat : integer;	# threat value
+			   transpos : integer;	# number of transpositions
+			   killers : integer;	# number of killermoves
+			   nodes : integer;	# number of visited nodes
+			   key : integer;	# unique number
+			   matrix : MatrixType; # random matrix
+			   iter : integer;	# iteration number
+			  END;
+
+END;

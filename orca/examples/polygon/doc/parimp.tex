@@ -1,0 +1,91 @@
+\sectionLabel{Parallel Implementations in Orca}
+
+To determine which parallel algorithm is best, Data-Parallel or Patchwised, we
+have coded both versions in Orca. The major issue in writing parallel Orca
+programs is how to structure an application such that it can make efficient use
+of the shared data objects provided for communication. Below we discuss the
+objects used in both parallel overlay implementations.
+
+\subsection{Data-Parallel Overlay}
+
+\begin{figure}[hbtp]
+  \begin{centering}
+    \hspace{0cm}
+    \epsffile{dataParObjects.eps}
+    \refAndCapt{objects used in the Data-Parallel implementation}
+  \end{centering}
+\end{figure}
+
+\refByCapt{objects used in the Data-Parallel implementation} shows that
+the Data-Parallel Overlay implementation uses three types of
+shared objects: queue-objects, a buffer-object, and counter-objects.
+The queues and buffer are used to transport (partial) maps (i.e. lists of
+polygons) between the Master and Worker processes.
+
+The distribution of the A map is handled by the Master through 
+GenericJobQueue objects from the standard Orca library.  Each Worker
+receives its part of the A map through a private $\rm{Queue_{A}}$ that
+is connected to the Master.  The Master distributes the parts of the A
+map by cycling all the queues connected to the workers.
+
+The replication of the B map is also handled by the Master.
+Unfortunately, the Master could not use a standard object to replicate
+the B map at all the workers, because the B map is too large to be sent
+in one operation (i.e. broadcast message). Therefore, the B map is
+fragmented into smaller pieces. Putting these pieces in a standard
+GenericJobQueue shared by all workers has the undesirable effect that all get
+operations modify the queue to signal that the next piece can be
+appended. Consequently, all operations on the queue are broadcast by the Orca
+system, which has a negative impact on performance.
+
+The solution is to artificially separate receiving of data and signaling
+the master into operations on different objects. Each slave is
+connected to the master through a single shared buffer ($\rm{Buffer_{B}}$)
+for receiving parts of the B map, and an individual counter
+($\rm{nbr\_free_{B}}$) to signal the receipt of a piece to the Master.
+To increase performance, the buffer can hold multiple pieces, so the Master can
+work ahead. This is particularly useful at the beginning since the Master
+starts handing out the B map immediately after distributing the A map,
+while the workers are still busy sorting their part of the A map.
+
+Recall that the master sorts each piece of the B map, while the workers merge
+them together to get a completely sorted B map. Merging a new piece with the
+partial B map takes progressively more time during the distribution of the B
+map. To avoid the master running idle, the buffer is filled with pieces of
+different sizes. A heuristic based on the number of free slots in the shared
+buffer is used by the master to determine the size of the next piece. Initially
+many buffers are free, so the master sorts small pieces of the B map; at the
+end, larger pieces are generated. In practice the heuristic manages to balance
+the load fairly well.
+
+Finally, the Master collects the result map through a single queue
+($\rm{Queue_{Result}}$) that is shared by all workers. Again the standard
+GenericJobQueue object is used for convenience.
+
+\subsection{Patchwised Overlay}
+
+The structure of the Patchwised Overlay implementation is shown in
+\refByCapt{objects used in the Patchwised implementation}.  Note that
+the Patchwised Overlay implementation just uses one type of shared
+object, the standard GenericJobQueue.
+
+The master communicates both parts of the A and B map to each worker
+through a private queue ($\rm{Queue}$). The results are collected
+through a single shared queue ($\rm{Queue_{Result}}$) just like with
+the Data-Parallel version.
+
+\begin{figure}[hbtp]
+  \begin{centering}
+    \hspace{0cm}
+    \epsffile{patchObjects.eps}
+    \refAndCapt{objects used in the Patchwised implementation}
+  \end{centering}
+\end{figure}
+
+One important observation is that the object structure of the Patchwised
+Overlay implementation is much less complicated than that of the
+Data-Parallel implementation. Consequently, getting the Patchwised
+Overlay implementation to work was a lot easier than for the
+Data-Parallel implementation. Note, however, that the algorithmic
+complexity of the Patchwised Overlay method is higher than that of the
+Data-Parallel method.

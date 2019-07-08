@@ -1,0 +1,150 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# Source description of the Orca compiler
+
+%if (%not defined(USE_LLGEN), {
+	USE_LLGEN = %false;
+});
+
+%if ($USE_LLGEN, {
+	G_SRC = {
+		$PWD/program.g,
+		$PWD/declar.g,
+		$PWD/expression.g,
+		$PWD/statement.g,
+	};
+
+	TOKEN_SRC = $PWD/tokenname.c [
+		gen_tokens,
+		cc-dest = symbol2str.c,
+		LL-dest = tokenfile.g
+	];
+
+	PARSER_SRC = $TOKEN_SRC + $G_SRC;
+}, {
+	PARSER_SRC = {
+		$PWD/Lpars.c,
+		$PWD/Lpars.h,
+		$PWD/declar.c,
+		$PWD/expression.c,
+		$PWD/program.c,
+		$PWD/statement.c,
+		$PWD/symbol2str.c,
+		$PWD/tokenfile.c,
+		$PWD/tokenname.c,
+	};
+});
+
+C_SRC = {
+	$PWD/LLlex.c,
+	$PWD/LLmessage.c,
+	$PWD/Version.c,
+	$PWD/bld_graph.c,
+	$PWD/chk.c,
+	$PWD/closure.c,
+	$PWD/const.c,
+	$PWD/data_flow.c,
+	$PWD/def.c,
+	$PWD/error.c,
+	$PWD/gen_code.c,
+	$PWD/gen_descrs.c,
+	$PWD/gen_expr.c,
+	$PWD/generate.c,
+	$PWD/idf.c,
+	$PWD/input.c,
+	$PWD/instantiate.c,
+	$PWD/list.c,
+	$PWD/main.c,
+	$PWD/misc.c,
+	$PWD/node.c,
+	$PWD/operation.c,
+	$PWD/opt_LV.c,
+	$PWD/opt_SR.c,
+	$PWD/options.c,
+	$PWD/prepare.c,
+	$PWD/process_db.c,
+	$PWD/scope.c,
+	$PWD/sets.c,
+	$PWD/simplify.c,
+	$PWD/specfile.c,
+	$PWD/strategy.c,
+	$PWD/temps.c,
+	$PWD/tokenname2.c,
+	$PWD/type.c,
+	$PWD/visit.c,
+};
+
+PARAM_H = {
+	errout.h,
+	idfsize.h,
+	numsize.h,
+	debugcst.h,
+	inputtype.h,
+	locking.h,
+};
+
+PARAM_SRC = $PWD/Parameters[parameters, c-incls = $PARAM_H];
+
+H_SRC = {
+	$PWD/LLlex.h,
+	$PWD/ansi.h,
+	$PWD/bld_graph.h,
+	$PWD/case.h,
+	$PWD/chk.h,
+	$PWD/class.h,
+	$PWD/closure.h,
+	$PWD/const.h,
+	$PWD/data_flow.h,
+	$PWD/db.h,
+	$PWD/debug.h,
+	$PWD/error.h,
+	$PWD/extra_tokens.h,
+	$PWD/f_info.h,
+	$PWD/gen_code.h,
+	$PWD/gen_descrs.h,
+	$PWD/gen_expr.h,
+	$PWD/generate.h,
+	$PWD/idf.h,
+	$PWD/input.h,
+	$PWD/instantiate.h,
+	$PWD/main.h,
+	$PWD/misc.h,
+	$PWD/node_num.h,
+	$PWD/operation.h,
+	$PWD/opt_LV.h,
+	$PWD/opt_SR.h,
+	$PWD/options.h,
+	$PWD/prepare.h,
+	$PWD/process_db.h,
+	$PWD/sets.h,
+	$PWD/simplify.h,
+	$PWD/specfile.h,
+	$PWD/oc_stds.h,
+	$PWD/strategy.h,
+	$PWD/tokenname.h,
+	$PWD/visit.h,
+};
+
+NEXT_SRC = {
+	$PWD/case.C,
+	$PWD/db.C,
+	$PWD/def.H,
+	$PWD/list.H,
+	$PWD/node.H,
+	$PWD/node_num.C,
+	$PWD/real.H,
+	$PWD/scope.H,
+	$PWD/temps.H,
+	$PWD/type.H,
+};
+
+SOURCEFILES = {
+	$PARSER_SRC,
+	$C_SRC,
+	$H_SRC,
+	$PARAM_SRC,
+	$NEXT_SRC,
+};
+

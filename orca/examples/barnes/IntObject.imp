@@ -1,0 +1,29 @@
+OBJECT IMPLEMENTATION IntObject;
+
+x: integer;
+
+
+OPERATION assign(v: integer);
+BEGIN
+    x := v;
+END;
+
+OPERATION inc();
+BEGIN
+    x +:= 1;
+END;
+
+OPERATION dec();
+BEGIN
+    x -:= 1;
+END;
+
+OPERATION AwaitValue(v: integer);
+BEGIN
+    GUARD x = v DO ; OD;
+END;
+
+
+BEGIN
+    x := 0;
+END;

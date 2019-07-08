@@ -1,0 +1,93 @@
+MODULE SPECIFICATION TspTypes;
+
+	IMPORT IntObject;
+
+
+	TYPE NodeIndex = integer;
+	TYPE Node =
+		RECORD
+			nr : NodeIndex;
+			x  : integer;
+			y  : integer;
+		END;
+	TYPE NodeArray = ARRAY[integer] OF Node;
+
+#	TYPE TourArray = ARRAY[integer] OF NodeIndex;
+	TYPE TourElement =
+		RECORD
+			nr : NodeIndex;
+			next : integer;
+			prev : integer;
+		END;
+	TYPE TourArray = ARRAY[integer] OF TourElement;
+	TYPE ValueArray = ARRAY[integer] OF integer;			
+
+#	TYPE NodeSubset = ARRAY[integer] OF NodeIndex;
+	TYPE NodeSubset = SET OF NodeIndex;
+
+	TYPE DistanceMatrix = ARRAY[integer, integer] OF integer;
+	TYPE NodeDistribution = ARRAY[integer] OF NodeSubset;
+	TYPE MoveNodeType =
+		RECORD
+			nr : NodeIndex;
+			from : integer;
+			to : integer;
+		END;
+	TYPE DistributionChange = SET OF MoveNodeType;
+	TYPE NodeSelection = ( random, improved, unspecified, worst_nodes );
+	TYPE NodeSubsetMatrix = ARRAY[integer, integer] OF NodeSubset;
+
+	TYPE NSelectionMode = ( optimized, always_previous, always_next );
+	TYPE MSelectionMode = ( terminating, blind );
+
+	TYPE IntObjectArray = ARRAY [integer] OF IntObject;
+
+
+	TYPE ImprovementStatus = 
+		RECORD
+			removed_length : integer;
+			inserted_length_open : integer;
+			open_improvement : integer;
+			closed_improvement : integer;
+			best_improvement : integer;
+
+			problem_size : integer;
+			time : integer;   # Milliseconds 
+		END;
+
+	TYPE ProblemSpecification = 
+		RECORD
+			nodes : NodeArray;
+			distances : DistanceMatrix;
+			name : string;
+			comment : string;
+			type : string;
+			dimension : integer;
+			edge_weight_type : string;
+			deliveryBoys : integer;
+			sequentialBadPaths : integer;
+			pursuePathsBetterThan : real;
+			searchDepth : integer;
+		END;
+
+
+	TYPE CalculationState = ( not_started, working, done );
+	TYPE ProcessorStatusType = ( running, stopped, stopping, waiting );
+
+
+	TYPE MoveInfo = 
+		RECORD
+			move : string;
+			val : integer;
+			valid : boolean;
+		END;
+
+
+END;
+
+
+
+
+
+
+

@@ -1,0 +1,4 @@
+Barnes is the Barnes-Hut application from the SPLASH benchmark suite,
+rewritten in Orca.
+
+We used a system with 16384 bodies for performance measurements.

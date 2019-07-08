@@ -1,0 +1,45 @@
+ ## ===========================================================================
+ ##
+ ##    File:    types_m.spf
+ ##    Type:    module specification
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ MODULE SPECIFICATION types_m ;
+
+ ## ===========================================================================
+ ##
+ ##  What's needed:
+ ##
+ ## ---------------------------------------------------------------------------
+
+ FROM matrix_m IMPORT intvec
+		    , vector
+		    , vectors
+		   ;
+
+ ## ===========================================================================
+ ##
+ ##  Exported types and objects
+ ##
+ ## ---------------------------------------------------------------------------
+
+ TYPE        twovec = RECORD c : vector ;
+			     r : vector ;
+                      END    ;
+
+ OBJECT intvec_mbin = NEW mbin_go( intvec );
+ OBJECT   real_worm = NEW worm_go( real   );
+ OBJECT twovec_worm = NEW worm_go( twovec );
+
+ OBJECT    vec_bin  = NEW GenericBin( vector );
+ OBJECT intvec_bin  = NEW GenericBin( intvec );
+
+ TYPE   intvec_dmux = ARRAY [ integer ] OF intvec_bin ;
+ TYPE      vec_mux  = ARRAY [ integer ] OF    vec_bin ;
+
+ ## ===========================================================================
+
+ END ;

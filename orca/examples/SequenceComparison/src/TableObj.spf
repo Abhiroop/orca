@@ -1,0 +1,23 @@
+OBJECT SPECIFICATION TableObj;
+
+
+OPERATION InitTable( up_b: integer );
+
+OPERATION SetPrinter( nr : integer );
+
+OPERATION DecPrinter( nr : integer );
+
+OPERATION PrintAwaitValue( nr : integer );
+
+OPERATION PrinterValue():integer;
+
+OPERATION GetCpuTime( nr : integer ):integer;
+
+OPERATION GetIdleTime( nr : integer ):integer;
+
+OPERATION PutCpuTime( nr, time : integer );
+
+OPERATION PutIdleTime( nr, time : integer );
+
+
+END;

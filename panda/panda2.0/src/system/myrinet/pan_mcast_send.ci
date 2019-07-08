@@ -1,0 +1,325 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+
+#ifndef __PAN_MCAST_SEND_CI__
+#define __PAN_MCAST_SEND_CI__
+
+
+/*
+ *  This module implements the send stuff of mcast communication.
+ * It exports the following functions:
+ *	- pan_mcast_send()
+ *
+ * Send msgs GSB style. The sender keeps a copy of the message for
+ * reliability purposes. Members who did not receive the broadcast msgs
+ * can request their retransmission, via a broadcast or via a point to point
+ * retransmit request. This is all of the reliability of data messages: the
+ * sender just broadcasts unreliably.
+ * The history of sent messages is purged on initiative from the purge process,
+ * that broadcasts MCAST_PURGE messages.
+ * The sequence number is fetched with a system level call. A time-out
+ * mechanism makes it reliable.
+ *
+ * The code does not implement a protocol to recover from processor failures.
+ * However, the network is made reliable, the protocol copes with lost network
+ * packets.
+ */
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+
+#include "fm.h"				/* Fast Messages for Myrinet */
+
+#include "pan_sys_msg.h"
+
+#include "pan_system.h"
+#include "pan_global.h"
+#include "pan_comm.h"
+#include "pan_sync.h"			/* Use macros */
+#include "pan_message.h"
+
+#include "pan_mcast_global.h"
+#include "pan_mcast_buf.ci"		/* Include .c file for inlining */
+#include "pan_mcast_rcve.h"
+#include "pan_mcast_header.h"
+
+#include "pan_mcast_send.h"
+
+#include "pan_mcast_next_seqno.h"
+#include "pan_mcast_next_seqno.ci"
+
+#include "pan_timer.h"
+
+#include "pan_trace.h"
+
+
+
+			/* Type for small mcast msgs.
+			 * The lay-out of this "struct" corresponds to the
+			 * lay-out of (the header part of) msgs.
+			 * DO NOT CHANGE THOUGHTLESSLY!!!!
+			 */
+
+#define SMALL_DATA	0
+#define SMALL_SIZE	(do_align(MAX_SMALL_SIZE, BCAST_COMM_HDR_ALIGN) + \
+			 BCAST_COMM_HDR_SIZE)
+
+typedef char               pan_mcast_small_t[SMALL_SIZE];
+typedef pan_mcast_small_t *pan_mcast_small_p;
+
+#define pan_mcast_small_data(sm)	(sm)
+#define pan_mcast_small_hdr(sm,nsp) \
+			((pan_mcast_hdr_p)&(sm)[do_align((nsp)->data_len, \
+							 BCAST_COMM_HDR_ALIGN)])
+#define pan_mcast_small_size(nsp) \
+			(do_align((nsp)->data_len, BCAST_COMM_HDR_ALIGN) + \
+			 BCAST_COMM_HDR_SIZE)
+
+
+
+typedef struct SEND_EV_INFO_T {
+    int mem;
+    int seqno;
+} send_ev_info_t;
+
+
+static trc_event_t pan_mcast_send_msg;
+static trc_event_t pan_mcast_send_small;
+
+static pan_timer_p send_timer;
+static pan_timer_p seqno_timer;
+
+
+
+/* Send out a msg:
+ * get a sequence number for this multicast group, then multicast.
+ */
+void
+pan_comm_multicast_msg(pan_pset_p to, pan_msg_p msg, pan_nsap_p nsap)
+{
+    pan_mcast_hdr_p hdr;
+    int             size;
+#ifndef RELIABLE_NETWORK
+    int             seqno_handle;
+    pan_mcast_hdr_p hist_hdr;
+    pan_msg_p       cp;
+#endif
+#ifdef TRACING
+    send_ev_info_t  send_info;
+#endif
+
+    SYS_STATINC(pan_n_mcast_send_data);
+
+    pan_timer_start(send_timer);
+
+    size = pan_sys_msg_nsap_store(msg, nsap);
+    hdr  = msg_comm_hdr(msg);
+
+#if (! defined RELIABLE_NETWORK) || (defined PANDA_MULTICASTS)
+    hdr->sender = pan_my_pid();
+#endif
+
+#ifndef RELIABLE_NETWORK
+    hdr->type   = MCAST_GSB;
+
+    pan_timer_start(seqno_timer);
+    seqno_handle = begin_next_seqno(pan_mcast_state.mcast_tag, size);
+						/* Copy msg in the get_seqno
+						 * latency */
+    cp = pan_msg_create();
+    pan_msg_copy(msg, cp);
+
+    hist_hdr = msg_comm_hdr(cp);
+
+    hdr->seqno = end_next_seqno(seqno_handle);
+    pan_timer_stop(seqno_timer);
+
+						/* Store copy in our history */
+    pan_mutex_lock(pan_mcast_upcall_lock);		
+
+    hdr->seen_seqno = pan_mcast_state.next_accept; /* ack our received seqnos */
+    if (hdr->seen_seqno > pan_mcast_state.last_status) {
+	pan_mcast_state.last_status = hdr->seen_seqno;	/* remember our ack */
+    }
+    if (hdr->seqno >= pan_mcast_state.global_next_accept) {
+	pan_mcast_state.global_next_accept = hdr->seqno + 1;
+						/* update, in case this 
+						 * broadcast gets lost */
+    }
+
+    *hist_hdr        = *hdr;			/* update history copy hdr */
+    hist_hdr->type   = MCAST_REXMIT;
+    pan_buf_put(pan_mcast_state.hist, cp);	/* store copy in history */
+
+    pan_mutex_unlock(pan_mcast_upcall_lock);
+
+#else		/* RELIABLE_NETWORK */
+    pan_timer_start(seqno_timer);
+    hdr->seqno = next_seqno(pan_mcast_state.mcast_tag, size);
+    pan_timer_stop(seqno_timer);
+#endif		/* RELIABLE_NETWORK */
+
+#ifdef TRACING
+    send_info.mem   = pan_my_pid();
+    send_info.seqno = hdr->seqno;
+    trc_event(pan_mcast_send_msg, &send_info);
+#endif
+
+						STATINC(ST_SEND_GSB);
+
+#ifndef PANDA_MULTICASTS
+    if (pan_nr_platforms() > 1) {
+	FM_broadcast(pan_mcast_data_handler, msg_data(msg), size);
+    }
+#endif		/* PANDA_MULTICASTS */
+
+					/* Do home upcall ourselves by
+					 * delivering a pointer to our
+					 * msg */
+    pan_mcast_data_upcall(msg);
+
+    pan_timer_stop(send_timer);
+    pan_timer_start(poll_timer);
+}
+
+
+void
+pan_comm_multicast_small(pan_pset_p rcvr, pan_nsap_p nsap, void *data)
+{
+    pan_mcast_small_t msg;
+    pan_mcast_hdr_p   hdr;
+    int               seqno_handle;
+    int               size;
+    pan_msg_p         cp;
+#ifndef RELIABLE_NETWORK
+    pan_mcast_hdr_p   hist_hdr;
+#endif		/* RELIABLE_NETWORK */
+#ifdef TRACING
+    send_ev_info_t  send_info;
+#endif
+
+    SYS_STATINC(pan_n_mcast_send_small);
+
+    pan_timer_start(send_timer);
+
+    size = pan_mcast_small_size(nsap);
+
+    pan_timer_start(seqno_timer);
+    seqno_handle = begin_next_seqno(pan_mcast_state.mcast_tag, size);
+
+    memcpy(pan_mcast_small_data(msg), data, nsap->data_len);
+    hdr = pan_mcast_small_hdr(msg, nsap);
+    hdr->nsap   = pan_sys_nsap_index(nsap);
+
+#if (! defined RELIABLE_NETWORK) || (defined PANDA_MULTICASTS)
+    hdr->sender = pan_my_pid();
+#endif
+
+#ifndef RELIABLE_NETWORK
+    hdr->type   = MCAST_GSB;
+
+    cp = pan_msg_create();
+    msg_offset(cp) = nsap->data_len;
+    memcpy(msg_data(cp), &msg, size);
+    hist_hdr = pan_mcast_small_hdr(cp, nsap);
+#endif		/* RELIABLE_NETWORK */
+
+    hdr->seqno = end_next_seqno(seqno_handle);
+    pan_timer_stop(seqno_timer);
+
+#ifndef RELIABLE_NETWORK
+    pan_mutex_lock(pan_mcast_upcall_lock);		
+    hdr->seen_seqno  = pan_mcast_state.next_accept;/* ack our received seqnos */
+    if (hdr->seen_seqno > pan_mcast_state.last_status) {
+	pan_mcast_state.last_status = hdr->seen_seqno;	/* remember our ack */
+    }
+    if (hdr->seqno >= pan_mcast_state.global_next_accept) {
+	pan_mcast_state.global_next_accept = hdr->seqno + 1;
+						/* update, in case this 
+						 * broadcast gets lost */
+    }
+					/* Store in our history */
+					/* Cannot avoid making a msg,
+					 * since
+					 * 1. a datum must be created to be
+					 *    stored: malloc() or pool()
+					 * 2. msg is the entity stored in
+					 *    all buffers
+					 */
+    *hist_hdr        = *hdr;		/* Update history copy header */
+    hist_hdr->type   = MCAST_REXMIT;
+    pan_buf_put(pan_mcast_state.hist, cp);
+
+    pan_mutex_unlock(pan_mcast_upcall_lock);
+#endif		/* RELIABLE_NETWORK */
+
+#ifdef TRACING
+    send_info.mem   = pan_my_pid();
+    send_info.seqno = hdr->seqno;
+    trc_event(pan_mcast_send_small, &send_info);
+#endif
+						STATINC(ST_SEND_GSB);
+
+#ifndef PANDA_MULTICASTS
+    if (pan_nr_platforms() > 1) {
+	FM_broadcast(pan_mcast_data_handler, (char *)msg, SMALL_SIZE);
+    }
+#endif		/* PANDA_MULTICASTS */
+
+					/* Do home upcall ourselves */
+					/* Cannot avoid making a msg,
+					 * since
+					 * 1. a datum must be created to be
+					 *    stored: malloc() or pool()
+					 * 2. msg is the entity stored in
+					 *    all buffers
+					 */
+    cp = pan_msg_create();
+    msg_offset(cp) = nsap->data_len;
+    memcpy(msg_data(cp), &msg, size);
+    hdr = pan_mcast_small_hdr(cp, nsap);
+
+    pan_mcast_data_upcall(cp);
+
+    pan_timer_stop(send_timer);
+}
+
+
+
+STATIC_CI void
+pan_mcast_do_send_init(void)
+{
+    pan_mcast_next_seqno_start();
+
+    pan_mcast_send_msg  = trc_new_event(2400, sizeof(send_ev_info_t),
+					 "mcast msg", "mem %d, msg-id %d");
+    pan_mcast_send_small = trc_new_event(2400, sizeof(send_ev_info_t),
+					 "mcast small", "mem %d, msg-id %d");
+    pan_mcast_state.mcast_tag = 0;
+    send_timer   = pan_timer_create();
+    seqno_timer  = pan_timer_create();
+}
+
+
+
+STATIC_CI void
+pan_mcast_do_send_end(void)
+{
+    pan_timer_print(send_timer,  "mcast send");
+    pan_timer_print(seqno_timer, "get seqno");
+
+    pan_timer_clear(send_timer);
+    pan_timer_clear(seqno_timer);
+
+    pan_mcast_next_seqno_end();
+}
+
+
+#endif

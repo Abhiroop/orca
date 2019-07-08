@@ -1,0 +1,232 @@
+#ifndef __PAN_RPC_TICKET_CI__
+#define __PAN_RPC_TICKET_CI__
+
+
+#include <assert.h>
+#include <limits.h>
+
+#include "pan_sys_msg.h"
+
+#include "pan_rpc_ticket.h"
+
+
+#define RPC_TICKET_SIZE	20
+#define RPC_TICKET_INCR	10
+
+
+#ifndef STATIC_CI
+#  define STATIC_CI	static
+#endif
+#ifndef INLINE
+#  ifdef __GNUC__
+#    define INLINE	__inline
+#  else
+#    define INLINE
+#  endif
+#endif
+
+
+/*
+ * This module implements a data structure to hand out/in tickets for
+ * rpcs, and to store the reply for waiters.
+ *
+ * The structure is dynamic, so there is no bound on the number of outstanding
+ * requests.
+ */
+
+
+#ifdef POLL_ON_WAIT
+
+static int	rpc_poll = 0;
+
+void
+pan_rpc_poll_reply(void)
+{
+    rpc_poll = 1;
+}
+
+#endif
+
+
+typedef struct pan_rpc_ticket_item rpc_ticket_link_t, *rpc_ticket_link_p;
+
+struct pan_rpc_ticket_item {
+    rpc_ticket_link_p	next;
+    pan_msg_p		msg;
+    pan_cond_p		reply_arrived;
+    char		pad[4];		/* speed up address calculation */
+};
+
+typedef struct pan_rpc_ticket	pan_rpc_ticket_t, *pan_rpc_ticket_p;
+
+struct pan_rpc_ticket {
+    rpc_ticket_link_p	item;
+    rpc_ticket_link_p	free_list;
+    int			size;
+    pan_mutex_p		lock;
+};
+
+
+static pan_rpc_ticket_t	rpc_tickets;
+
+
+
+static pan_rpc_ticket_p
+rpc_ticket_init(pan_rpc_ticket_p lst, int size)
+{
+    int              i;
+
+    lst->size   = size;
+
+    lst->item = pan_malloc(size * sizeof(rpc_ticket_link_t));
+    lst->free_list = &lst->item[0];
+    for (i = 0; i < size - 1; i++) {
+	lst->item[i].next = &lst->item[i+1];
+    }
+    lst->item[size - 1].next = NULL;
+    lst->lock = pan_mutex_create();
+    for (i = 0; i < size; i++) {
+	lst->item[i].reply_arrived = pan_cond_create(lst->lock);
+    }
+
+    return lst;
+}
+
+
+static void
+rpc_ticket_grow(pan_rpc_ticket_p lst, int incr)
+{
+    int i;
+    int old_size;
+    int size;
+
+    old_size   = lst->size;
+    lst->size += incr;
+    size       = lst->size;
+    if (size > SHRT_MAX) {
+	pan_panic("%2d: rpc ticket buffer size outgrows short type!\n");
+    }
+
+    lst->item = pan_realloc(lst, size * sizeof(rpc_ticket_link_t));
+    for (i = old_size; i < size - 1; i++) {
+	lst->item[i].next = &lst->item[i+1];
+    }
+    lst->item[size - 1].next = lst->free_list;
+    lst->free_list = &lst->item[old_size];
+
+    for (i = old_size; i < size; i++) {
+	lst->item[i].reply_arrived = pan_cond_create(lst->lock);
+    }
+}
+
+
+static void
+rpc_ticket_clear(pan_rpc_ticket_p lst)
+{
+    int i;
+
+    for (i = 0; i < lst->size; i++) {
+	pan_cond_clear(lst->item[i].reply_arrived);
+    }
+    pan_mutex_clear(lst->lock);
+    pan_free(lst->item);
+}
+
+
+STATIC_CI void
+pan_rpc_ticket_start(void)
+{
+    rpc_ticket_init(&rpc_tickets, RPC_TICKET_SIZE);
+}
+
+
+STATIC_CI void
+pan_rpc_ticket_end(void)
+{
+    rpc_ticket_clear(&rpc_tickets);
+}
+
+
+STATIC_CI INLINE short int
+pan_rpc_ticket_get(void)
+{
+    short int         ticket;
+    rpc_ticket_link_p tp;
+
+    pan_mutex_lock(rpc_tickets.lock);
+    if (rpc_tickets.free_list == NULL) {
+	rpc_ticket_grow(&rpc_tickets, RPC_TICKET_INCR);
+    }
+
+				/* Get the front of the free list */
+    tp = rpc_tickets.free_list;
+    rpc_tickets.free_list = tp->next;
+
+    ticket = tp - &rpc_tickets.item[0];
+    tp->msg = NULL;		/* Sentinel for message arrival */
+
+    pan_mutex_unlock(rpc_tickets.lock);
+
+    return ticket;
+}
+
+
+
+				/* Caller must hold the lock */
+static INLINE void
+rpc_ticket_put(pan_rpc_ticket_p rpc_tickets, rpc_ticket_link_p ticket_slot)
+{
+				/* Prepend the item to the free list */
+    ticket_slot->next = rpc_tickets->free_list;
+    rpc_tickets->free_list = ticket_slot;
+}
+
+
+
+STATIC_CI INLINE pan_msg_p
+pan_rpc_ticket_wait(short int ticket)
+{
+    rpc_ticket_link_p ticket_slot;
+    pan_msg_p         msg;
+
+    pan_mutex_lock(rpc_tickets.lock);
+    ticket_slot = &rpc_tickets.item[ticket];
+#ifdef POLL_ON_WAIT
+    while (ticket_slot->msg == NULL) {
+	if (rpc_poll) {
+	    pan_mutex_unlock(rpc_tickets.lock);
+	    pan_poll();
+	    pan_mutex_lock(rpc_tickets.lock);
+	} else {
+	    pan_cond_wait(ticket_slot->reply_arrived);
+	}
+	ticket_slot = &rpc_tickets.item[ticket];	/* Maybe resized? */
+    }
+#else
+    while (ticket_slot->msg == NULL) {
+	pan_cond_wait(ticket_slot->reply_arrived);
+	ticket_slot = &rpc_tickets.item[ticket];	/* Maybe resized? */
+    }
+#endif
+    msg = ticket_slot->msg;
+    rpc_ticket_put(&rpc_tickets, ticket_slot);
+    pan_mutex_unlock(rpc_tickets.lock);
+
+    return msg;
+}
+
+
+STATIC_CI INLINE void
+pan_rpc_ticket_signal(short int ticket, pan_msg_p msg)
+{
+    rpc_ticket_link_p tp;
+
+    pan_mutex_lock(rpc_tickets.lock);
+    tp = &rpc_tickets.item[ticket];
+    tp->msg = msg;
+    pan_cond_signal(tp->reply_arrived);
+    pan_mutex_unlock(rpc_tickets.lock);
+}
+
+
+#endif

@@ -1,0 +1,45 @@
+OBJECT IMPLEMENTATION NatObject;
+	x: integer;
+
+	OPERATION dummy();  # used for benchmarks
+	BEGIN
+	END;
+
+	OPERATION value(): integer;
+	BEGIN
+		RETURN x;
+	END;
+
+	OPERATION assign(v: integer);
+	BEGIN
+		x := v;
+	END;
+
+	OPERATION min(v: integer);
+	BEGIN
+		GUARD v < x DO
+			x := v;
+		OD;
+
+		GUARD v >= x DO
+		OD;
+	END;
+
+	OPERATION inc();
+	BEGIN
+		x +:= 1;
+	END;
+
+	OPERATION dec();
+	BEGIN
+		x -:= 1;
+	END;
+
+	OPERATION AwaitValue(v: integer): integer;
+	BEGIN
+		GUARD x = v DO RETURN v; OD;
+		GUARD x = -1 DO RETURN -1; OD;
+	END;
+BEGIN
+	x := 0;
+END;

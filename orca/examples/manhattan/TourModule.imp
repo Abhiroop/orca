@@ -1,0 +1,783 @@
+# TourModule
+# File: TourModule.imp
+# 
+
+
+MODULE IMPLEMENTATION TourModule;
+
+FROM InOut IMPORT
+	WriteInt,
+	Flush,
+	WriteString;
+FROM TspTypes IMPORT
+	NodeIndex;
+FROM PresentationModule IMPORT
+	PrintMessageInt,
+	PrintMessage,
+	Error,
+	Warning;
+FROM InOut IMPORT
+	WriteLn;
+IMPORT SpecificationObject;
+
+
+
+
+################################################################
+##   Printing
+################################################################
+
+# PrintHelpFun
+#
+# PrintHelpFun is the internal help function to 
+# PrintTour.
+#
+FUNCTION PrintHelpFun (t : Tour; n : Node; last : Node);
+BEGIN
+	IF n /= NIL THEN
+		WriteInt (t[n].nr);
+		WriteString (" ");
+		IF n /= last THEN
+			PrintHelpFun (t, Next (n, t), last);
+		FI;
+	FI;
+END;
+
+
+
+# PrintTour
+#
+# PrintTour writes a subtour to the standard output. The output does not
+# conform with the standards of output since this function is intended
+# to be used by the TourObject or the TourCollectionObject which might
+# want more information grouped together.
+# Example:
+#     Subtour: (0 12 43 12 32 12 13)
+#
+FUNCTION PrintTour (t : Tour);
+BEGIN
+	IF (t.root = NIL) THEN
+		Warning ("TourModule: Tour was empty.");
+	ELSE
+		WriteString ("   Subtour: (");
+		PrintHelpFun (t, First (t), Last (t));
+		WriteString (")");
+		WriteLn ();
+		Flush ();
+	FI;
+END;
+
+
+
+# InitializeTour
+#
+# InitializeTour returns a new tour which is initialized.
+# Every tour used should be initialized using this function
+# before used.
+#
+FUNCTION InitializeTour () : Tour;
+	t : Tour;
+BEGIN
+	t.root := NIL;
+	t.nodes := 0;
+	t.lastInserted := NIL;
+	RETURN t;
+END;
+
+
+
+# InsertFirstNode
+#
+# InsertFirstNode inserts the first node of a tour and sets
+# necessary values.
+#
+FUNCTION InsertFirstNode (n : Node; t : Tour) : Tour;
+BEGIN
+	IF (t.root = NIL) THEN
+		t.nodes := 1;
+		t.root := n;
+		t.firstInserted := n;
+		t.lastInserted := n;		
+		t[n].next_inserted := NIL;
+		t[n].prev := n;
+		t[n].next := n;
+		RETURN t;
+	ELSE
+		Warning ("TourModule: InsertFirstNode called with non-empty tour");
+		RETURN t;
+	FI;
+END;
+	
+
+
+
+
+# InsertAtEnd
+#
+# InsertAtEnd creates and inserts a node into the tour. The node is
+# created on the basis of a node index passed as parameter. The node
+# is inserted in the of the tour ordered list as well as the end of
+# the insertion (unordered) list.
+#
+FUNCTION InsertAtEnd (nr : NodeIndex; t : Tour) : Tour;
+	n : Node;
+BEGIN
+	IF Present (nr, t) THEN
+		RETURN t;
+	FI;
+
+	n := ADDNODE (t);
+	t[n].nr := nr;
+	IF (t.root = NIL) THEN
+		RETURN InsertFirstNode (n, t);
+	FI;	
+	
+	# Configure node;
+	t[n].next := t.root;
+	t[n].prev := t[t.root].prev;
+	t[n].next_inserted := NIL;
+
+	# Maintain insertion list
+	IF t.lastInserted /= NIL THEN
+		t[t.lastInserted].next_inserted := n;
+	FI;
+	t.lastInserted := n;
+
+	# Maintain tour order list
+	t[t[t.root].prev].next := n;
+	t[t.root].prev := n;
+
+	# List cardinality
+	t.nodes +:= 1;
+
+	RETURN t;
+END;
+
+
+
+# InsertionCost
+#
+# InsertionCost calculates how expensive an insertion of a node e
+# is between nodes n1 and n2. The return value is defined  as follows:
+#   0 - No cost
+#  >0 - The tour will become longer
+#
+# NOTE: The return value can never be less than 0.
+FUNCTION InsertionCost (n1, n2, e : Node; 
+			t : Tour; spec : SpecificationObject) : integer;
+	d2, 		# Distance between: n1 - e
+	d3, 		# Distance between: e - n2
+	d4 : integer;	# Distance between: n1 - n2
+	rel : integer;  # Relation between n1 and n2
+			#    0: Not neighbours
+			#    1: n1 left of n2
+			#    2: n2 left of n1
+	right : Node;
+BEGIN
+	IF e = NIL THEN
+		RETURN 0;
+	FI;
+
+	d2 := spec$Distance (Index (n1, t), Index (e, t));
+	d3 := spec$Distance (Index (e, t), Index (n2, t));
+	d4 := spec$Distance (Index (n1, t), Index (n2, t));
+
+	rel := 0;
+	IF Next (n1, t) = n2 THEN rel := 1; FI;
+	IF Next (n2, t) = n1 THEN rel := 2; FI;
+	IF rel > 0 THEN
+		IF rel = 1 THEN
+			right := n2;
+		ELSE
+			right := n1;
+		FI;
+		IF Index (right, t) = 0 THEN
+			# The zero-valued distance will be shorter
+			IF rel = 1 THEN RETURN d2; ELSE RETURN d3; FI;
+		FI;
+	FI;
+	
+	RETURN  d2 + d3 - d4;
+
+END;
+
+
+
+FUNCTION SwapCost (n1, n2 : Node; t : Tour; spec : SpecificationObject) : integer;
+BEGIN
+	IF ((n1 = NIL) OR (n2 = NIL)) THEN
+		RETURN 0;
+	FI;
+	RETURN InsertionCost (Prev (n2, t), Next (n2, t), n1, t, spec) - 
+	       InsertionCost (Prev (n1, t), Next (n1, t), n1, t, spec) +
+	       InsertionCost (Prev (n1, t), Next (n1, t), n2, t, spec) - 
+               InsertionCost (Prev (n2, t), Next (n2, t), n2, t, spec);			
+END;
+
+
+
+# InsertAtBest
+#
+# InsertAtBest creates and inserts a node based on the node index passed
+# as a parameter. The new node is inserted last in the insertion (unordered)
+# list. In the tour list the node is inserted between nodes n1 and n2 such 
+# that minimize the function InsertionCost.
+#
+FUNCTION InsertAtBest (nr : NodeIndex; 
+		t : Tour; 
+		value : OUT integer; 
+		spec : SpecificationObject) : Tour;
+	n, last : Node;
+	new : Node;
+	min : integer;
+	ip : Node;	# Insertion point
+	temp : integer;
+BEGIN
+	value := 0;
+	new := ADDNODE (t);
+	t[new].nr := nr;		# Must be set before whileloop below.
+	IF (t.root = NIL) THEN
+		RETURN InsertFirstNode (new, t);
+	FI;	
+
+	min := MAX (integer);
+	n := First (t);
+	last := Last (t);
+	WHILE last /= n DO
+		temp := InsertionCost (n, Prev (n,t), new, t, spec);
+		IF  temp < min THEN
+			min := temp;
+			ip := n;
+		FI;
+		n := Next (n, t);
+	OD;
+
+	IF InsertionCost (Last (t), Prev (Last (t),t), new, t, spec) < min THEN
+		min := InsertionCost (Last (t), Prev (Last (t),t), new, t, spec);
+		ip := Last (t);
+	FI;
+
+	IF min = MAX (integer) THEN
+		Error ("TourModule: InsertAtBest: No insertion point found.");
+	ELSE
+		value := min;
+		t[t[ip].prev].next := new;
+		t[new].prev := t[ip].prev;
+		t[ip].prev := new;
+		t[new].next := ip;
+		IF t.lastInserted /= NIL THEN
+			t[t.lastInserted].next_inserted := new;
+		FI;
+		t.lastInserted := new;	
+		t[t.lastInserted].next_inserted := NIL;
+		t.nodes +:= 1;
+	FI;
+
+	RETURN t;
+END;
+
+
+
+
+
+# RemoveNode
+#
+# RemoveNode
+#
+FUNCTION RemoveNode (i : NodeIndex; t : Tour; value : OUT integer; spec : SpecificationObject) : Tour;
+	n : Node;
+	p : Node;
+BEGIN
+	value := 0;
+	p := NIL;
+	n := UnorderedFirst (t);
+	WHILE n /= NIL DO
+		IF Index (n, t) = i THEN
+			EXIT;
+		ELSE
+			p := n;
+			n := UnorderedNext (n, t);
+		FI;
+	OD;
+
+	IF n /= NIL THEN
+		IF Index (n, t) = 0 THEN
+			RETURN t;
+		FI;
+		IF t.root = n THEN
+			t.root := Prev (n, t);
+		FI;
+		value := InsertionCost (Prev (n, t), Next (n, t), n, t, spec);
+		t[t[n].next].prev := Prev (n, t);
+		t[t[n].prev].next := Next (n, t);
+		t.nodes -:= 1;
+		IF p /= NIL THEN
+			t[p].next_inserted := UnorderedNext (n, t);
+		ELSE
+			t.firstInserted := UnorderedNext (n, t);
+		FI;
+		IF t.lastInserted = n THEN
+			t.lastInserted := p;
+		FI;
+		DELETENODE (t, n);
+	ELSE
+		Warning ("Removenode: Node not found");
+	FI;
+
+	RETURN t;
+END;
+
+
+
+# Swap
+#
+# Swap two elements of the tour
+#
+FUNCTION Swap (n1, n2 : Node; t : Tour) : Tour;
+	n : Node;
+BEGIN
+	IF ((n1 = NIL) OR (n2 = NIL)) THEN
+		RETURN t;
+	FI;
+
+	t[t[n1].prev].next := n2;
+	t[t[n2].prev].next := n1;
+	t[t[n1].next].prev := n2;
+	t[t[n2].next].prev := n1;
+
+	n := t[n1].prev;
+	t[n1].prev := t[n2].prev;
+	t[n2].prev := n;
+	n := t[n1].next;
+	t[n1].next := t[n2].next;
+	t[n2].next := n;
+
+
+	RETURN t;
+END;
+
+	
+
+# Empty
+#
+# Empty returns true if no nodes are inserted into the tour,
+# false otherwise.
+#
+FUNCTION Empty (t : Tour) : boolean;
+BEGIN
+	RETURN ((t.nodes = 0) OR (t.root = NIL));
+END;
+
+
+
+# First
+#
+# First returns the first node of the Tour list.
+#
+FUNCTION First (t : Tour) : Node;
+BEGIN
+	RETURN t.root;
+END;
+
+
+
+# Last
+#
+# Last returns the last node of the tour list.
+#
+FUNCTION Last (t : Tour) : Node;
+BEGIN
+	IF ((t.root = NIL) OR (t.nodes = 0)) THEN
+		RETURN NIL;
+	ELSE
+		RETURN t[t.root].prev;
+	FI;
+END;
+
+
+
+# Next
+#
+# Next returns the next node of the tour relative to the node
+# passed as parameter.
+#
+FUNCTION Next (n : Node; t : Tour) : Node;
+BEGIN
+	IF n /= NIL THEN
+		RETURN t[n].next;
+	ELSE
+		RETURN NIL;
+	FI;
+END;
+
+
+
+# Prev
+# 
+# Prev returns the previous node of the tour relative to the
+# node passed as parameter.
+#
+FUNCTION Prev (n : Node; t : Tour) : Node;
+BEGIN
+	IF n /= NIL THEN
+		RETURN t[n].prev;
+	ELSE
+		RETURN NIL;
+	FI;
+END;
+
+
+
+# Index
+# 
+# Index returns the index number (node index) of the node passed
+# as parameter.
+#
+FUNCTION Index (n : Node; t : Tour) : NodeIndex;
+BEGIN
+	IF n = NIL THEN
+		RETURN 0;
+	ELSE
+		RETURN t[n].nr;
+	FI;
+END;
+
+
+
+# Present
+#
+# Present returns true if a certain node is in the path, and
+# false otherwise.
+#
+FUNCTION Present (city : NodeIndex; t : Tour) : boolean;
+	last : Node;
+	n : Node;
+BEGIN
+	IF t.root = NIL THEN
+		RETURN false;
+	FI;
+
+	last := Last (t);
+	n := First (t);
+
+	IF ((last = NIL) OR (n = NIL)) THEN
+		RETURN false;
+	FI;
+
+	WHILE last /= n DO
+		IF Index (n, t) = city THEN
+			RETURN true;
+		FI;
+		n := Next (n, t);
+	OD;
+
+	IF Index (last,t) = city THEN
+		RETURN true;
+	ELSE
+		RETURN false;
+	FI;
+END;
+
+
+
+# ConsistentTour
+#
+# ConsistentTour is a function primarily intended for debug purposes.
+# It will check that the tour seems consistent based on the  facts
+# known about the problem such as:
+#	- Node with index 0 must be included
+#	- Number of nodes inserted must be the same as number of nodes in tour
+# Returns:
+#	true - If everything seems ok
+#	false - otherwise
+#
+FUNCTION ConsistentTour (t : Tour) : boolean;
+	n, last : Node;
+	consistent : boolean;
+	counter : integer;
+	m, l : Node;
+BEGIN
+	counter := 0;
+	consistent := true;
+	n := First (t);
+	last := Last (t);
+	IF ((n = last) AND (t.nodes /= 1)) THEN
+		consistent := false;
+	FI;
+
+	WHILE n /= last DO
+		counter +:= 1;
+		n := Next (n, t);
+		m := First (t);
+		l := Last (t);
+		WHILE m /= l DO
+			IF ((Index (m, t) = Index (n, t)) AND
+			    (m /= n)) THEN
+				Warning ("Duplicate index in tour");
+				PrintMessageInt ("Index: ", Index (m, t));
+				RETURN false;
+			FI;
+			m := Next (m, t);
+		OD;
+		IF ((Index (l, t) = Index (n, t)) AND
+		    (l /= n)) THEN
+			Warning ("Duplicate index in tour");
+			PrintMessageInt ("Index: ", Index (m, t));
+			RETURN false;
+		FI;
+	OD;
+	counter +:= 1;
+	IF counter /= t.nodes THEN
+		Warning ("The number of nodes in the tour does not match the number of nodes inserted.");
+		consistent := false;
+	FI;
+	RETURN consistent;
+END;
+
+
+
+FUNCTION ReverseTour (t : Tour) : Tour;
+	n,
+	temp : Node;	# Temp for swap of prev and next pointers
+BEGIN
+	n := UnorderedFirst (t);
+	WHILE n /= NIL DO
+		temp := t[n].prev;
+		t[n].prev := t[n].next;
+		t[n].next := temp;
+		n := UnorderedNext (n, t);
+	OD;
+
+	RETURN t;
+END;
+
+
+
+FUNCTION SetRoot (t : SHARED Tour; spec : SpecificationObject);
+	n,
+	last : Node;
+BEGIN
+	IF Index (t.root, t) = 0 THEN RETURN; FI;
+	n := First (t);
+	last := Last (t);
+	WHILE n /= last DO
+		IF Index (n, t) = 0 THEN
+			t.root := n;
+			IF spec$Distance (0, Index (Next (n, t), t)) > spec$Distance (Index (Prev (n, t), t), 0) THEN
+				t := ReverseTour (t);
+			FI;
+			EXIT;
+		FI;
+		n := Next (n, t);
+	OD;
+	IF Index (n, t) = 0 THEN
+		t.root := n;
+		IF spec$Distance (0, Index (Next (n, t), t)) > spec$Distance (Index (Prev (n, t), t), 0) THEN
+			t := ReverseTour (t);
+		FI;
+	FI;
+
+END;
+
+
+
+# TourValue
+#
+# TourValue is the primitive tour value calculator. 
+# It will calculate the tours value and will have a time complexity
+# of ordo (n). The function returns the value (length) of the tour.
+#
+FUNCTION TourValue (t : SHARED Tour; spec : SpecificationObject) : integer;
+	n : Node;
+	last : Node;
+	result : integer;
+BEGIN
+	SetRoot (t, spec);
+	n := First (t);
+	last := Last (t);
+	result := 0;
+	WHILE n /= last DO
+		result +:= spec$Distance (Index (Next (n, t), t), Index (n, t));
+		n := Next (n, t);
+	OD;
+
+	RETURN result;
+END;
+
+
+
+# ClearTour
+#
+# ClearTour deallocates and clears an entire tour. The empty tour is returned.
+#
+FUNCTION ClearTour (t : Tour) : Tour;
+	na : ARRAY [integer 1..t.nodes] OF Node;
+	n : Node;
+BEGIN
+	n := t.root;
+	FOR i IN LB(na)..UB(na) DO
+		na[i] := n;
+		n := t[n].next;
+	OD;
+	FOR i IN LB(na)..UB(na) DO
+		DELETENODE (t, na[i]);
+	OD;
+	t.root := NIL;
+	t.nodes := 0;
+	t.firstInserted := NIL;
+	t.lastInserted := NIL;
+	RETURN t;
+END;
+
+
+
+# Size
+#
+# Size returns the number of nodes in the tour
+#
+FUNCTION Size (t : Tour) : integer;
+BEGIN
+	RETURN t.nodes;
+END;
+
+
+
+# UnorderedNext
+#
+# UnorderedNext returns the next node inserted.
+# Return value:
+#	NIL  - If the node was the last one inserted
+#	node - Otherwise
+#
+FUNCTION UnorderedNext (n : Node; t: Tour) : Node;
+BEGIN
+	RETURN t[n].next_inserted;
+END;
+
+
+
+# UnorderedFirst
+#
+# UnorderedFirst returns the first node inserted. Returns NIL if the tour
+# is empty.
+#
+FUNCTION UnorderedFirst (t : Tour) : Node;
+BEGIN
+	RETURN t.firstInserted;
+END;
+
+
+
+# UnorderedLast
+#
+# UnorderedLast returns the last node inserted. Returns NIL if the tour
+# is empty.
+#
+FUNCTION UnorderedLast (t : Tour) : Node;
+BEGIN
+	RETURN t.lastInserted;
+END;
+
+
+
+
+# TwoOptReorder
+#
+# TwoOptReorder performs a reorder according to the two-opt algorithm
+# proposed by [REFERENCE]. 
+#
+#
+FUNCTION TwoOptReorder (n, m: Node; t : Tour) : Tour;
+	curr, prev : Node;
+	e1, e2, e3, e4 : Node;
+BEGIN
+	e1 := n;
+	e2 := Next (n, t);    #t[n].next;
+	e3 := m;
+	e4 := Next (m, t);    #t[m].next;
+	t[e1].next := e3;
+	prev := n;
+	curr := m;
+	WHILE curr /= e2 DO
+		t[curr].next := t[curr].prev;
+		t[curr].prev := prev;
+		prev := curr;
+		curr := t[curr].next;
+	OD;
+	t[e2].prev := prev;
+	t[e2].next := e4;
+	t[e4].prev := e2;
+
+
+	RETURN t;
+END;
+
+
+
+# ROptReorder
+#
+# ROptReorder performs a reorder of the tour according to the R-Opt
+# algorithm proposed by [REFERENCE]
+#
+FUNCTION ROptReorder (start : Node;
+			n : Node;
+			m : Node;
+			k : Node;
+			direction : DirectionType;
+			t : Tour) : Tour;
+	iStart,
+	iN, iM, iK, 
+	i, 
+	iLast : Node;
+BEGIN
+	iStart := start;
+	iN := n;
+	iM := m;
+	iK := k;
+
+	IF (m /= start) THEN 
+		IF direction = previous THEN
+			i := Prev (iM, t);
+			t[iM].next := i;
+			iLast := iM;
+			WHILE i /= iStart DO
+				t[i].next := Prev (i, t);
+				t[i].prev := iLast;
+				iLast := i;
+				i := Next (i, t);	
+			OD;
+			t[iStart].prev := iLast;
+			t[iM].prev := iN;
+			t[iN].next := iM;
+			t[iStart].next := iK;
+			t[iK].prev := iStart;
+		ELSE
+			i := Next (iM, t);
+			t[iM].prev := i;
+			iLast := iM;
+			WHILE i /= iStart DO
+				t[i].prev := Next (i, t);
+				t[i].next := iLast;
+				iLast := i;
+				i := Prev (i, t);
+			OD;
+			t[iStart].next := iLast;
+			t[iM].next := iN;
+			t[iN].prev := iM;
+			t[iStart].prev := iK;
+			t[iK].next := iStart;
+		FI;
+
+	ELSE
+		PrintMessage ("Tour not reordered cause no good replacement was found.");
+	FI;
+
+
+
+	RETURN t;
+END;
+
+
+
+
+END;

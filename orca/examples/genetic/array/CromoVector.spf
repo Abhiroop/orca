@@ -1,0 +1,19 @@
+MODULE SPECIFICATION CromoVector;
+
+FROM BoolVector IMPORT BoolVector;
+
+TYPE individual = RECORD
+			cromozom: BoolVector;
+			fitness: integer;
+			eval: integer;
+		  END;
+#
+# in this version the population is an array of individuals
+#
+
+TYPE population = ARRAY [integer] OF individual; 
+
+FUNCTION DynIndividual (SizeIndividual: integer): individual;
+FUNCTION DynPopulation (SizeIndividual, SizePopulation: integer): population;
+
+END;

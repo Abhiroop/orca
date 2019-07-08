@@ -1,0 +1,6 @@
+MODULE SPECIFICATION BpTypes;
+
+TYPE 	ArrayType = 	ARRAY [integer] OF real;
+
+# end module specification
+END;

@@ -1,0 +1,350 @@
+\sectionLabel{Parallel Algorithms}
+
+This section describes three different methods to solve the
+Polygon Overlay problem in parallel. 
+The outline of the methods were suggested by \cite{Wilson:1994}.
+The main difference between the three methods is the way of
+distributing the maps among the processors.
+
+
+
+\subsection{Pipelined Overlay}
+
+In a pipelined control-parallel implementation,
+each of the $n_A$ polygons of the A map is allocated to one
+of the $p$ processors, $1 \leq p \leq n_A$.
+The polygons of the B map are then streamed through the
+pipeline;
+results are either passed through the same pipeline,
+stored locally for collection upon termination,
+or "bled off" as the pipeline executes
+(\refByCapt{Pipelined Overlay}).
+
+\begin{figure}[hbtp]
+  \begin{centering}
+    \hspace{0cm}
+    \epsffile{pipelined.eps}
+    \refAndCapt{Pipelined Overlay}
+  \end{centering}
+\end{figure}
+
+This method is suited for architectures in which
+processors are arranged in a grid, where each pipelined message
+is transmitted over a different communication channel.
+This method, however, is not appropriate for the Zoo's architecture,
+because the pipelined messages would all be transmitted over
+the same Ethernet channel.
+Contention between them would limit performance.
+
+But even if the right architecture was used, 
+Pipelined Overlay would still suffer from load balancing
+problems, which emerge during optimization.
+The way to optimize the method would be by combining it with
+the Sort-and-Delete method.
+The Sort-and-Delete method is already discussed in the sequential
+case, see
+\refSection{The Sort-and-Delete Method}.
+Combining Sort-and-Delete with Pipelined Overlay is straight
+forward.
+The consequence is that a polygon can be taken out of the pipeline if
+its surface has been overlapped totally by the polygons it has
+been checked with by the previous processor(s).
+This would cause serious load balancing problems, since the last
+processors in the pipeline have magnitudes less of polygons to check
+compared to what the first processors have to check.
+
+
+
+\subsection{Data-Parallel Overlay}
+
+In a pure data-parallel version, the whole of map A is
+read into a parallel structure in memory, or, equivalently,
+each polygon is associated with a single virtual processor
+(\refByCapt{Data-Parallel Overlay}).
+Polygons from the B map are then read in one at a time,
+and the intersection of a B polygon with each A polygon is
+calculated simultaneously at each step.
+Non-empty intersections are collected using a scan or gather
+operation, and written to file.
+
+\begin{figure}[hbtp]
+  \begin{centering}
+    \hspace{0cm}
+    \epsffile{dataParallel.eps}
+    \refAndCapt{Data-Parallel Overlay}
+  \end{centering}
+\end{figure}
+
+The method as described above cannot be implemented directly on the Zoo's
+architecture, because the fine grain manner of handling polygons one by
+one causes too much communication overhead.
+By enlarging the grain size, the Data-Parallel method can be
+implemented as follows.
+
+Map A is partitioned in equally sized sets of polygons,
+which are called sub-maps.
+Each sub-map of A is placed on a different processor.
+Note that since map A has no ordering,
+polygons from a sub-map can be scattered over the whole map, and
+therefore the sub-maps cannot be classified as being polygon maps
+since they violate the requirement that they contain no holes, see
+\refSection{Problem Description}.
+Map B is replicated on each processor.
+Now each processor overlays its A sub-map with its
+copy of the B map, and sends all the resulting polygons to the
+collector.
+
+This method has two advantages:
+\begin{enumerate}
+  \item
+    It is relatively simple to implement.
+  \item
+    The number of polygons per processor is practically equal.
+    This guarantees a good load balance.
+\end{enumerate}
+
+
+
+\subsection{Patchwised Overlay}
+
+This method exploits geographical locality in contrast to
+the previous method, which partitions the map in random sets.
+
+Map A is partitioned in so called "patches", see 
+\refByCapt{Patchwised Decomposition}.
+The number of patches is equal to the number of participating
+processors.
+All polygons which are situated inside the borders of a certain
+patch are put in a corresponding sub-map.
+Each sub-map is placed on a different processor.
+Map B is either replicated on all the processors or is 
+partitioned similarly to the A map, with the same patch borders.
+Now all intersections are calculated by the processors and the
+results are gathered.
+
+\begin{figure}[hbtp]
+  \begin{centering}
+    \hspace{0cm}
+    \epsffile{patchwised.eps}
+    \refAndCapt{Patchwised Decomposition}
+  \end{centering}
+\end{figure}
+
+The method above suggests that the B map might be replicated
+on all processors.
+Although this simplifies distribution of the B map,
+replication is not good for performance as the number of comparisons
+is dramatically higher compared to the alternative of partitioning
+the B map in patches.
+The amount of work to partition the map patches will be
+significantly less than the overhead of all the useless comparisons
+done in the case of replication.
+
+For simplicity the partitioning is changed from a gridwise one,
+as suggested in
+\refByCapt{Patchwised Decomposition}, to a columnwise partitioning.
+The advantage of columnwise partitioning is threefold:
+\begin{enumerate}
+  \item
+    It simplifies understanding of the algorithms.
+  \item
+    Making a gridwise partitioning is not a trivial process,
+    and if there is an algorithm for it, then it is unlikely to be simple
+    and fast.
+    Making a columnwise partitioning, on the other hand, is simple and fast.
+  \item
+    It makes the methods for dealing with 'border polygons',
+    mentioned below, less complex.
+\end{enumerate}
+
+One important aspect of Patchwised Overlay, not mentioned  by
+\cite{Wilson:1994}, is the handling of 'border polygons'.
+A border polygon is a polygon who's surface is spread over more
+than one patch.
+
+There are three ways to deal with these border polygons.
+The first method puts the border polygons in all the
+concerning sub-maps, as 
+\refByCapt{Patchwised Decomposition} already suggested.
+The second method adjusts the borders of the patches to the polygons,
+hence, a border polygon is placed in only one of the sub-maps.
+The third method adjusts the border polygons to the patches by
+clipping them, hence, a border polygon is split into sub-polygons,
+one per sub-map.
+All three methods have difficulties to ensure that the correct resulting
+maps are produced.
+How the three methods work in detail, what their specific problems
+are, and how those problems are dealt with is discussed below.
+
+\begin{description}
+  \item[Duplicate-and-Filter]
+    Map A is partitioned in such a way that each border polygon is 
+    duplicated in those sub-maps that correspond to the 
+    patches that overlap the border polygon.
+    Map B is similarly divided in patches, and with
+    the same procedure for border polygons.
+
+    The consequence of duplicating border polygons is that
+    two neighboring processors can generate the same resulting
+    polygon.
+    This problem emerges when both the processors get the same A
+    and B border polygon, and those border polygons are also
+    overlapping each other.
+    According to the requirements made in
+    \refSection{Problem Description} this is not allowed,
+    so these duplicates should be filtered out.
+    This could be done at the end by the collector, but that would be
+    a time consuming sequential process, which reduces speedup.
+    Filtering can also be done on each processor during
+    the creation of duplicate polygons.
+    This is accomplished by marking all the copies of every border
+    polygon of map A and B, except those copies that are laying in the
+    patch that contains their upper left corner, see
+    \refByCapt{Patchwised decomposition with marked border polygons}.
+    If during overlay a nonempty intersection of two marked polygons
+    is found, then it should be thrown away.
+    It should be thrown away because the patch with at least one
+    of the unmarked polygons finds it too, and therefore keeps it.
+
+    Thus generating duplicates is not such a problem as long as they
+    are filtered out locally and it doesn't involve too much work.
+
+    \begin{figure}[hbtp]
+      \begin{centering}
+        \hspace{0cm}
+	\epsffile{duplicateAndFilter.eps}
+        \refAndCapt{Patchwised decomposition with marked border polygons}
+      \end{centering}
+    \end{figure}
+
+
+  \item[Extending-Borders]
+    Map A is partitioned, in such a way that border polygons are not
+    duplicated.
+    Instead a border polygon is placed in the sub-map that corresponds
+    to the patch which contains the polygon's upper left corner.
+    See for example 
+    \refByCapt{farthest border polygons in the A sub-maps}, where border
+    polygon $a_{1}$ is placed in the sub-map that corresponds with
+    patch $A_{1}$, $a_{2}$ in the corresponding sub-map of $A_{2}$,
+    and $a_{3}$ in the corresponding sub-map of $A_{3}$.
+    Each right B patch border is now extended to cover the A border
+    polygon sticking out farthest of the corresponding A patch.
+    This is done to ensure that every A border polygon will produce
+    all possible intersections with the B polygons.
+    Now the B map will be partitioned according to the extended B
+    patches, and B border polygons are duplicated in those sub-maps
+    which correspond to the patches that overlap the border polygon.
+    An example is given in
+    \refByCapt{overlapping borders of the B sub-maps} where the border
+    polygons $a_{1}, a_{2},$ and $a_{3}$ are sticking out the farthest of
+    their A patches. The $B_{1}, B_{2},$ and $B_{3}$ patches are
+    extended to cover the $a_{1}, a_{2},$ and $a_{3}$ border polygons
+    respectively.
+    Note that a B sub-map may contain polygons which do not overlap
+    with any polygon of the corresponding A sub-map, which means that
+    there are too many B polygons duplicated.
+    Correcting this by keeping track of all the right sides of
+    the A border polygons, would involve more work than is gained.
+
+    \vspace*{-0.4cm}
+    \begin{figure}[hbt]
+      \begin{centering}
+        \hspace*{1cm}
+        \hspace*{-1cm}
+        \subfigure [farthest border polygons in the A sub-maps] {
+          \hspace*{2cm}
+          \epsffile{extendingBorders_a.eps}
+          \hspace*{2cm}
+        \label{farthest border polygons in the A sub-maps}
+        }
+        \hspace*{-0.5cm}
+        \subfigure [overlapping borders of the B sub-maps] {
+          \hspace*{1.5cm}
+          \epsffile{extendingBorders_b.eps}
+          \hspace*{2cm}
+        \label{overlapping borders of the B sub-maps}
+        }
+      \end{centering}
+      \vspace{-0.8cm}\refAndCapt{Extending-Borders}
+    \end{figure}
+
+    Instead of looking at the upper left corner of a border polygon
+    during the partitioning of the A map, it is also possible to put
+    the polygon in the sub-map for which the patch contains the most
+    surface of the polygon.
+    This would give a better distribution of polygons per sub-map,
+    what should result in better load balancing.
+    The costs for doing this is that the left borders of the B patches
+    have to be extended as well.
+    In the general case, when the input maps are large, this is not
+    worth the trouble, because then the number of polygons is much
+    larger than the number of patches.
+    This implies that the chances are small that border polygons are
+    sticking out far, which could have caused the unbalance
+
+  \item[Clip-and-Merge]
+    During the partitioning of map A, each border polygon is
+    duplicated in all the sub-maps that correspond to the
+    overlapping patches, with the adjustment that each duplicate is
+    clipped such that it fits into the concerning patch, see
+    \refByCapt{Patchwised decomposition with clipped border polygons}.
+    Map B is partitioned similarly, with the same patch structure.
+    After the overlay is done, the result map can contain
+    disjoint polygons that must be merged into one polygon.
+    This can only be done at the end, when all the results are gathered.
+    As the merging of polygons is a considerably expensive sequential
+    process, it will reduce speedup, and therefore this method is not
+    worthwhile to implement.
+
+    \begin{figure}[hbtp]
+      \begin{centering}
+        \hspace{0cm}
+	\epsffile{clipAndMerge.eps}
+        \refAndCapt{Patchwised decomposition with clipped border polygons}
+      \end{centering}
+    \end{figure}
+
+\end{description}
+
+It is not clear beforehand which of the two remaining methods
+Duplicate-and-Filter or Extending-Borders will be the best.
+The difference in performance will not be dramatic, since,
+in the general case where the maps are large, the number of border
+polygons are relatively small.
+As performance will not be dramatic, only one of the two methods is
+chosen.
+In this case Duplicate-and-Filter is chosen as the method is simplest
+to understand.
+
+
+
+\subsection{Data-Parallel Versus Patchwised}
+
+If both the Patchwised overlay and the Data-Parallel overlay methods are
+not optimized then it is clear that Patchwised Overlay is much faster,
+because in the Patchwised method the B maps is partitioned, where in the
+in Data-Parallel method the whole B map is replicated on each
+processor.
+This makes the number of comparisons in the Patchwised method
+approximately $p$ times less than in the Data-Parallel method,
+where $p$ is the number of processors.
+But if both methods are optimized, which will be discussed in the
+next section, then this dramatic difference will disappear, and it
+is not so clear anymore which method will be the best.
+
+The main disadvantage of Patchwised overlay is that the number of polygons
+may differ strongly per sub-map, which may cause load balancing problems.
+There are even exceptions that make patchwised partitioning of the maps 
+useless.
+An example was already given in 
+\refByCapt{worst case}.
+In the Duplicate-and-Filter method all the processors get all the A
+and B polygons, and all processors will calculate the same resulting
+polygons, and all processors, except the first, will throw all the
+results away.
+In the Extending-Borders method only the first processor will get all
+the A and B polygons, and the rest of the processors will be idle.
+In both cases there will only be 'slowdown' instead of speedup.
+An other disadvantage of Patchwised Overlay is that the presence of
+border polygons causes extra work.

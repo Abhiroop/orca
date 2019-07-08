@@ -1,0 +1,26 @@
+MODULE IMPLEMENTATION IntMatrix;
+
+FROM BoolVector IMPORT BoolMatrix;
+
+FUNCTION DynIntMatrix (Nrow: integer; Ncol: integer): IntMatrix;
+	a_dyn: IntMatrix[0..Nrow-1, 0..Ncol-1];
+BEGIN
+	RETURN a_dyn;
+END;
+
+FUNCTION MakeAdjMatrix (G: BoolMatrix; nb_nodes: integer; A: SHARED IntMatrix);
+	degree: integer;
+BEGIN
+	FOR i IN 0..nb_nodes-1 DO
+		degree := 0;
+		FOR j IN 0..nb_nodes-1 DO
+			IF (i /= j) AND G[i,j] THEN
+				degree +:= 1;
+				A[i, degree] := j;
+			FI;
+		OD;
+		A[i,0] := degree;
+	OD;
+END;
+
+END;

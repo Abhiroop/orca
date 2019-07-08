@@ -1,0 +1,11 @@
+OBJECT SPECIFICATION SearchTree;
+	FROM Game IMPORT board;
+
+	TYPE Node;  # Opaque type; the actual type is defined in impl. part
+	FUNCTION NullNode(): Node;
+	OPERATION ReadNode(n: Node; b: OUT board; alpha, beta: OUT integer);
+	OPERATION AddNode(parent: Node; b: board; WhichSon: integer;
+			  nsons: integer) : Node;
+	OPERATION PropagateResult(n: Node; score: integer);
+	OPERATION RootValue(): integer;
+END;

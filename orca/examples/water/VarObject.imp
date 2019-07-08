@@ -1,0 +1,330 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+ 
+OBJECT IMPLEMENTATION VarObject;
+
+FROM Common IMPORT	OrderType, DirectionType, AtomType,
+			AtomTableType, DirAtomsArray, SmallMolDataType,
+			AllCpuDataType, TLC_Type, PCC_Type,
+			DirTableType, array_of_reals;
+
+FROM ForceEnergy IMPORT	DoIntraForces, DoInterForces, DoPotEnergy;
+FROM PredCor	 IMPORT	DoPredict, DoCorrectBoundary;
+FROM Math	 IMPORT LongRealMin;
+
+Var : VarType;
+valid_copies : integer;
+received : integer;
+
+
+FUNCTION InitVar(Size   : integer;
+		 Array  : OUT VarType[0 .. Size, DISP .. FORCES]);
+BEGIN
+	FOR mol IN 0 .. Size DO
+	    FOR order IN DISP .. FORCES DO
+		FOR dir IN XDIR .. ZDIR DO
+		    FOR atom IN H1 .. H2 DO
+			Array[mol,order][dir,atom] := 0.0D;
+		    OD;
+		OD;
+	    OD;
+	OD;
+END;
+
+FUNCTION InitValues(NrMols : integer;
+	            RandomArray : array_of_reals;
+		    min, sum : OUT DirTableType;
+		    Var : SHARED VarType);
+	Counter : integer;
+	Val : longreal;
+BEGIN
+        FOR dir IN XDIR .. ZDIR DO
+            min[dir] := 0.0D;	# Same as in John's code, but why not infinity?
+            sum[dir] := 0.0D;
+	OD;
+
+        Counter := 0;
+        FOR mol IN 0 .. NrMols DO
+            FOR dir IN XDIR .. ZDIR DO
+                FOR atom IN H1 .. H2 DO
+                    Val := RandomArray[Counter];
+                    Var[mol,DISP][dir,atom] := Val;
+                    min[dir] := LongRealMin(min[dir], Val);
+ 
+                    Val := RandomArray[Counter + 1];
+                    Var[mol,VEL][dir,atom] := Val;
+                    sum[dir] +:= Val;
+                    Counter +:= 2;
+                OD;
+            OD;
+        OD;
+END;
+
+
+OPERATION Init(NrMols : integer;
+	       RandomArray : array_of_reals;
+	       min, sum : OUT DirTableType);
+BEGIN
+	InitVar(NrMols+1, Var);
+	InitValues(NrMols, RandomArray, min, sum, Var);
+	valid_copies := 0;
+	received := 0;
+END;
+
+
+OPERATION SetValue(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Atom  : AtomType;
+		   Value : longreal);
+BEGIN
+	Var[Mol,Order][Dir,Atom] := Value;
+END;
+
+
+OPERATION GetValue(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Atom  : AtomType) : longreal;
+BEGIN
+	RETURN Var[Mol,Order][Dir,Atom];
+END;
+
+
+OPERATION IncValue(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Atom  : AtomType;
+		   Value : longreal);
+BEGIN
+	Var[Mol,Order][Dir,Atom] +:= Value;
+END;
+
+
+OPERATION DecValue(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Atom  : AtomType;
+		   Value : longreal);
+BEGIN
+	Var[Mol,Order][Dir,Atom] -:= Value;
+END;
+
+
+OPERATION SetAtoms(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Value : AtomTableType);
+BEGIN
+	FOR atom IN H1 .. H2 DO
+		Var[Mol,Order][Dir,atom]:= Value[atom];
+	OD;
+END;
+
+
+OPERATION GetAtoms(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType) : AtomTableType;
+Value   : AtomTableType;
+BEGIN
+	FOR atom IN H1 .. H2 DO
+		Value[atom] := Var[Mol,Order][Dir,atom];
+	OD;
+	RETURN Value;
+END;
+
+
+OPERATION IncAtoms(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Value : AtomTableType);
+BEGIN
+	FOR atom IN H1 .. H2 DO
+	    Var[Mol,Order][Dir,atom] +:= Value[atom];
+	OD;
+END;
+
+
+OPERATION SetDirAtoms(Mol   : integer;
+		      Order : OrderType;
+		      Value : DirAtomsArray);
+BEGIN
+	Var[Mol,Order] := Value;
+END;
+
+
+OPERATION GetDirAtoms(Mol   : integer;
+		      Order : OrderType) : DirAtomsArray;
+BEGIN
+	RETURN Var[Mol,Order];
+END;
+
+
+# integrated synchronization to avoid external barriers
+
+OPERATION Valid( copies : integer);
+BEGIN
+	valid_copies := copies;
+END;
+
+OPERATION AllHandedOut();
+BEGIN
+	GUARD valid_copies = 0 DO OD;
+END;
+
+OPERATION GetPositions(size: integer) : SmallMolDataType;
+
+	All : SmallMolDataType[0 .. size-1];
+BEGIN
+	GUARD valid_copies > 0 DO
+	    valid_copies -:= 1;
+	    FOR mol IN 0 .. size-1 DO
+	    	FOR dir IN XDIR .. ZDIR DO
+		    FOR atom IN H1 .. H2 DO
+		    	All[mol][dir,atom] := Var[mol,DISP][dir,atom];
+		    OD;
+	    	OD;
+	    OD;
+	    RETURN All;
+	OD;
+END;
+
+
+OPERATION IncAll(Dest : OrderType;
+		 All : SmallMolDataType);
+BEGIN
+	FOR mol IN LB(All) .. UB(All) DO
+	    FOR dir IN XDIR .. ZDIR DO
+		FOR atom IN H1 .. H2 DO
+		    Var[mol,Dest][dir,atom] +:= All[mol][dir,atom];
+		OD;
+	    OD;
+	OD;
+	received +:= 1;
+END;
+
+OPERATION ReceivedAll( pieces : integer);
+BEGIN
+	GUARD received = pieces DO
+	    received := 0;
+	OD;
+END;
+
+
+###### Inline functions from ForceEnergy.imp
+
+OPERATION CallIntraForces(Vir : OUT longreal; NrMols : integer);
+BEGIN
+	DoIntraForces(Var, Vir, NrMols);
+END;
+
+OPERATION CallInterForces(TmpVir : OUT longreal;
+			  AllVal : OUT AllCpuDataType;
+			  AllPos : AllCpuDataType;
+                          StartMol, NrMols, NMOL, NrParts, me : integer;
+                          BOXH, BOXL, REF1, CUT2 : longreal;
+                          Dest : OrderType);
+BEGIN
+	DoInterForces(Var, TmpVir, AllVal, AllPos, StartMol, NrMols, NMOL,
+		      NrParts, me, BOXH, BOXL, REF1, CUT2, Dest);
+END;
+
+
+OPERATION MultiplyForces(NrMols : integer; Dest : OrderType;
+			 FHM, FOM : longreal);
+BEGIN
+        FOR mol IN 0 .. NrMols DO
+            FOR dir IN XDIR .. ZDIR DO
+               Var[mol,Dest][dir,H1] *:= FHM;
+               Var[mol,Dest][dir, O] *:= FOM;
+               Var[mol,Dest][dir,H2] *:= FHM;
+            OD;
+        OD;
+END;
+
+
+OPERATION CallPotEnergy(AllPos : AllCpuDataType;
+			LPOTA, LPOTR, LPTRF : OUT longreal;
+			StartMol, NrMols, NMOL : integer;
+			CUTOFF, CUT2, REF1, BOXH, BOXL  : longreal);
+BEGIN
+	DoPotEnergy(Var, AllPos, LPOTA, LPOTR, LPTRF, StartMol, NrMols, NMOL,
+		    CUTOFF, CUT2, REF1, BOXH, BOXL);
+END;
+
+
+###### Inline functions from PredCor.imp
+
+OPERATION CallPredict(NORDER, NrMols : integer;
+                      TLC            : TLC_Type);
+BEGIN
+	DoPredict(Var, NORDER, NrMols, TLC);
+END;
+
+OPERATION CallCorrectBoundary( NORDER, NrMols : integer;
+			       PCC            : PCC_Type;
+			       BOXL           : longreal;
+			       KinEnergy      : OUT longreal);
+BEGIN
+	DoCorrectBoundary(Var, NORDER, NrMols, PCC, BOXL, KinEnergy);
+END;
+
+
+###### Inline loops from WaterWorker.imp
+
+FUNCTION square( r : longreal) : longreal;
+BEGIN
+        RETURN r*r;
+END;
+
+
+OPERATION Shift(NrMols : integer;
+		TmpMin : DirTableType);
+BEGIN
+       FOR mol IN 0 .. NrMols DO
+           FOR dir IN XDIR .. ZDIR DO
+               FOR atom IN H1 .. H2 DO
+                   Var[mol,DISP][dir,atom] -:= TmpMin[dir];
+               OD;
+           OD;
+       OD;
+END;
+
+
+OPERATION Factor(NrMols : integer;
+		 TmpSum : DirTableType;
+		 HMAS, OMAS : longreal;
+		 TmpSu : OUT DirTableType);
+BEGIN
+       FOR dir IN XDIR .. ZDIR DO
+           TmpSu[dir] := 0.0;
+       OD;
+
+       FOR mol IN 0 .. NrMols DO
+           FOR dir IN XDIR .. ZDIR DO
+               TmpSu[dir] +:=
+                   (square(Var[mol,VEL][dir,H1] - TmpSum[dir]) +
+                    square(Var[mol,VEL][dir,H2] - TmpSum[dir])) / HMAS +
+                    square(Var[mol,VEL][dir,O]  - TmpSum[dir])  / OMAS;
+           OD;
+       OD;
+END;
+
+
+OPERATION Normalize(NrMols : integer;
+		    TmpSum, TmpSu : DirTableType;
+		    Xmas : AtomTableType);
+BEGIN
+       FOR mol IN 0 .. NrMols DO
+           FOR dir IN XDIR .. ZDIR DO
+               FOR atom IN H1 .. H2 DO
+		   Var[mol,VEL][dir,atom] :=
+		   		(Var[mol,VEL][dir,atom] -
+                                 TmpSum[dir]) * TmpSu[dir] / Xmas[atom];
+               OD;
+           OD;
+       OD;
+END;
+
+END;

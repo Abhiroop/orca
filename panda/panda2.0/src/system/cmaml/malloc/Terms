@@ -1,0 +1,10 @@
+block:
+	the piece of memory as supplied to the user (term from MALLOC(3)).
+
+mallink:
+	the struct containing the info which enables the operations on
+	the chunks to be performed.
+
+chunk:
+	the basic malloc entity, consisting of a mallink and a block.
+

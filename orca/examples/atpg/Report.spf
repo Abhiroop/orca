@@ -1,0 +1,26 @@
+OBJECT SPECIFICATION Report;
+	
+	FROM AtpgTypes IMPORT Logic_Value;
+	
+	FROM Circuit IMPORT Testvector;
+	
+	OPERATION Initialize();
+	OPERATION Assign_No_Faults(no_of_faults:integer);
+	OPERATION Inc_Detected();
+	OPERATION Inc_Aborted();
+	OPERATION Inc_Testvectors();
+
+	OPERATION Communicate_Tv(i:integer;input_value:Testvector);
+
+	# Processor no i reports a testvector. Put this input value in the
+	# list associated with all the other processors.
+	
+	OPERATION Get_Tv(i:integer;testvector:OUT Testvector):boolean;
+	
+	# Return a testvector from the list associated with processor i.
+	# If this list is empty the operation returns false else true
+	# is returned.
+
+	OPERATION Write_Results();
+
+END; # OBJECT SPECIFICATION Report

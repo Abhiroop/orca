@@ -1,0 +1,23 @@
+MODULE SPECIFICATION ParamRes;
+
+TYPE param_t  = RECORD
+		nfib_val  : integer;
+		threshold : integer;
+		END;
+TYPE result_t = integer;
+
+CONST params_tag = 1;
+CONST result_tag = 2;
+
+TYPE ParamRes = UNION (tag : integer)
+		params_tag => params : param_t;
+		result_tag => result : result_t;
+		END;
+
+FUNCTION WriteParamRes(p : ParamRes);
+
+FUNCTION WriteParam(p : param_t);
+
+FUNCTION WriteResult(r : result_t);
+
+END;

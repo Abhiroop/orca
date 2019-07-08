@@ -1,0 +1,14 @@
+
+# for queue solution
+
+OBJECT SPECIFICATION Line;
+FROM ConTypes IMPORT Vali;
+
+  OPERATION Init(n : integer);
+
+  OPERATION Assign(i, v : integer);
+
+  OPERATION Value(i: integer) : integer;
+
+
+END;

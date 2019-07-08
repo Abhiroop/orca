@@ -1,0 +1,19 @@
+input format for the grammars is as follows (in EBNF):
+
+grammar          -> production rules <eoln> dictionary <eof>
+production_rules -> {production_rule} <eoln>
+production_rule  -> <left_symbol> '->' <right_symbol1> [<right_symbol_2>]
+
+dictionary       -> {dict_rule} <eoln>
+dict_rule        -> <left_symbol> '->' <right_symbol1>
+
+Used notation: {a} : 0 or more times 'a'
+               [a] : 0 or 1 time 'a'
+
+<left_symbol>, <right_symbol_1> and <right_symbol_2> are strings of characters.
+The maximum string length is 20.
+
+Lines starting with a '#' are treated as comment and are ignored.
+Furthermore whitespace characters (spaces and tabs) are allowed everywhere
+in the input. 
+ 

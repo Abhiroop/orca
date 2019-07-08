@@ -1,0 +1,103 @@
+OBJECT IMPLEMENTATION GlobalMemory;
+
+FROM vectmath IMPORT Vectmath, CLRM, CLRV, ADDMSame,
+		     ADDVSame, MULVS, DIVVS;
+FROM LocalMemory IMPORT LocalMemoryType;
+FROM GlobalVars	IMPORT nbody;
+
+Global : GlobalMemoryType;
+readers : integer;
+locked : boolean;
+
+
+OPERATION write_lock();
+BEGIN
+    GUARD (readers = 0) AND ( NOT locked) DO
+	locked := true;
+    OD;
+END;
+
+
+OPERATION write_unlock();
+BEGIN
+    locked := false;
+END;
+
+
+OPERATION read_lock();
+BEGIN
+    GUARD NOT locked DO
+	readers +:= 1;
+    OD;
+END;
+
+
+OPERATION read_unlock();
+BEGIN
+    readers -:= 1;
+END;
+
+
+OPERATION operwrite( Local: LocalMemoryType);
+    tempv1,tempv2 : Vectmath;
+BEGIN
+    Global.n2bcalc +:= Local.myn2bcalc;
+    Global.nbccalc +:= Local.mynbccalc;
+    Global.selfint +:= Local.myselfint;
+
+    ADDMSame( Global.keten, Local.myketen);
+    ADDMSame( Global.peten, Local.mypeten);
+
+    FOR  k IN 0..2 DO
+      Global.etot[k] +:= Local.myetot[k];
+    OD;
+
+    ADDVSame( Global.amvec, Local.myamvec);
+
+    MULVS( tempv1, Global.cmphase[0], Global.mtot);
+    MULVS( tempv2, Local.mycmphase[0], Local.mymtot);
+    ADDVSame( tempv1, tempv2);
+    DIVVS( Global.cmphase[0], tempv1, Global.mtot + Local.mymtot); 
+
+    MULVS( tempv1, Global.cmphase[1], Global.mtot);
+    MULVS( tempv2, Local.mycmphase[1], Local.mymtot);
+    ADDVSame( tempv1, tempv2);
+    DIVVS( Global.cmphase[1], tempv1, Global.mtot + Local.mymtot);
+    Global.mtot +:= Local.mymtot;
+
+END;
+
+OPERATION operread(nttot, nbavg, ncavg: OUT integer);
+BEGIN
+    nttot := Global.n2bcalc + Global.nbccalc;
+    nbavg := Global.n2bcalc / nbody;
+    ncavg := Global.nbccalc / nbody;
+END;
+
+
+OPERATION print(verbose: integer);
+BEGIN
+    WriteLine("tnow  T     U     rsize");
+    WriteLine(# tnow,
+		Global.etot[1], Global.etot[2]
+		# , rsize
+		);
+END;
+
+
+BEGIN 
+    Global.n2bcalc := 0;
+    Global.nbccalc := 0;
+    Global.selfint := 0;
+    Global.mtot := 0.0;
+    FOR i IN 0..2 DO
+        Global.etot[i] := 0.0;
+    OD;
+    CLRM( Global.keten);
+    CLRM( Global.peten);
+    CLRV( Global.cmphase[0]);
+    CLRV( Global.amvec);
+    CLRV( Global.cmphase[1]);
+    readers := 0;
+    locked := false;
+END;

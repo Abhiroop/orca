@@ -1,0 +1,30 @@
+MODULE SPECIFICATION Job;
+#
+# Program:	Mandelbrot
+# File:		job.spf
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	job description for a mandelbrot worker, and
+#		user requests for mandelbrot computation.
+#
+
+TYPE store_t =
+	 ARRAY [integer] OF char;
+
+TYPE job_t = 
+	RECORD
+		start: integer;
+		size: integer;
+		results: store_t;
+	END;
+
+TYPE request_t =
+	RECORD
+		scale: real;
+		x_left: real;
+		y_up : real;
+		width: integer;
+		height : integer;
+		dwell : integer;
+	END;
+
+END;

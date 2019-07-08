@@ -1,0 +1,13 @@
+DATA MODULE SPECIFICATION global;
+
+  TYPE complex =
+	RECORD
+		wr, wi: real;
+	END;
+  
+  TYPE complexarray = ARRAY[integer] OF complex;
+
+  # real and imaginary parts of w
+  w: complexarray;
+
+END;

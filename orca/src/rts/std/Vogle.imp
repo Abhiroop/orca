@@ -1,0 +1,321 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+#========================================================================
+#== File:      Vogle.imp					       ==
+#== Program:   Orca<->Vogle interface				       ==
+#== Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994        ==
+#== Contains:  implementation of interface routines 		       ==
+#==								       ==
+#========================================================================
+
+OBJECT IMPLEMENTATION Vogle;
+
+#=======================================================================
+#== imports							      ==
+#=======================================================================
+
+IMPORT      Xd;
+FROM VTypes IMPORT DEF_CIRCLE_SEGS;
+
+
+#=======================================================================
+#== operations							      ==
+#=======================================================================
+
+
+#
+# Backbuffer() : Where possible VOGLE allows for front and  back
+#                buffers  to enable  things  like  animation  and
+#                smooth updating of the screen. The operation Backbuffer()
+#                is used to initialise  double buffering. Returns false
+#                if  the device is not up to it. See also SwapBuffer().
+OPERATION BackBuffer(
+) : boolean;
+
+BEGIN
+	IF (Xd.BackBuffer() = -1) THEN
+		RETURN false;
+	ELSE
+		RETURN true;
+	FI;
+END;
+
+
+
+#
+# Circle() : Draw a circle. x and y are values in worldcoordinates.
+#            col is the color the circle will be drawn in.
+#            If polyfill is true, the circle will be filled.
+OPERATION Circle(
+	col : integer;
+	polyfill : boolean;
+	x, y : real;
+        radius : real
+);
+BEGIN
+	Xd.CirclePrecision(DEF_CIRCLE_SEGS);
+	Xd.Color(col);
+	Xd.PolyFill(polyfill);
+	Xd.Circle(x, y, radius);
+END;
+	
+
+
+#
+# Circle_Seg(): same as Circle. nsegs is the number of segments used
+#               to draw the circle. The default is defined in VTypes.spf
+#
+#
+OPERATION Circle_Seg(
+	col : integer;
+	polyfill : boolean;
+	nsegs : integer;
+	x, y : real;
+	radius : real
+);
+BEGIN
+	Xd.CirclePrecision(nsegs);
+	Xd.Color(col);
+	Xd.PolyFill(polyfill);
+	Xd.Circle(x, y, radius);
+	Xd.CirclePrecision(DEF_CIRCLE_SEGS);
+END;
+
+
+
+#
+# Clear() : clear the window with color col.
+#
+OPERATION Clear(
+        col : integer
+);
+
+BEGIN
+	Xd.Color(col);
+	Xd.Clear();
+END;
+
+
+
+#
+# Color() : set the color for subsequent drawing routines.
+#
+OPERATION Color(
+	col : integer
+);
+
+BEGIN
+	Xd.Color(col);
+END;
+
+
+
+#
+# Draw() : draw a line from current graphics position to (x, y)
+#
+OPERATION Draw(
+	x, y : real
+);
+BEGIN
+	Xd.Draw2(x, y);
+END;
+
+
+
+#
+# DrawStr(): put the string str on position (x,y). col is the color of
+#            the string.
+#
+#
+OPERATION DrawStr(
+	col : integer;
+	x,y : real;
+	str : string
+);
+
+BEGIN
+	Xd.Color(col);
+	Xd.Move2(x, y);
+	Xd.DrawStr(str);
+END;
+
+
+
+#
+# Exit() : close the window. The user should press 'q' in the window.
+#          NOTE: Exit() should be the last operation called.
+OPERATION Exit();
+
+BEGIN
+	Xd.X_Exit();
+END;
+
+
+
+#
+# Init() : initialize interface.
+#          NOTE: This should be the first operation called.
+#                One exception to this rule is the operation Ortho()
+#                which is used set clipping planes of the window.
+#
+OPERATION Init();
+
+BEGIN
+	Xd.X_Init();
+END;	
+
+
+
+#
+# Line() : draw a line in color col, from (x1, y1) to (x2, y2)
+#
+OPERATION Line(
+	col : integer;
+	x1, y1,
+	x2, y2 :real
+);
+BEGIN
+	Xd.Color(col);
+	Xd.Move2(x1, y1);
+	Xd.Draw2(x2, y2);
+END;
+
+
+
+#
+# MapColor() : create your own colormap by specifying the (red, green, blue).
+#              red, green and blue should be values in between 0 and 255
+#              NOTE: Some default colors have been defined in VTypes.spf
+#
+OPERATION MapColor(
+	index :	 integer;
+	red : 	 integer;
+	green :  integer;
+	blue :	 integer
+);
+
+BEGIN
+	Xd.MapColor(index, red, green , blue);
+END;
+
+
+
+
+#
+# Ortho() : Define the x (left, right) and y (bottom, top) clipping planes.
+#            This operation can be used to scale and/or rotate your interface
+#            window. By default these values are:
+#            (left, right, bottom, top) = (-1.0, 1.0, -1.0, 1.0). So,
+#            by default the origin is in the middle of the window.
+#            Example: To create a window with a 10 units width and
+#                     50 units height and the origin in the lower left
+#                     corner, call Ortho(0.0, 10.0, 0.0, 50.0);
+OPERATION Ortho(
+	left, right,
+	bottom, top : real
+);
+
+BEGIN
+	Xd.Ortho2(left, right, bottom, top);
+END;
+
+
+
+#
+# Point() : draw a point at (x,y) in color col.
+#
+OPERATION Point(
+	col : integer;
+        x, y : real
+);
+
+BEGIN
+	Xd.Color(col);
+	Xd.Point2(x,y);
+END;
+
+
+
+#
+# PrefPosition(): Specify the preferred position of the window opened
+#                 by Init()
+#
+OPERATION PrefPosition(
+	x, y : integer
+);
+
+BEGIN
+	Xd.PrefPosition(x,y);
+END;
+
+
+
+#
+# PrefSize() : Specify the preferred width and height of the window
+#              opened by Init()
+#
+OPERATION PrefSize(
+	width, height : integer
+);
+BEGIN
+	Xd.PrefSize(width, height);
+END;
+
+
+
+#
+# Rect() : Draw a rectangle. col and polyfill are analogous to the
+#          Circle() parameters.
+#
+OPERATION Rect(
+	col : integer;
+	polyfill : boolean;
+	x1,y1, 
+	x2, y2 : real
+);
+
+BEGIN
+	Xd.Color(col);	
+	Xd.PolyFill(polyfill);
+	Xd.Rect(x1, y1, x2, y2);
+END;
+
+
+
+#
+# SwapBuffers() : Swap the front and back buffers. Used in combination
+#                 with the BackBuffer() routine.
+#
+OPERATION SwapBuffers();
+BEGIN
+	Xd.SwapBuffers();
+END;
+
+
+
+#
+# VsetFlush() : set global flushing status. If yesno = false
+#  		then don't  do  any  flushing  (except  in swapbuffers(), or
+#	        vflush()). If yesno = 1 true then do the flushing as
+#		described above. 
+# 
+OPERATION VsetFlush(
+	yesno : boolean			# do flushing or not?
+);
+BEGIN
+	Xd.VsetFlush(yesno);
+END;
+
+
+#
+# Vflush() : Call the device flush or syncronisation  routine. This
+#            forces a flush.
+#
+OPERATION Vflush();
+BEGIN
+	Xd.Vflush();
+END;
+
+END;

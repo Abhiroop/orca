@@ -1,0 +1,44 @@
+ORCA_HOME	= /usr/proj/orca/latest_greatest;
+
+%include $ORCA_HOME/lib/bc_opt.amk;
+
+CONF_SUN = /usr/proj/amwork/conf/amoeba/$ARCH.gnu-2;
+
+XDISPLAY = 
+    {
+	xdisplay/xdisplay.o,
+	xdisplay/DrawArea.o,
+    };
+
+XLIBS = 
+    {
+	$CONF_SUN/X11R6/xc/lib/Xaw/libXaw.a,
+	$CONF_SUN/X11R6/xc/lib/Xmu/libXmu.a,
+	$CONF_SUN/X11R6/xc/lib/Xext/libXext.a,
+	$CONF_SUN/X11R6/xc/lib/Xt/libXt.a,
+	$CONF_SUN/X11R6/xc/lib/X11/libX11.a,
+	$CONF_SUN/X11R6/xc/lib/SM/libSM.a,
+	$CONF_SUN/X11R6/xc/lib/ICE/libICE.a,
+	$CONF_ROOT/lib/ajax/libajax.a,
+	$CONF_ROOT/lib/math/libmath.a,
+    };
+
+INCLUDES = $INCLUDES + { '-I/usr/include' } ;
+
+Mandelbrot  =
+   {
+	Xdisplay.spf[orca-no-imp],
+	Job.spf[orca-no-imp],
+	Request.spf,
+	Request.imp,
+	Scheduler.spf,
+	Scheduler.imp,
+	JobQueue.spf,
+	JobQueue.imp,
+	Mandelbrot.spf,
+	Mandelbrot.imp,
+   };
+
+%instance ocluster(	mandel,
+			$Mandelbrot, 
+			$BCASTRTS + $XDISPLAY + $XLIBS + $LIB_AMOEBA );

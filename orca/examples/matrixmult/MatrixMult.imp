@@ -1,0 +1,91 @@
+MODULE IMPLEMENTATION MatrixMult;
+	IMPORT IntObject;
+	FROM Finish IMPORT Finish;
+
+	CONST WantOutput = false;	# set to true if you want to see output
+	CONST N = 250;  # size of the matrices
+	TYPE RowType = ARRAY [integer] OF integer;
+	TYPE matrix = ARRAY[integer] OF RowType;
+	FROM Time IMPORT SysMilli, PrintTime;
+	
+	FUNCTION DotProduct(row, col: integer; A, B: matrix): integer;
+		sum: integer;
+	BEGIN  # Compute the dot product of a row of A and a column of B.
+		sum := 0;
+		FOR i IN 1 .. N DO
+			sum +:= A[row][i] * B[i][col];
+		OD;
+		RETURN sum;
+	END;
+
+	FUNCTION ComputeRow(row: integer; A, B: matrix): RowType;
+		R: RowType[1..N];
+	BEGIN  # Compute one row of the result matrix
+		FOR col IN 1 .. N DO
+			R[col] := DotProduct(row, col, A, B);
+		OD;
+		RETURN R;
+	END;
+
+	FUNCTION InitMatrices(A, B: OUT matrix[1..N][1..N]);
+	BEGIN  # Initialize A and B
+		FOR r IN 1.. N DO
+			FOR c IN 1..N DO
+				A[r][c] := r+c;
+				B[r][c] := r-c;
+			OD;
+		OD;
+	END;
+
+	# Description of slave processes
+	PROCESS slave(lb, ub: integer; turn: SHARED IntObject);
+		Result: matrix[lb..ub];  # part of result matrix
+		A, B: matrix;
+		#dum: IntObject; v: integer;
+	BEGIN
+		# WriteLine("Slave ", MYCPU(), " hi");
+		InitMatrices(A,B); # initialize A and B
+		FOR row IN lb .. ub DO
+			# v := dum$value();
+			Result[row] := ComputeRow(row, A, B);
+		OD;
+		   # Wait until it's my turn to print results
+		# WriteLine("Slave ", MYCPU(), " waits for turn ", lb);
+		turn$AwaitValue(lb);
+		# WriteLine("Slave ", MYCPU(), " has turn ", lb, " ", ub);
+		IF WantOutput THEN
+			FOR row IN lb .. ub DO
+				Write("Row ", row);
+				FOR col IN 1 .. N DO
+					Write("	", Result[row][col]);
+				OD;
+				WriteLine();
+			OD;
+		FI;
+		turn$assign(ub+1);  # Allow next slave to print
+		# WriteLine("Slave ", MYCPU(), " finishes");
+	END;
+
+	# Description of master process
+	PROCESS OrcaMain();
+		turn: IntObject; # used to coordinate printing
+		nslaves: integer; # number of slaves
+		lb, ub: integer;
+		start, stop: integer;
+	BEGIN
+		start := SysMilli();
+		nslaves := NCPUS(); # determine number of processors
+		turn$assign(1); # initialize turn
+		lb := 1;
+		FOR i IN 0 .. nslaves-1 DO
+			ub := lb + (N-lb+1) / (nslaves-i) - 1;
+			FORK slave(lb, ub, turn)  ON (nslaves-i-1);
+			lb := ub+1;
+		OD;
+		# WriteLine("Master waits for turn");
+		turn$AwaitValue(N+1);
+		stop := SysMilli();
+		PrintTime("MatrixMult", stop-start);
+		Finish();
+	END;
+END;

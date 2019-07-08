@@ -1,0 +1,15 @@
+# ========================================================================
+# == File:      WordList.spf   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Specification of a list of words			==
+# ========================================================================
+
+MODULE SPECIFICATION Wordlist;
+
+FROM Types IMPORT word_t;
+FROM StringObject IMPORT compare_string;
+
+OBJECT wordlist_t  	= NEW GenSimList(word_t, compare_string);
+
+END;

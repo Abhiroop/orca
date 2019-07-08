@@ -1,0 +1,24 @@
+MODULE SPECIFICATION Mandelbrot;
+#
+# Program:	Mandelbrot
+# File:		Mandelbrot.spf
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	some constants for the mandelbrot program.
+#
+#
+
+IMPORT JobQueue;
+IMPORT Request;
+
+# color info
+CONST N_COLORS = 256;		# number of colors	
+CONST N_RESERVED = 32;		# number of colors we do not touch
+CONST MANDEL_COLORS = (N_COLORS-N_RESERVED);
+CONST MANDEL_INFINITY = 4.0;	# sqr of distance needed to be in set
+
+FUNCTION DrawCallback(draw_queue: SHARED JobQueue);
+
+FUNCTION RequestCallback(request: SHARED Request; zoom, x, y, w, h: IN integer);
+PROCESS OrcaMain();
+
+END;

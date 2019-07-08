@@ -1,0 +1,106 @@
+MODULE IMPLEMENTATION main;
+
+    FROM Time IMPORT GetTime;
+    FROM Finish IMPORT Finish;
+    IMPORT IntObject;
+    
+    OBJECT nfib_scheduler = NEW scheduler( integer, integer);
+
+    CONST Root = 30;
+    CONST Threshold = Root-3;	# -1 works fine
+    
+    FUNCTION value( sched : SHARED nfib_scheduler; t : nfib_scheduler.task) : integer;
+    
+    FUNCTION nfib( n : integer) : integer;
+    BEGIN
+    	IF ( n < 2) THEN
+    		RETURN 1;
+    	ELSE
+    		RETURN nfib(n-1) + nfib(n-2) + 1;
+    	FI;
+    END;
+    
+    
+    FUNCTION pfib( sched : SHARED nfib_scheduler; n : integer) : integer;
+	t1, t2 : nfib_scheduler.task;
+    BEGIN
+    	IF ( n < Threshold) THEN
+    		RETURN nfib( n);
+    	ELSE
+    		t1 := sched$create(n-1);
+    		t2 := sched$create(n-2);
+    		RETURN value(sched,t1) + value(sched,t2) + 1;
+    	FI;
+    END;
+    
+    # can't do it in the scheduler; limited use of GUARDs!
+    FUNCTION value( sched : SHARED nfib_scheduler; t : nfib_scheduler.task) : integer;
+	v : integer;
+    BEGIN
+	IF sched$tryvalue(MYCPU(),t,v) THEN
+		RETURN v;
+	ELSE
+		RETURN sched$waitvalue(MYCPU(),t);
+	FI;
+    END;
+    
+
+    PROCESS worker( id : integer; sched : SHARED nfib_scheduler; barrier : SHARED IntObject);
+	w : nfib_scheduler.work;
+	v : integer;
+    BEGIN
+	WriteLine( MYCPU(), ": worker ", id,  " started");
+	WHILE sched$get( w) DO
+		WriteLine( MYCPU(), ", worker ", id, ": pfib ", w.e);
+		v := pfib(sched, w.e);
+		WriteLine( MYCPU(), ", worker ", id, ": pfib ", w.e, " = ", v);
+    		sched$result(w.t, v);
+	OD;
+	Write( "pipo ");
+	WriteLine( "worker ", id, " terminated");
+	barrier$dec(id);
+    END;
+    
+    
+    # background process that controls creation of new threads
+    PROCESS driver( sched : SHARED nfib_scheduler; barrier : SHARED IntObject);
+	cpu : integer;
+	id : integer;
+    BEGIN
+	#WriteLine( MYCPU(), ": driver started");
+	id := 0;
+    	WHILE sched$idle( cpu) DO
+		id +:= 1;
+		WriteLine( "proc ", id, " on ", cpu);
+		barrier$inc();
+    		FORK worker( id, sched, barrier) ON cpu;
+    	OD;
+	barrier$AwaitValue(1);
+	WriteLine( "driver terminated");
+	barrier$dec(0);
+    END;
+    
+    
+    PROCESS OrcaMain();
+    	sched : nfib_scheduler;
+    	start, stop : integer;
+    	root : nfib_scheduler.task;
+	sol : integer;
+	barrier : IntObject;
+    BEGIN
+	sched$init();
+	barrier$assign(1);
+    	FORK driver( sched, barrier);
+    	start := GetTime();
+    	root := sched$create( Root);
+	sol := value(sched,root);
+    	stop := GetTime();
+	WriteLine( "barrier = ", barrier$value());
+	sched$exit();
+	barrier$AwaitValue(0);
+    	WriteLine( "nfib(", Root,") = ", sol);
+    	WriteLine( "time = ", stop - start);
+	Finish();
+    END;
+
+END;

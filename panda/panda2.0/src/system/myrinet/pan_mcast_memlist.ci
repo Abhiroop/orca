@@ -1,0 +1,93 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+
+#ifndef __PAN_MCAST_MEMLIST_CI__
+#define __PAN_MCAST_MEMLIST_CI__
+
+
+/* A package for lists of mcast group members.
+ * Implemented as array of int
+ * Used by the purge watchdog daemon to maintain its member admin:
+ *  - which is the next-to-be-acknowledged seqno of this member.
+ */
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include <limits.h>
+
+#include "pan_sys_msg.h"
+
+#include "pan_system.h"
+
+#include "pan_mcast_memlist.h"
+
+
+#ifndef STATIC_CI
+#  define STATIC_CI static
+#endif
+
+
+
+
+STATIC_CI int
+pan_mcast_mem_lst_n_behind(int *seen_seqno, int min_sq)
+{
+    int          i;
+    int          n;
+
+    n = 0;
+    for (i = 0; i < pan_nr_platforms(); i++) {
+	if (seen_seqno[i] < min_sq) {
+	    ++n;
+	}
+    }
+
+    return n;
+}
+
+
+STATIC_CI int
+pan_mcast_mem_lst_min_seen(int *seen_seqno)
+{
+    int i;
+    int min;
+
+    min = seen_seqno[0];
+    for (i = 1; i < pan_nr_platforms(); i++) {
+	if (seen_seqno[i] < min) {
+	    min = seen_seqno[i];
+	}
+    }
+
+    return min;
+}
+
+
+STATIC_CI int *
+pan_mcast_mem_lst_create(void)
+{
+    int          i;
+    int *seen_seqno;
+
+    seen_seqno = pan_malloc(pan_nr_platforms() * sizeof(int));
+    for (i = 0; i < pan_nr_platforms(); i++) {
+	seen_seqno[i] = -1;
+    }
+
+    return seen_seqno;
+}
+
+
+STATIC_CI void
+pan_mcast_mem_lst_clear(int *seen_seqno)
+{
+    pan_free(seen_seqno);
+}
+
+
+#endif

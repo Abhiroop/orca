@@ -1,0 +1,222 @@
+MODULE IMPLEMENTATION genfunct;
+
+FROM BoolVector IMPORT BoolVector, BoolMatrix;
+FROM CromoVector IMPORT individual, Node, population, DynPopulation;
+FROM GenTypes IMPORT configuration;
+FROM matrixfunct IMPORT evaluation;
+FROM randfunct IMPORT randilohi, randft;
+FROM output_solution IMPORT write_solution;
+IMPORT Random;
+
+CONST FITMAX = 100;
+CONST FITDEC = 20;
+CONST FITMIN = 10;
+
+#
+# includes functions related to genetic operations
+#
+
+#
+# generates a mask of true and false
+#
+FUNCTION bitmask (nb_nodes: integer; r: Random): BoolVector;
+	mask: BoolVector[0..nb_nodes-1];
+BEGIN
+	FOR i IN 0..nb_nodes-1 DO
+		mask[i] := randft(0.5, r);
+	OD;
+	RETURN mask;
+END;
+
+#
+# a chromosome must have equal numbers of true and false values
+# 
+FUNCTION equalize_01(cromo: SHARED BoolVector; nb_nodes: integer;
+			r: Random);
+	j, dif: integer;
+BEGIN
+	dif := 0;
+	FOR i IN 0..nb_nodes-1 DO
+		IF cromo[i] THEN dif +:= 1; ELSE dif -:= 1;
+		FI;
+	OD;
+	IF (dif = 0) OR (dif = 1) OR (dif = -1) THEN
+		RETURN;
+	FI;
+	IF dif<0 THEN
+		WHILE dif<0 DO
+			j := randilohi(0, nb_nodes-1, r);
+			IF NOT cromo[j] THEN
+				cromo[j] := true;
+				dif +:= 2;
+			FI;
+		OD;
+	ELSE
+		WHILE dif>0 DO
+			j := randilohi(0, nb_nodes-1, r);
+			IF cromo[j] THEN
+				cromo[j] := false;
+				dif -:= 2;
+			FI;
+		OD;
+	FI;
+END;
+
+
+FUNCTION print_generation(Pop: population; config: configuration; nb_nodes: integer);
+BEGIN
+	FOR i IN 0..2*config.nb_individuals-1 DO
+		WriteLine("Individual no.= ", i);
+		write_solution(nb_nodes, Pop[Pop.p[i]].ind);
+	OD;
+END; 
+
+#
+# computes the fit sums for a generation
+#
+FUNCTION calc_fsum(Pop: population; config: configuration): integer;
+	fit_sum: integer;
+BEGIN
+	fit_sum := 0;
+	FOR i IN 0..config.nb_individuals-1 DO
+		fit_sum +:= Pop[Pop.p[i]].ind.fitness;
+	OD;
+	RETURN fit_sum;
+END;
+
+#
+# selects an individual 
+# uses a roulette whill algorithm
+#
+FUNCTION select(Pop: population; config: configuration;
+		fit_sum: integer; r: Random): integer;
+	psum, lim: integer;
+BEGIN
+	psum := 0;
+	lim := randilohi(0, fit_sum, r);
+	FOR i IN 0..config.nb_individuals-1 DO
+		IF Pop[Pop.p[i]].ind.fitness + psum >= lim THEN
+			RETURN i;		#successful choice
+		FI;
+		psum +:= Pop[Pop.p[i]].ind.fitness;
+	OD;
+	RETURN -10;				#error!
+END;
+
+#
+# crossover produces two sons s1 and s2 starting from two parents p1 and p2
+# parents are located in the first half of the population array
+# sons are located in the second half of the population array
+# 
+FUNCTION crossover(config: configuration; nb_nodes: integer; 
+		p1, p2, s1, s2: SHARED BoolVector; r: Random);
+	mask: BoolVector[0..nb_nodes-1];
+BEGIN
+	IF r$val01() < config.cross_probab THEN
+		mask := bitmask (nb_nodes, r);
+
+# WriteLine("!!!!! ", p1, " ", p2, " ", s1, " ", s2);
+
+		FOR i IN 0..nb_nodes-1 DO
+		  s1[i] := NOT mask[i] AND p1[i] OR mask[i] AND p2[i];
+		  s2[i] := NOT mask[i] AND p2[i] OR mask[i] AND p1[i];
+		OD;
+	ELSE
+		s1 := p1;
+		s2 := p2;
+	FI;
+END;
+
+#
+# modifies a chromosome in an interval randomly selected
+#
+FUNCTION mutation(cromo: SHARED BoolVector; config: configuration; 
+		nb_nodes: integer; r: Random);
+	j, lo, hi: integer;
+BEGIN
+	lo := randilohi(0, nb_nodes-1, r);
+	hi := randilohi(0, nb_nodes-1, r);
+	IF hi<lo THEN
+		j := hi; hi := lo; lo := j; 
+	FI;
+	FOR i IN lo..hi DO
+		IF r$val01() < config.mutation_probab THEN
+			cromo[i] := NOT cromo[i];
+		FI;
+	OD;
+END;
+
+
+#
+# computes the values of fitness fields for a population
+# starting with FITMAX for the first individual and decreasing the fit
+# value by FITDEC for each subsequent individual with a smaller eval value
+# 
+FUNCTION fitness (Pop: SHARED population; config: configuration);
+	fit, val: integer;
+BEGIN
+	fit := FITMAX;
+	val := Pop[Pop.p[0]].ind.eval;
+	FOR i IN 0..config.nb_individuals-1 DO
+		IF val /= Pop[Pop.p[i]].ind.eval THEN
+			val := Pop[Pop.p[i]].ind.eval;
+			fit -:= FITDEC;
+		FI;
+		IF fit< FITMIN THEN fit := FITMIN; FI;
+		Pop[Pop.p[i]].ind.fitness := fit;
+	OD;
+END;
+
+
+#
+# quicksort functions
+#
+
+FUNCTION swap (Pop: SHARED population; i,j: integer);
+	tmpind: Node;
+BEGIN
+	tmpind := Pop.p[i];
+	Pop.p[i] := Pop.p[j];
+	Pop.p[j] := tmpind;
+END;
+
+FUNCTION find_pivot (Pop: SHARED population; l, r: integer): integer;
+	first: integer;
+BEGIN
+	first := Pop[Pop.p[l]].ind.eval;
+	FOR k IN l+1..r DO
+		IF Pop[Pop.p[k]].ind.eval>first THEN
+			RETURN k;
+		ELSIF Pop[Pop.p[k]].ind.eval<first THEN
+			RETURN l;
+		FI;
+	OD;
+	RETURN -1;	# all elements are equal
+END;
+
+FUNCTION partition (Pop: SHARED population; l, r, pivot: integer): integer;
+BEGIN
+	REPEAT
+		swap(Pop, l, r);
+		WHILE Pop[Pop.p[l]].ind.eval < pivot DO l +:= 1; OD;
+		WHILE Pop[Pop.p[r]].ind.eval >= pivot DO r -:= 1; OD;
+	UNTIL l >= r;
+	RETURN l;
+END; 
+
+FUNCTION quicksort(Pop: SHARED population; l_lim, r_lim: integer);
+	vpivot, ipivot, k: integer;
+BEGIN
+	ipivot := find_pivot(Pop, l_lim, r_lim);
+	IF ipivot>=0 THEN
+		vpivot := Pop[Pop.p[ipivot]].ind.eval;
+		k := partition(Pop, l_lim, r_lim, vpivot);
+		quicksort(Pop, l_lim, k-1);
+		quicksort(Pop, k, r_lim);
+	FI;
+END;
+
+END;
+
+
+

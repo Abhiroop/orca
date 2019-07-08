@@ -1,0 +1,15 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: Random.spf,v 1.1 1996/04/13 08:07:44 tim Exp $
+
+OBJECT SPECIFICATION Random;
+
+OPERATION val() : integer;		# random int in the range 0 2^31 - 1.
+
+OPERATION val01() : real;		# random float in the range 0 .. 1
+
+OPERATION init(seed : integer);		# seed may not be negative
+
+END;

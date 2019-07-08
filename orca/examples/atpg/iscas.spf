@@ -1,0 +1,77 @@
+MODULE SPECIFICATION iscas;
+
+     FROM AtpgTypes IMPORT FaultSet,GateType;
+
+     # Circuit-size dependent constants, all these are often specified in
+     # the iscas circuit description file.
+     # Constants used to describe the maximum number of gates in the circuit
+     CONST MAX_NO_OF_GATES   = 900;
+     CONST MAX_NO_OF_INPUTS  = 300;
+     CONST MAX_NO_OF_OUTPUTS = 40;
+     CONST MAX_NO_OF_FAULTS  = 950;
+
+     # Constants that describe the maximum fanin/fanout of a gate
+     CONST MAX_FANIN = 12;	# Currently MAX_FANOUT must equal MAX_FANIN !!
+     CONST MAX_FANOUT = 12;	# because of the type Int_Array.
+
+     TYPE Int_Array = ARRAY[integer 1..MAX_FANOUT] OF integer;
+
+     TYPE Return_Value = (OK, E_OPEN, E_SYNTAX, END_OF_FILE);
+
+     FUNCTION Read_Nodeline(number:OUT integer;
+			    name:OUT string;type:OUT GateType;
+			    fanout:OUT integer;
+                            fanin:OUT integer;
+                            faults:OUT FaultSet):Return_Value;
+
+     # Read a nodeline out of the file indicated by the
+     # filedescriptor. Return the contents.
+
+
+     FUNCTION Read_Faninline(fanin:integer;
+                             faninnrs:OUT Int_Array):Return_Value;
+
+     # Read the fanin-numbers from the current input-line.
+
+     FUNCTION Read_Fanoutline(number:OUT integer;
+                              name:OUT string;
+                              fromname:OUT string;
+			      faults:OUT FaultSet):Return_Value;
+
+     # Read in a fanout line and return its contents in the
+     # OUT-parameters.
+
+     FUNCTION Write_Nodeline(address:integer;
+                            name:string;type:GateType;
+                            fanout:integer;
+                            fanin:integer;
+                            faults:FaultSet);
+
+     # Write a nodeline.
+
+     FUNCTION Write_Faninline(fanin:integer;
+				faninnrs:Int_Array);
+
+     # Write the fanin-numbers.
+
+     FUNCTION Write_Fanoutline(address:integer;
+				name:string;fromname:string;
+				faults:FaultSet);
+     # Write one fanout line.
+
+     FUNCTION Write_EOF();
+     # Write the EOF-character.
+
+     FUNCTION Iopen(fname:string;mode: integer):boolean;
+     # Open the named ISCAS-circuit-description file.
+
+     FUNCTION Iclose(mode:integer);
+     # Close the named ISCAS-circuit-description.
+
+# DEBUG
+     FUNCTION Type_To_String(type:GateType;stype:OUT string):boolean;
+     # This function maps the gatetype onto the corresponding string.
+     # If false is returned the gatetype didn't correspond with the
+     # known gatetypes. If a mapping could be made true is returned.
+
+END; # MODULE SPECIFICATION ISCAS

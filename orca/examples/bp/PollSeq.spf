@@ -1,0 +1,9 @@
+OBJECT SPECIFICATION PollSeq;
+         # Gallup poll consisting of a sequence of simple polls
+         # If all voters say yes, the result of a simple poll is yes.
+         # if anyone votes no, the result of the simple poll is `no'
+
+        OPERATION init(n: integer);
+        OPERATION vote(iter: integer; YesOrNo: boolean);
+        OPERATION AwaitDecision(iter: integer): boolean;
+END;

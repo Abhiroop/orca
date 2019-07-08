@@ -1,0 +1,42 @@
+OBJECT IMPLEMENTATION IntList;
+
+	TYPE ItemName = NODENAME OF list;
+	TYPE list =
+	  GRAPH
+		first, last: ItemName;
+	  NODES
+		data: integer;
+		next: ItemName;
+	  END;
+	
+	L: list;
+
+	OPERATION AppendItem(item: integer);  # append an item at end of list
+		p: ItemName;
+	BEGIN
+		p := ADDNODE(L);
+		L[p].data := item;
+		L[p].next := NIL;
+		IF L.first = NIL THEN
+			L.first := p;
+		ELSE
+			L[L.last].next := p;
+		FI;
+		L.last := p;
+	END;
+		
+	OPERATION GetHead(): integer; 
+		p: ItemName;
+	BEGIN
+		ASSERT(L.first /= NIL);
+		p := L.first;
+		L.first := L[p].next;
+		IF L.first = NIL THEN L.last := NIL; FI;
+		RETURN L[p].data;
+	END;
+
+	OPERATION IsEmpty(): boolean;  # list empty ?
+	BEGIN
+	RETURN L.first = NIL;
+	END;
+END;

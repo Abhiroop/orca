@@ -1,0 +1,66 @@
+# ConnectFour
+# Opgave parallel programmeren
+# Authors : Fabian Breg    & Rob Buis
+#           fbreg@cs.vu.nl   rwlbuis@cs.vu.nl
+# File    : gameboard.spf
+
+MODULE SPECIFICATION gameboard;
+
+    FROM misc IMPORT NrOfPlayers, Columns, Rows, OrderType;
+
+    CONST NrOfPossibleWins = 69;
+
+    TYPE PosSet  = ARRAY[integer 1..NrOfPossibleWins] OF boolean;
+    TYPE MapType = ARRAY[integer 1..Columns, integer 1..Rows] OF PosSet;
+
+    TYPE BoardType =
+        RECORD
+            Board         : ARRAY[integer 1..Columns, integer 1..Rows] OF integer;
+	    Skill         : integer;
+            CurrentPlayer : integer;
+            LastMove      : RECORD
+                                Column : integer;
+                                Row    : integer;
+                            END;
+	    Stats         : ARRAY[integer 1..2, integer 1..NrOfPossibleWins] OF integer;
+	    Score         : ARRAY[integer 1..NrOfPlayers] OF integer;
+        END;
+ 
+
+    FUNCTION SetSkill(GameBoard : SHARED BoardType; Skill : integer);
+    # Set skillevel for alpha-beta-search.
+
+    FUNCTION InitBoard(GameBoard : OUT BoardType; Map : OUT MapType);
+    # Empty Board and set maximum alpha-beta depth.
+
+    FUNCTION GetPlayer(GameBoard : BoardType; Column : integer; 
+                       Row : integer) : integer;
+    # Get info on current player at the given location.
+
+    FUNCTION DoSet(GameBoard : SHARED BoardType; Column : integer; Player : integer ; Map : MapType);
+    # Put a fiche in column.
+
+    FUNCTION UnSet(GameBoard : SHARED BoardType);
+    # Undo.
+
+    FUNCTION AlphaBeta(GameBoard : BoardType; Level : integer ;Alpha, Beta : integer; 
+		       Player : integer; Move : OUT integer; NodeType : integer;
+		       ParLevel : integer ; Map : MapType; Order : OrderType)
+		       : integer;
+    # Alpha-Beta search. Returns result.
+
+    FUNCTION Won(GameBoard : BoardType): boolean;
+    # If current player has won return true, else freturn false.
+
+    FUNCTION FullBoard(GameBoard : BoardType): boolean;
+    # Returns true if board is full, false otherwise.
+
+    FUNCTION GetCols(): integer;
+    # Get Board Dimensions
+
+    FUNCTION GetRows(): integer;
+    # Get Board Dimensions
+
+    FUNCTION ColumnFull(GameBoard : BoardType; Column : integer) : boolean;
+    # Is Column already full ?
+END;

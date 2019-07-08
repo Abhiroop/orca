@@ -1,0 +1,493 @@
+#-----------------------------------------------#
+# Author : H. Staalman				#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION BackwardRA;
+
+# FROM Time IMPORT SysMicro;	# not on unix
+FROM Time IMPORT GetTime, SysMilli;
+IMPORT IntObject;
+IMPORT stat;
+
+# FROM tracetypes IMPORT pollevent, pollend;
+
+
+FROM	AwariTypes		IMPORT	Configuration, ConfigUnit, GoedelNr, GtvKnown, 
+					ElementUnit, GTV,
+					GtvDetermined, Stones, PitNr, Side, PitsPerBoard, 
+					PitsPerSide, AllPits;
+FROM	BoardOperations 	IMPORT	Mirror_Configuration, Count_Nr_Stones_On_Board, 
+					Move_Stone, Is_Legal_Predecessor, At_Side, Is_Hit, 
+					Is_Empty, Map2PitNr;
+FROM	Debug			IMPORT	Print_ConfigUnit, Print_Board;
+FROM	DataBaseTypes		IMPORT	DataBaseObject, AdresTable;
+FROM	DataBaseModule		IMPORT	Get_DBPartObject_LB, Get_DBPartObject_UB;
+		IMPORT	DBMetaDataObject;
+		IMPORT	ConverterObject;
+		IMPORT  buffer;
+		IMPORT  barrier;
+		IMPORT  terminate;
+FROM buffer IMPORT buffers;
+FROM barrier IMPORT join, vote;
+
+FROM unmove IMPORT PositionType, ParentType, NextParent, Swap;
+
+#MODULE pollmod = NEW trace_gen(pollevent, "poll", "%d", 6000);
+#MODULE pollendmod = NEW trace_gen(pollend, "poll end", "%d", 6000);
+
+# Forward declaration (needed because of recursive call
+
+
+FUNCTION PrintConfig(c: Configuration);
+BEGIN
+	FOR i IN 1 .. PitsPerBoard DO
+		Write(c[i].contents, " ");
+	OD;
+	WriteLine();
+END;
+
+FUNCTION TellParents(database: SHARED DataBaseObject;
+		 converter: IN ConverterObject;
+		 cpu_table: IN AdresTable;
+		 mycpu: IN integer;
+		 nworkers: integer;
+		 mybuf:  SHARED buffer;
+		 current_db_size: Stones;
+		 unattainable: integer;
+		 configuration: Configuration;
+		 newvalue: GTV;
+		 currentGodelCode: GoedelNr;
+		 go: SHARED IntObject);
+
+FUNCTION handle_msg(database: SHARED DataBaseObject;
+	cpu_table: IN AdresTable;
+	mycpu: integer;
+	nworkers: integer;	# Add RFHH
+	mybuf: SHARED buffer;
+	converter: IN ConverterObject;
+	current_db_size: Stones;
+	unattainable: integer;
+	g: integer;
+	newvalue: GTV;
+	optimal: boolean;
+	currentGodelCode: GoedelNr;
+	go: SHARED IntObject);
+
+	configuration: Configuration;
+
+	configunit: ConfigUnit;
+	best_value: GTV;
+	index: integer;
+BEGIN
+	# ASSERT(g % nworkers = MYCPU());
+	ASSERT(mycpu = MYCPU());
+	index := g / nworkers;
+        IF database[MYCPU()]$Update_DBPart_Element_Value(index,
+					newvalue, optimal, best_value) THEN
+		# g has been assigned GtvKnown now, inform its parents
+
+	     IF (currentGodelCode = -1) OR	# Victor's trick to avoid
+		(g <= currentGodelCode) THEN	# very deep recursion
+	        database[mycpu]$Get_DBPart_Element(index, configunit);
+	        ASSERT(configunit.nr_succ = GtvKnown);
+
+		stat.IncGoedelcnt(MYCPU());
+		converter$Goedel2Config(g, configuration);
+		database[mycpu]$Set_DBPart_Element_Determined(index);
+	        # WriteLine("recursie , g = ", g);
+		TellParents(database, converter, cpu_table, mycpu,
+				nworkers,
+				mybuf,
+		  		current_db_size, unattainable,
+				configuration, best_value, currentGodelCode, go);
+	     FI;
+	FI;
+END;
+
+FUNCTION CpuOf(cpu_table: AdresTable; g: GoedelNr; nworkers: integer): integer;
+BEGIN
+	RETURN g % nworkers;
+END;
+
+
+FUNCTION TellParents(database: SHARED DataBaseObject;
+		 converter: IN ConverterObject;
+		 cpu_table: IN AdresTable;
+		 mycpu: IN integer;
+		 nworkers: integer;	# Add RFHH
+		 mybuf:  SHARED buffer;
+		 current_db_size: Stones;
+		 unattainable: integer;
+		 configuration: Configuration;
+		 newvalue: GTV;
+		 currentGodelCode: GoedelNr;
+		 go: SHARED IntObject);
+
+  # !!
+  parent: ParentType;
+  startConfig, parentConfig: PositionType;
+  i: integer;
+  predgtv: GTV;
+
+
+  predecessor_goedel_nr: GoedelNr;
+
+  optimal: boolean;
+  captured: integer;
+
+  cpu: integer;
+BEGIN
+	startConfig.configuration := configuration;
+	startConfig.godelCode := -1;	# !! not used??
+
+	i := 1;
+	WHILE i <= PitsPerSide DO
+		IF startConfig.configuration[i].contents /= 0 THEN
+			EXIT;
+		FI;
+		i +:= 1;
+	OD;
+	ASSERT(i /= PitsPerSide+1);
+
+	parent.startPit := 1;
+	WHILE (parent.startPit <= PitsPerSide) AND
+	      (startConfig.configuration[Swap(parent.startPit)].contents /= 0) DO
+		parent.startPit +:= 1;
+	OD;
+
+	IF parent.startPit <= PitsPerSide THEN
+		parent.endPit := parent.startPit;
+		parent.nstones := 0;
+		FOR j IN 1 .. PitsPerSide DO
+			parent.captured[j] := -1;
+		OD;
+		Mirror_Configuration(startConfig.configuration,
+					parentConfig.configuration);
+	FI;
+
+	#PrintConfig(startConfig.configuration);
+	#WriteLine();
+	#PrintConfig(parentConfig.configuration);
+	WHILE NextParent(parent, startConfig.configuration,
+			 parentConfig.configuration) DO
+		#PrintConfig(parentConfig.configuration);
+		#WriteLine();
+		converter$Config2Goedel(parentConfig.configuration,
+					predecessor_goedel_nr);
+		parentConfig.godelCode := predecessor_goedel_nr;
+		# parentConfig.contents := -1 ; # !! not used?
+
+		captured := startConfig.configuration[AllPits].contents -
+			    parentConfig.configuration[AllPits].contents;
+		predgtv := -newvalue+captured;
+		optimal :=  - newvalue +
+			    startConfig.configuration[AllPits].contents +
+			    unattainable = current_db_size;
+		cpu := CpuOf(cpu_table, predecessor_goedel_nr, nworkers);
+		IF cpu = mycpu THEN
+			handle_msg(database, cpu_table, mycpu,
+				 nworkers,
+				 mybuf,
+				 converter,
+				 current_db_size,
+				 unattainable,
+				 predecessor_goedel_nr,
+				 predgtv,
+				 optimal,
+				 currentGodelCode,
+				 go);
+		ELSE
+			# Put msg in output buffer
+			IF mybuf$OutPut(predecessor_goedel_nr, predgtv,
+				optimal, cpu) THEN
+				#WriteLine("CPU ", MYCPU(), " signals");
+				go$assign(1);
+			FI;
+		FI;
+	OD;
+END;
+
+
+
+FUNCTION HandleTermination(
+		waitingtime:  SHARED integer;
+		WaitForInput:  SHARED integer;
+		database: SHARED DataBaseObject;
+		cpu_table: IN AdresTable;
+		mycpu: integer;
+		nworkers: integer;
+		mybuf:	  SHARED buffer;
+		converter: IN ConverterObject;
+		current_db_size: Stones;
+		unattainable: integer;
+		term:	  SHARED terminate;
+		bar:	  SHARED barrier;
+		go:	  SHARED IntObject);
+  g: GoedelNr;
+  value: GTV;
+  quit: boolean;
+  start, stop: integer;
+  # wasted: integer
+  waiting, WaitInput: integer;
+  # pollrec: pollevent;
+  # pollendrec: pollend;
+
+  tim: integer;
+  do_go: boolean;
+  optimal: boolean;
+
+BEGIN
+    # pollrec.dummy := 0;
+    # wasted := 0;
+    waiting := 0;
+    WaitInput := 0;
+    REPEAT
+	REPEAT
+		# first process everything in the input queue
+		WHILE mybuf$InTryGet(g, value, optimal, do_go) DO
+			handle_msg(database, cpu_table, mycpu,
+			   nworkers,
+			   mybuf,
+			   converter, current_db_size, unattainable,
+			   g, value, optimal, -1, go);
+			# IF do_go THEN go$assign(1); FI;
+		OD;
+		# IF do_go THEN go$assign(1); FI;
+		go$assign(1);
+		# start := SysMicro();
+		mybuf$AwaitInNonemptyOrOutEmpty();
+		# stop := SysMicro();
+		# waiting +:= (stop - start);
+	UNTIL mybuf$InputIsEmpty();
+
+	# Now the output queue is definitely empty (since this process is the
+	# only one that can put something in the output queue).
+	# The input queue probably is empty, but other processes may have
+	# put something in it since the last test.
+
+
+	quit := true;
+
+	# hack of the year ... first wait a couple of msecs, or until
+	# I'm the last one  ...
+
+	# start := SysMicro();	# not on unix
+	tim := SysMilli() + 100;
+	WHILE (SysMilli() < tim) AND (term$value() < nworkers - 1) DO # change RFHH
+		IF NOT mybuf$InputIsEmpty() THEN
+			quit := false;
+			EXIT;
+		FI;
+	OD;
+	# stop := SysMicro();	# not on unix
+	waiting +:= (stop - start);
+	IF NOT quit THEN WaitInput +:= (stop - start); FI;
+
+	IF quit THEN
+
+		term$GoPassive();	# I'm (probably) willing to terminate
+
+		# polling, yaghh, yaghh, yaghh ...
+		#pollmod.event(pollrec);
+		# start := SysMicro();	# not on unix
+		WHILE ((NOT term$done()) AND mybuf$InputIsEmpty() ) DO OD;
+		# stop := SysMicro();	# not on unix
+		waiting +:= (stop - start);
+		IF NOT mybuf$InputIsEmpty() THEN WaitInput +:= (stop - start);FI;
+		# pollendmod.event(pollendrec);
+
+		# If my inputbuffer is not empy, I try to do a decrement on
+		# the idle processes counter. If the decrement fails (because
+		# it already was at the maximum) or my input buffer is empty,
+		# I enter the synchronization phase.
+
+		IF mybuf$InputIsEmpty() OR NOT term$GoActive() THEN
+
+			# Synchronization phase
+			# Now everybody is probably willing to terminate,
+			# but let's make sure ...
+
+			# start := SysMicro();
+			join(bar);	# synchronize all processes
+			# someone has to reset term, just in case we can't terminate yet
+			IF MYCPU() = 0 THEN
+				term$clear();
+			FI;
+
+			# Vote: I'm willing to terminate if my input buffer
+			# is still empty
+
+			quit := vote(mybuf$InputIsEmpty(), bar);
+			# stop := SysMicro();
+			# wasted +:= (stop - start);
+			IF (NOT quit) AND (MYCPU()=0) THEN
+				WriteLine("sync failed");
+			FI;
+		ELSE
+			quit := false;	
+		FI;
+	FI;
+    UNTIL quit;
+    waitingtime +:= waiting;
+    WaitForInput +:= WaitInput;
+    # WriteLine("worked ", MYCPU(), "waits ", waiting,  " wasted ", wasted, " usecs");
+    # WriteLine("worked ", MYCPU(), "waits ", waiting,  " usecs");
+END;
+
+
+FUNCTION Backward(database: SHARED DataBaseObject;
+		 dbmetadata: SHARED DBMetaDataObject;
+		 converter: IN ConverterObject;
+		 cpu_table: IN AdresTable;
+		 bufs:	    SHARED buffers;
+		 term:	    SHARED terminate;
+		 bar:	    SHARED barrier;
+		 go:		SHARED IntObject;
+		 nworkers:      integer;
+		 totwaiting:	SHARED integer;
+		 totwaitforinput: SHARED integer);
+
+
+  DBPartObject_LB,
+  DBPartObject_UB: GoedelNr;
+
+  onBoard,
+  current_db_size,
+  unattainable: integer;
+
+  configunit: ConfigUnit;
+  configuration: Configuration;
+
+  cnt: integer;
+  mycpu, ncpus: integer;
+  elt: ElementUnit;
+  # start, stop: integer;
+  # start_own_part, finish_own_part, finish: integer;
+  waitingtime, WaitForInput: integer;
+
+  g, goedel_number: GoedelNr;
+  value: GTV;
+  do_go: boolean;
+  optimal: boolean;
+
+
+BEGIN
+  Get_DBPartObject_LB(cpu_table, DBPartObject_LB);
+  Get_DBPartObject_UB(cpu_table, DBPartObject_UB);
+  dbmetadata$Get_DB_Size(current_db_size);
+  unattainable := dbmetadata$Get_Unattainable();
+
+  waitingtime := 0;
+  WaitForInput := 0;
+
+  bufs[MYCPU()]$SetPhase(1);	# in local traversal
+
+  cnt := 0;
+  mycpu := MYCPU();
+  ncpus := nworkers;
+
+  # make a pass through the whole database[part]
+  # start := GetTime();
+  # start_own_part := GetTime();
+
+  goedel_number := mycpu;	# 1st goedel number
+  FOR goedel_index IN DBPartObject_LB..DBPartObject_UB
+  DO
+
+    # First process whatever is in the input queue
+
+    WHILE bufs[MYCPU()]$InTryGet(g, value, optimal, do_go) DO
+	handle_msg(database, cpu_table, mycpu,
+		   nworkers,
+		   bufs[MYCPU()],
+		   converter, current_db_size, unattainable,
+		   g, value, optimal, -1, go);
+	# IF do_go THEN go$assign(1); FI;
+    OD;
+
+    database[mycpu]$Get_DBPart_Element(goedel_index, configunit);
+
+    IF (configunit.nr_succ = GtvKnown)
+       THEN
+	 ################################################################
+	 # The configuration is known: all the successor configurations #
+	 # are known, so the current gtv is the best gtv for this config#
+	 ################################################################
+	 stat.IncGoedelcnt(MYCPU());
+	 converter$Goedel2Config(goedel_number, configuration);
+	 cnt := cnt + 1;
+
+	 database[mycpu]$Set_DBPart_Element_Determined(goedel_index);
+
+         # WriteLine("doorgeven, g = ", goedel_index);
+	 TellParents(database, converter, cpu_table, mycpu,
+		      nworkers,
+		      bufs[MYCPU()],
+		      current_db_size, unattainable, configuration,
+		      configunit.gtv, goedel_number, go);
+
+    ELSIF configunit.nr_succ /= GtvDetermined THEN 
+	      stat.IncGoedelcnt(MYCPU());
+	      converter$Goedel2Config(goedel_number, configuration);
+	      onBoard := current_db_size - configuration[AllPits].contents;
+#	      ASSERT(current_db_size - Count_Nr_Stones_On_Board(configuration) = 
+#			configuration[AllPits].contents);	# !!
+	      IF configunit.gtv + unattainable = onBoard THEN
+		      configunit.nr_succ := GtvKnown;
+		      elt.goedel_nr := goedel_index;
+		      elt.gtv := configunit.gtv;
+		      elt.nr_succ := GtvDetermined;
+		      database[mycpu]$Set_DBPart_Element(elt);
+
+		      #WriteLine("max haalbaar, g = ", goedel_index);
+		      TellParents(database, converter, cpu_table, mycpu,
+				  nworkers,
+				  bufs[MYCPU()],
+				  current_db_size, unattainable, configuration,
+				  configunit.gtv, goedel_number, go);
+	      ELSIF unattainable = onBoard THEN
+		      configunit.nr_succ := GtvKnown;
+		      configunit.gtv := 0;
+		      elt.goedel_nr := goedel_index;
+		      elt.gtv := 0;
+		      elt.nr_succ := GtvDetermined;
+		      database[mycpu]$Set_DBPart_Element(elt);
+
+		      #WriteLine("cycle , g = ", goedel_index);
+		      TellParents(database, converter, cpu_table, mycpu,
+				  nworkers,
+				  bufs[MYCPU()],
+				  current_db_size, unattainable, configuration,
+				  configunit.gtv, goedel_number, go);
+	      FI;
+    FI;
+    goedel_number +:= ncpus;	# !!
+  OD;
+
+  # finish_own_part := GetTime();
+  # Now comes the hard part: distributed termination detection !
+  # WriteLine("HandleTerm ", MYCPU());
+  bufs[MYCPU()]$SetPhase(2);	# done with local traversal
+  go$assign(1);	# wake up comm. thread if it's blocked in OutTryGet
+  HandleTermination(waitingtime, WaitForInput, database, cpu_table, mycpu,
+		    nworkers,	# Add RFHH
+		    bufs[mycpu],
+		    converter, current_db_size, unattainable, term, bar, go);
+
+  totwaiting +:= waitingtime;
+  totwaitforinput +:= WaitForInput;
+  # WriteLine("Worker ", MYCPU(), ": Waiting time = ", waitingtime);
+  # finish := GetTime();
+  # WriteLine("Worker ", MYCPU(),
+# 	    " : time own part = ",
+# 	    finish_own_part - start_own_part,
+# 	    " , finish input buffer = ", finish - finish_own_part);
+  # stop := GetTime();
+  # WriteLine("Did ", cnt,  " Godel conversions, time = ", stop-start);
+END;
+
+
+
+END; # BackwardRA

@@ -1,0 +1,121 @@
+################################################################################
+######  BoxListModule.imp                                                 ######
+###                                                                          ###
+
+MODULE IMPLEMENTATION BoxListModule;
+
+#-------------------------------------------------------------------------------
+# Imports:
+#-------------------------------------------------------------------------------
+
+ FROM BoxModule IMPORT
+     Box;
+
+#-------------------------------------------------------------------------------
+# addToBoxList()
+#-------------------------------------------------------------------------------
+
+ FUNCTION addToBoxList(
+     list: SHARED BoxList;
+     box:  IN Box
+ );
+     node: BoxListNode; # Going to be added to "list" and will hold "box".
+ BEGIN
+     node := ADDNODE(list);
+     list[node].box := box;
+     list[node].next := list.head;
+     list.head := node;
+ END; # addToBoxList()
+
+#-------------------------------------------------------------------------------
+# delNextBoxFromList()
+#-------------------------------------------------------------------------------
+
+ FUNCTION delNextBoxFromList(
+     list: SHARED BoxList;
+     node: IN BoxListNode
+ );
+     helper: BoxListNode; # helping node.
+ BEGIN
+     IF NOT(list.head = NIL) THEN
+	 IF node = NIL THEN
+	     helper := list.head;
+	     list.head := list[helper].next;
+	     DELETENODE(list, helper);
+	 ELSE
+	     helper := list[node].next;
+	     list[node].next := list[helper].next;
+	     DELETENODE(list, helper);
+         FI;
+     FI;
+ END; # delNextBoxFromList()
+
+#-------------------------------------------------------------------------------
+# delFirstBoxFromList()
+#-------------------------------------------------------------------------------
+
+ FUNCTION delFirstBoxFromList(
+     list: SHARED BoxList
+ );
+     helper: BoxListNode; # helping node.
+ BEGIN
+     IF NOT(list.head = NIL) THEN
+	 helper := list.head;
+	 list.head := list[helper].next;
+	 DELETENODE(list, helper);
+     FI;
+ END; # delFirstBoxFromList()
+
+#-------------------------------------------------------------------------------
+# isEmptyBoxList()
+#-------------------------------------------------------------------------------
+
+ FUNCTION isEmptyBoxList(
+     list: IN BoxList
+ ): boolean;
+ BEGIN
+     RETURN list.head = NIL;
+ END; # isEmptyBoxList()
+
+#-------------------------------------------------------------------------------
+# length()
+#-------------------------------------------------------------------------------
+
+ FUNCTION length(
+     list: IN BoxList
+ ): integer;
+     len: integer;     # Length to be calculated.
+     p:   BoxListNode; # To walk true the list.
+ BEGIN
+     len := 0;
+     p := list.head;
+     WHILE NOT (p = NIL) DO
+	 len +:= 1;
+	 p := list[p].next;
+     OD;
+
+     RETURN len;
+ END; # length()
+
+#-------------------------------------------------------------------------------
+# swapBoxList()
+#-------------------------------------------------------------------------------
+
+ FUNCTION swapBoxList(
+     list:  SHARED BoxList;
+     nodeA: SHARED BoxListNode;
+     nodeB: SHARED BoxListNode
+ );
+     swapBox: Box; # Helps whith swapping.
+ BEGIN
+     swapBox := list[nodeA].box;
+     list[nodeA].box := list[nodeB].box;
+     list[nodeB].box := swapBox;
+ END; # swapBoxList()
+
+
+END; # BoxLisMtodule
+ 
+###                                                                          ###
+######  BoxListModule.imp                                                 ######
+################################################################################

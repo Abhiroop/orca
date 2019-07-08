@@ -1,0 +1,11 @@
+# ========================================================================
+# == File:      acp.imp		  					==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  ACP's main program specifictation 	 		==
+# ========================================================================
+MODULE SPECIFICATION acp;
+
+PROCESS OrcaMain();
+
+END;

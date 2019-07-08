@@ -1,0 +1,158 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+ 
+OBJECT SPECIFICATION VarObject;
+
+FROM Common IMPORT	OrderType, DirectionType, AtomType,
+			AtomTableType, DirAtomsArray, SmallMolDataType,
+			AllCpuDataType, TLC_Type, PCC_Type,
+			DirTableType, array_of_reals;
+
+TYPE VarType  = ARRAY [integer, OrderType] OF DirAtomsArray;
+
+
+### Initialize VarObject. The size of the first field of VarType
+### is also determined here.
+#
+OPERATION Init(NrMols : integer;
+	       RandomArray : array_of_reals;
+	       min, sum : OUT DirTableType);
+
+
+### Assign 'Value' to VarObject[Mol,Order][Dir][Atom]
+#
+OPERATION SetValue(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Atom  : AtomType;
+		   Value : longreal);
+
+
+### Retrieve VarObject[Mol,Order][Dir][Atom]
+#
+OPERATION GetValue(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Atom  : AtomType) : longreal;
+
+
+### Add 'Value' to VarObject[Mol,Order][Dir][Atom]
+#
+OPERATION IncValue(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Atom  : AtomType;
+		   Value : longreal);
+
+
+### Subtract 'Value' from VarObject[Mol,Order][Dir][Atom]
+#
+OPERATION DecValue(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Atom  : AtomType;
+		   Value : longreal);
+
+
+### Add 'Value[atom]' to VarObject[Mol,Order][Dir][atom]
+#
+OPERATION IncAtoms(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Value : AtomTableType);
+
+
+### Assign 'Value' to VarObject[Mol,Order][Dir]
+#
+OPERATION SetAtoms(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType;
+		   Value : AtomTableType);
+
+
+### Retrieve VarObject[Mol,Order][Dir]
+#
+OPERATION GetAtoms(Mol   : integer;
+		   Order : OrderType;
+		   Dir   : DirectionType) : AtomTableType;
+
+
+### Assign 'Value' to VarObject[Mol,Order]
+#
+OPERATION SetDirAtoms(Mol   : integer;
+		      Order : OrderType;
+		      Value : DirAtomsArray);
+
+
+### Retrieve VarObject[Mol,Order]
+#
+OPERATION GetDirAtoms(Mol   : integer;
+		      Order : OrderType) : DirAtomsArray;
+
+
+### Get all positions contained in 'VarObject'. 
+#
+OPERATION GetPositions(size: integer) : SmallMolDataType;
+
+OPERATION Valid( copies : integer);
+OPERATION AllHandedOut();
+
+
+
+### Add 'All[mol,dir][atom]' to VarObject[mol,Order][dir][atom]. 
+#
+OPERATION IncAll(Order : OrderType;
+		 All   : SmallMolDataType);
+
+# synchonization primitive to wait until everything has arrived
+OPERATION ReceivedAll( pieces : integer);
+
+
+#### connection to ForceEnergy.imp
+
+OPERATION CallIntraForces(Vir : OUT longreal; NrMols : integer);
+
+OPERATION CallInterForces(TmpVir : OUT longreal;
+                          AllVal : OUT AllCpuDataType;
+                          AllPos : AllCpuDataType;
+                          StartMol, NrMols, NMOL, NrParts, me : integer;
+                          BOXH, BOXL, REF1, CUT2 : longreal;
+                          Dest : OrderType);
+	
+OPERATION MultiplyForces(NrMols : integer; Dest : OrderType;
+                         FHM, FOM : longreal);
+
+ 
+OPERATION CallPotEnergy(AllPos : AllCpuDataType;
+                        LPOTA, LPOTR, LPTRF : OUT longreal;
+                        StartMol, NrMols, NMOL : integer;
+                        CUTOFF, CUT2, REF1, BOXH, BOXL  : longreal);
+
+#### connection to PredCor.imp
+
+OPERATION CallPredict(NORDER, NrMols : integer;
+                      TLC            : TLC_Type);
+
+OPERATION CallCorrectBoundary( NORDER, NrMols : integer;
+                               PCC            : PCC_Type;
+                               BOXL           : longreal;
+                               KinEnergy      : OUT longreal);
+
+
+###### Inline loops from WaterWorker.imp
+ 
+OPERATION Shift(NrMols : integer;
+                TmpMin : DirTableType);
+
+OPERATION Factor(NrMols : integer;
+                 TmpSum : DirTableType;
+                 HMAS, OMAS : longreal;
+                 TmpSu : OUT DirTableType);
+
+OPERATION Normalize(NrMols : integer;
+                    TmpSum, TmpSu : DirTableType;
+                    Xmas : AtomTableType);
+
+
+END;

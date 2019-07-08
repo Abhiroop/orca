@@ -1,0 +1,184 @@
+MODULE IMPLEMENTATION Files;
+
+FROM	Common	IMPORT	MION, NTRACK, ISEED, StringType, ConstType;
+FROM	InOut	IMPORT	OpenInputFile, CloseInput,
+			OpenOutputFile, CloseOutput,
+			WriteChar, WriteString, WriteLn, Eoln,
+			ReadChar, ReadString, ReadReal, ReadInt;
+
+
+FUNCTION ReadLine(Array : OUT StringType);
+
+	i : integer;
+BEGIN
+	i := 1;
+	IF Eoln() THEN
+	    ReadChar(Array[i]);
+	FI;
+
+	WHILE NOT Eoln() DO
+	    ReadChar(Array[i]);
+	    IF i < 80 THEN
+		i +:= 1;
+	    FI;
+	OD;
+	ReadChar(Array[i]);
+END;
+	
+
+FUNCTION PrintLine(Array : StringType);
+
+BEGIN
+	FOR i IN 1 .. 80 DO
+	    WriteChar(Array[i]);
+	    IF ORD(Array[i]) = 012B	# newline
+	    THEN EXIT
+	    FI;
+	OD;
+END;
+
+    
+FUNCTION ReadConstFile(CNST         : OUT ConstType;
+		       Argc         : integer;
+		       Argv0, Argv1 : string) : boolean;
+
+	Dummy : StringType;
+	File  : string;
+BEGIN
+	IF Argc = 1 THEN
+	    File := CONSTFILE;
+	ELSIF Argc = 2 THEN
+	    File := Argv1;
+	ELSE
+	    WriteLn();
+	    WriteLine("USAGE: ", Argv0, " <const-file>");
+	    WriteLn();
+	    RETURN false;
+	FI;
+
+	IF NOT OpenInputFile(File) THEN
+	    WriteLn();
+	    WriteLine("ERROR: input file '", File, "' not found.");
+	    WriteLn();
+	    RETURN false;
+	FI;
+
+	ReadLine(CNST.RNAME);	ReadLine(Dummy);
+	ReadString(CNST.IFIL);	ReadLine(Dummy);
+	ReadString(CNST.IOUT);	ReadLine(Dummy);
+	ReadString(CNST.IOUT2);	ReadLine(Dummy);
+	ReadInt(CNST.IDIS);	ReadLine(Dummy);
+	ReadInt(CNST.NREP);
+	ReadReal(CNST.TAUMAX);
+	ReadInt(CNST.NRPSC);	ReadLine(Dummy);
+	ReadReal(CNST.DPL);
+	ReadReal(CNST.DEL);
+	ReadReal(CNST.UPL);
+	ReadReal(CNST.UEL);
+	ReadReal(CNST.RONS);
+	ReadReal(CNST.RRION);	ReadLine(Dummy);
+	ReadReal(CNST.RPM);
+	ReadInt(CNST.K0);
+	ReadInt(CNST.KD);	ReadLine(Dummy);
+	ReadInt(CNST.RAND);	ReadLine(Dummy);
+	ReadInt(CNST.MINELTS);	ReadLine(Dummy);
+	ReadInt(CNST.OPTELTS);	ReadLine(Dummy);
+	ReadInt(CNST.EXTRA);	ReadLine(Dummy);
+	ReadInt(CNST.PERC);
+	CloseInput();
+
+	FOR i IN 1 .. 2 DO
+
+	    IF (i = 2) AND (OpenOutputFile(CNST.IOUT)) THEN FI;
+
+	    WriteLn();
+	    WriteString("Electron distribution      : ");
+
+	    IF CNST.IDIS = 0 THEN
+		WriteString("Gaussian");
+	    ELSIF CNST.IDIS = 1 THEN
+		WriteString("Exponential");
+	    FI;
+
+	    WriteLn();
+	    WriteString("Random number generator(s) : ");
+
+	    IF CNST.RAND = 0 THEN
+		WriteString("Local");
+	    ELSE
+		WriteString("Global");
+	    FI;
+
+	    WriteLn();
+	    WriteLine("Tracks from file           : ", CNST.IFIL);
+	    WriteLine("Output on files            : ", CNST.IOUT,
+					      " and ", CNST.IOUT2);
+	    WriteLine("Seed                       : ", ISEED);
+	    WriteLn();
+ 
+	    IF i = 2 THEN CloseOutput(); FI;
+	OD;
+
+	IF OpenOutputFile(CNST.IOUT2) THEN 
+	    CloseOutput();
+	FI;
+
+	RETURN true;
+END;
+
+
+FUNCTION ReadDataFile(CNST          : SHARED ConstType;
+		      MaxEltsPerCPU : OUT integer) : boolean;
+
+	MaxElts : integer;
+BEGIN
+	IF NOT OpenInputFile(CNST.IFIL) THEN
+	    WriteLine("ERROR: input file '", CNST.IFIL, "' not found.");
+	    WriteLn();
+	    RETURN false;
+	FI;
+
+	MaxElts := 0;
+
+	FOR i IN 1 .. NTRACK DO
+	    ReadInt(CNST.DAT[i].Nion0);
+
+	    IF CNST.DAT[i].Nion0 > MION THEN
+		WriteLine("ERROR: Nion0 > MION (not allowed).");
+		WriteLn();
+		RETURN false;
+	    ELSIF CNST.DAT[i].Nion0 > MaxElts THEN
+		MaxElts := CNST.DAT[i].Nion0;
+	    FI;
+
+	    FOR j IN 1 .. CNST.DAT[i].Nion0 / 2 DO 
+		ReadReal(CNST.DAT[i].Coords[j].X);
+		ReadReal(CNST.DAT[i].Coords[j].Y);
+		ReadReal(CNST.DAT[i].Coords[j].Z);
+	    OD;
+	OD;
+
+	CNST.MAX := MaxElts;
+
+	IF MaxElts < NCPUS() THEN
+	    CNST.NCPUS := MaxElts;
+	ELSE
+	    CNST.NCPUS := NCPUS();
+	FI;
+
+	MaxEltsPerCPU := MaxElts / CNST.NCPUS + 1;
+
+	IF MaxEltsPerCPU < 2 * CNST.OPTELTS THEN
+	    MaxEltsPerCPU := 2 * CNST.OPTELTS;
+	FI;
+
+	IF MaxEltsPerCPU < CNST.MINELTS THEN
+	    MaxEltsPerCPU := CNST.MINELTS;
+	FI;
+
+	CloseInput();
+	RETURN true;
+END;
+
+
+END;

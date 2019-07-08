@@ -1,0 +1,1 @@
+/usr/proj/orca/latest_greatest/bin/oc_panda -amoeba -v -O2 -CHK --O --V Mandelbrot.imp xdisplay/*.c -I/usr/openwin/include -L/usr/proj/orca/latest_greatest/lib/amoeba/sparc -lXaw -lXmu -lXext -lXt -lX11 -lSM -lICE

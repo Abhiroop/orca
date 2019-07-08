@@ -1,0 +1,34 @@
+#-----------------------------------------------#
+# Author : E.J.J. de Waal			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT SPECIFICATION ElectionObject;
+
+# The Object defines operations to register, vote and look at the results 
+# of such a vote. This is needed when all workers have to agree on a 
+# certain subject; every worker votes 'yes' or 'no', and the results 
+# can be examined.
+# If all voters say yes, the result of a simple poll is yes.
+# If anyone votes no, the result of the simple poll is `no'
+# Analogous to the PollSequence object; extra is the need to register.
+
+
+  OPERATION Init(nr_voters: IN integer);
+    # initialise election object
+
+  OPERATION Register(round: IN integer);
+    # register for elections
+
+  OPERATION Await_To_Vote();
+   # Block until everybody is ready for voting
+
+  OPERATION Vote(round: IN integer; YesOrNo: IN boolean);
+    # vote `yes' or `no' in this round
+
+  OPERATION AwaitDecision(round: IN integer): boolean;
+    # wait for a choice from all cpu's 
+
+
+END; # ElectionObject

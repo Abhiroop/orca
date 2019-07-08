@@ -1,0 +1,89 @@
+MODULE IMPLEMENTATION code_io;
+
+FROM LocalMemory IMPORT LocalMemoryType;
+FROM GlobalMemory IMPORT GlobalMemory;
+FROM vectmath IMPORT CLRV,CLRM, DIVVSSame;
+FROM GlobalVars IMPORT nbody, eps, fcells, dtime, tol, dtout, tstop, dthf;
+IMPORT barrier;
+FROM barrier IMPORT sync;
+IMPORT Node;
+FROM Util	IMPORT print_report;
+
+
+FUNCTION initoutput(allnodes: SHARED Node);
+    nprocs:integer;
+BEGIN
+    nprocs := NCPUS();
+    WriteLine("nbody	", nbody);
+    WriteLine("dtime	", dtime);
+    WriteLine("eps	", eps);
+    WriteLine("tol	", tol);
+    WriteLine("dtout	", dtout);
+    WriteLine("tstop	", tstop);
+    WriteLine("fcells	", fcells);
+    WriteLine("NPROCS	", nprocs);
+    WriteLine("dthf	", dthf);
+    print_report(allnodes);
+END;
+
+#  compute diagnostics and output data
+
+FUNCTION output(Local:SHARED LocalMemoryType;
+		allbodies:SHARED Node; 
+                Global:SHARED GlobalMemory;
+                b:SHARED barrier);
+
+#    nttot, nbavg, ncavg:integer;
+BEGIN
+    IF (Local.tout - 0.01 * dtime) <= Local.tnow THEN
+        Local.tout +:= dtout;
+    FI;
+
+    diagnostics(allbodies,Local);
+
+    IF (Local.mymtot /= 0.0) THEN
+        Global$write_lock();
+	Global$operwrite(Local);
+	Global$write_unlock();
+    FI;
+    sync(b);
+
+#    IF ProcessId = 0 THEN
+#	Global$read_lock();
+#        Global$operread(nttot,nbavg,ncavg);
+#	Global$read_unlock();
+#    FI;
+END;
+
+
+
+# compute set of dynamical diagnostics
+ 
+FUNCTION diagnostics(allbodies:SHARED Node;
+                     Local:SHARED LocalMemoryType);
+
+    pidx:integer;
+BEGIN
+    Local.mymtot := 0.0;
+    Local.myetot[1] := 0.0;
+    Local.myetot[2] := 0.0;
+
+    CLRM(Local.myketen);
+    CLRM(Local.mypeten);
+    CLRV(Local.mycmphase[0]);
+    CLRV(Local.mycmphase[1]);
+    CLRV(Local.myamvec);
+
+    pidx:=Local.mybody.mynbody-1;
+    WHILE pidx >= 0 DO
+        allbodies$opdiag(Local.mybody.mybodytab[pidx], Local,Local);
+	pidx-:=1;
+    OD;
+    Local.myetot[0] := Local.myetot[1] + Local.myetot[2];
+    IF (Local.mymtot /= 0.0) THEN
+        DIVVSSame( Local.mycmphase[0], Local.mymtot);
+        DIVVSSame(Local.mycmphase[1], Local.mymtot);
+    FI;
+END;
+
+END;

@@ -1,0 +1,20 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date   : August 1994				#
+# Version: 1.0 					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION DataBaseTypes;
+
+FROM	AwariTypes	IMPORT	GoedelNr;
+IMPORT	DataBasePartObject;
+
+
+TYPE   DataBaseObject = ARRAY[integer] OF DataBasePartObject;
+
+TYPE   AdresTable = ARRAY[integer] OF RECORD
+                                          begin_adres: GoedelNr;
+                                          end_adres: GoedelNr;
+                                      END;
+
+END; # DataBaseTypes

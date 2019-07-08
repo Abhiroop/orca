@@ -1,0 +1,9 @@
+OBJECT SPECIFICATION IntObject;
+	OPERATION dummy();  # used for benchmarks
+	OPERATION value(): integer;
+	OPERATION assign(v: integer);
+	OPERATION min(v: integer);
+	OPERATION inc();
+	OPERATION dec( id : integer);
+	OPERATION AwaitValue(v: integer);
+END;

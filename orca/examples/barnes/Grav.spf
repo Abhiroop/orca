@@ -1,0 +1,13 @@
+MODULE SPECIFICATION Grav;
+
+FROM LocalMemory IMPORT LocalMemoryType;
+FROM Node IMPORT ChangeSummaryArray, NodeTypeArray;
+
+FUNCTION hackgrav( pidx, p: integer; Local: SHARED LocalMemoryType;
+                   allnodes: NodeTypeArray;
+		   rsize: real;
+		   root: integer;
+		   updates: SHARED ChangeSummaryArray
+		);
+
+END;

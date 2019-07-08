@@ -1,0 +1,62 @@
+#!/bin/csh -f
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+
+if ($#argv < 3) then
+	echo Usage: $0 n_timeout delta_t command '[args]'
+	exit
+endif
+
+set coredumper	=
+
+# set arguments = $0
+set arguments
+while ($#argv > 0)
+	switch ( $1 )
+case -f:
+		shift
+		set HOSTFILE = $1
+		breaksw
+case -nocore:
+		limit core 0
+		breaksw
+default:
+		set arguments = ($arguments $1)
+		breaksw
+endsw
+	shift
+end
+
+source $HOSTFILE
+# setenv HOSTS `cat $HOSTFILE`
+# echo HOSTS = $HOSTS
+
+set RM		= /bin/rm
+
+set n_timeout	= $arguments[1]
+set delta_t	= $arguments[2]
+set comm	= "$arguments[3]"
+
+$comm $arguments[4-] &
+
+set n = 0
+while ( $n < $n_timeout )
+	sleep $delta_t
+	jobs -l > /tmp/out.$$
+	if (-z /tmp/out.$$) then
+		$RM /tmp/out.$$
+		exit
+	endif
+	@ n = $n + 1
+end
+
+echo "timeout expired"
+
+jobs -l > /tmp/out.$$
+set pid = `awk '{if ($2 == "+" || $2 == "-") {print $3} else {print $2}}' /tmp/out.$$`
+
+$RM /tmp/out.$$
+
+kill -9 $pid

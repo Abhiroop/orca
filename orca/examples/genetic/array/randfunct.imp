@@ -1,0 +1,42 @@
+MODULE IMPLEMENTATION randfunct;
+
+IMPORT Random;
+
+#
+# produces a random true or false value
+#
+FUNCTION randft(probability: real; r: SHARED Random): boolean;
+BEGIN
+	IF r$val01() < probability THEN
+		RETURN false;
+	ELSE
+		RETURN true;
+	FI;
+END;
+
+#
+# produces a random integer between lo and hi
+#
+FUNCTION randilohi(lo, hi: integer; r: SHARED Random): integer;
+	i: integer;
+BEGIN
+	IF lo >= hi THEN
+		i := lo;
+	ELSE
+		i := TRUNC(r$val01()*FLOAT(hi-lo+1)+FLOAT(lo));
+		IF i>hi THEN i := hi; FI;
+	FI;
+	RETURN i;
+END;
+
+#
+# produces a random real value between lo and hi
+#
+FUNCTION randflohi(lo, hi: real; r: SHARED Random): real;
+BEGIN
+	RETURN r$val01()*(hi-lo)+lo;
+END;
+
+END;
+
+

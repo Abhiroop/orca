@@ -1,0 +1,11 @@
+# ConnectFour
+# Opgave parallel programmeren
+# Authors : Fabian Breg    & Rob Buis
+#           fbreg@cs.vu.nl   rwlbuis@cs.vu.nl
+# File    : main.spf
+
+MODULE SPECIFICATION main;
+
+    PROCESS OrcaMain();
+
+END;

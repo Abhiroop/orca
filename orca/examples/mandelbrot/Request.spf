@@ -1,0 +1,59 @@
+OBJECT SPECIFICATION Request;
+#
+# Program:	Mandelbrot
+# File:		Request.spf
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	constants for the standard Mandelbrot request.
+#
+
+FROM Job IMPORT request_t;
+
+# reset setup: (X_LEFT, Y_UP), width = X_WINDOW, height = Y_WINDOW
+CONST X_LEFT		= -1.5;
+CONST Y_UP		= -2.25;
+#CONST X_LEFT		= -0.669643;
+#CONST Y_UP		= -0.387500;
+CONST X_WINDOW		= 3.0;	
+CONST Y_WINDOW		= 3.0;
+#CONST X_WINDOW		= 0.1;	
+#CONST Y_WINDOW		= 0.1;	
+
+# initial screen size.
+#CONST WIDTH		= 224; # multiples of 32!
+#CONST HEIGHT		= 224;
+CONST WIDTH		= 384; # multiples of 32!
+CONST HEIGHT		= 384;
+
+# the user requests. (Keep this consistent with the C part!!)
+CONST REQUEST_QUIT	= 1;
+CONST REQUEST_ZOOM	= 2;
+CONST REQUEST_RESET	= 3;
+CONST REQUEST_RESIZE	= 4;
+CONST REQUEST_DWELL	= 5;
+CONST REQUEST_BACK	= 6;
+CONST REQUEST_DEMO	= 7;
+CONST REQUEST_NOP	= 0;
+
+# the dwell. (Keep this consistent with the initial value of old_dwell in
+# xdisplay/xdisplay.c)
+#CONST DWELL		= 150;
+CONST DWELL		= 1000;
+
+
+# -------------------------------------------------------------
+# operations
+# -------------------------------------------------------------
+# the requests
+OPERATION Zoom(x, y, w, h: IN integer);
+OPERATION Resize(w, h: IN integer);
+OPERATION NewDwell(d: IN integer);
+OPERATION Quit();
+OPERATION Back();
+
+# reset to original setup
+OPERATION Reset();
+
+# will there be more requests (true until Quit() is done) 
+OPERATION Next(r: OUT request_t): boolean;
+
+END;

@@ -1,0 +1,91 @@
+#=======================================================================
+#==== EdgeCollection.imp : EdgeCollection function definitions      ====
+#==                                                                   ==
+MODULE IMPLEMENTATION EdgeCollection;
+
+#=======================================================================
+# == data                                                             ==
+#=======================================================================
+
+#=======================================================================
+# == functions                                                       ==
+#=======================================================================
+
+# 
+# equal_edges:  If two edges are equal, return 0 else
+#               return result of comparison of symbol_name
+#
+
+FUNCTION compare_edges(                       
+	edge_coll : edge_t;			# the collection of edges
+	edge1 : edge_p;				# first edge
+	edge2 : edge_p				# second edge
+	
+) : integer;                                # Out: equal or not 
+
+BEGIN	
+	IF (edge_coll[edge1].data.comp_1    = edge_coll[edge2].data.comp_1) AND
+	   (edge_coll[edge1].data.comp_2    = edge_coll[edge2].data.comp_2) AND
+	   (edge_coll[edge1].data.from_node = edge_coll[edge2].data.from_node) AND
+	   (edge_coll[edge1].data.to_node   = edge_coll[edge2].data.to_node) AND
+	   (edge_coll[edge1].data.symbol_name = edge_coll[edge2].data.symbol_name) THEN
+		RETURN 0;
+	ELSE
+		RETURN -1;
+	FI;
+END;
+
+
+#
+# construct_edge() : fill in values of an edge
+#
+FUNCTION fill_edge(
+	edge_coll : SHARED edge_t;		# collection of edges
+	edge : edge_p;				# the pointer
+	data : edge_info_t			# data to be filled with
+);
+
+BEGIN
+	edge_coll[edge].data.from_node := data.from_node;
+	edge_coll[edge].data.to_node := data.to_node;
+	edge_coll[edge].data.symbol_name := data.symbol_name;
+	edge_coll[edge].data.comp_1 := data.comp_1;
+	edge_coll[edge].data.comp_2 := data.comp_2;
+	edge_coll[edge].data.word := data.word;
+	
+
+END;
+
+	
+#
+# create_edge() : create an edge and return a pointer to it
+#
+FUNCTION create_edge(
+	edge_coll : SHARED edge_t		# collection of edges
+) : edge_p;
+
+BEGIN
+	RETURN ADDNODE(edge_coll);
+END;
+
+
+#
+# give_info() : return info on an edge
+#
+FUNCTION give_info(
+	edge_coll : edge_t;			# collection of edges
+	edge : edge_p;				# the pointer
+	info : OUT edge_info_t			# the info
+);	
+
+BEGIN
+	info.from_node := edge_coll[edge].data.from_node;
+	info.to_node   := edge_coll[edge].data.to_node;
+	info.symbol_name := edge_coll[edge].data.symbol_name;
+	info.comp_1 := edge_coll[edge].data.comp_1;
+	info.comp_2 := edge_coll[edge].data.comp_2;
+	info.word := edge_coll[edge].data.word;
+
+END;
+
+END;

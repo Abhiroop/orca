@@ -1,0 +1,4 @@
+sh mkjg.time > time.jg
+sh mkjg.spd > spd.jg
+/home/raoul/bin/sol2/jgraph time.jg > ../sor.eps
+/home/raoul/bin/sol2/jgraph spd.jg > ../sor.spd.eps

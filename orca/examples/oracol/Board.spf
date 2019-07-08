@@ -1,0 +1,10 @@
+MODULE SPECIFICATION Board;
+ 
+FROM Types IMPORT Problem,ProblemArray,DataRecord,BoardType;
+ 
+	FUNCTION InitBoard(dr : SHARED DataRecord);
+	FUNCTION SetUp(dr : SHARED DataRecord; problem : Problem);
+	FUNCTION PrintBoard(b : SHARED BoardType);
+	FUNCTION LoadProblems(array : OUT ProblemArray);
+ 
+END;

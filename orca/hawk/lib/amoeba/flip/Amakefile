@@ -1,0 +1,95 @@
+CONF_ROOT = /usr/proj/amwork/conf/amoeba/sparc.gnu-2;
+SRC_ROOT = /usr/proj/amwork/src;
+RTS_ROOT= ../../../rts;
+ARCH = sparc;
+LIB_AMOEBA = $CONF_ROOT/lib/amoeba/libamoeba.a;
+LIB_AJAX = $CONF_ROOT/lib/ajax/libajax.a;
+LIB_AMOEBA_DEBUG = /usr/proj/amwork/conf0/amoeba/sparc.gnu-2/lib/amoeba.maldb/libamoeba.a;
+LIB_AJAX_DEBUG = /usr/proj/amwork/conf0/amoeba/sparc.gnu-2/lib/ajax.maldb/libajax.a;
+ 
+INCLUDES = {
+        -I$SRC_ROOT/h,
+        -I$SRC_ROOT/h/class,
+        -I$SRC_ROOT/h/ajax,
+        -I$SRC_ROOT/h/server,
+        -I$SRC_ROOT/h/posix,
+        -I$SRC_ROOT/h/posix/machdep/$ARCH,
+        -I$SRC_ROOT/h/machdep/arch/$ARCH,
+        -I$SRC_ROOT/h/machdep/dev,
+        -I$SRC_ROOT/h/module,
+	-I$RTS_ROOT/include,
+	-I$RTS_ROOT/include/communication,
+	-I$RTS_ROOT/include/synchronization,
+	-I$RTS_ROOT/include/util,
+	-I$RTS_ROOT/include/po,
+        -I.,
+	-I/net/panda/panda2.0/latest_greatest/include,
+};
+ 
+DEFINES = {
+#       '-DDEBUG',
+#	'-D__MAL_DEBUG',
+        '-g',
+#      	'-O0',
+#      	'-DPROTO_DEBUG',
+#      	'-DPRECONDITION_TRACE',
+#       '-DAT_TIMER',
+	'-DNDEBUG',
+       	'-mv8',
+      	'-ansi',
+      	'-Wall',
+};
+ 
+%include $CONF_ROOT/toolset/amoeba.bin;
+%include $SRC_ROOT/Amakelib/gnu-2/cxx-c.amk;
+ 
+AMCOLL_LIBS = {
+        '-lg++',
+        '-lgcc2',
+        $LIB_AJAX,
+        $LIB_AMOEBA,
+};
+ 
+AJ_LINTLIBS = {
+        $LINT_AJAX,
+        $LINT_AMOEBA,
+};
+ 
+U_C = {
+	$RTS_ROOT/po/consistency.c,
+	$RTS_ROOT/po/instance.c,
+	$RTS_ROOT/po/po_invocation.c,
+	$RTS_ROOT/po/partition.c,
+	$RTS_ROOT/po/pdg.c,
+	$RTS_ROOT/po/po.c,
+	$RTS_ROOT/po/po_rts_object.c,
+	$RTS_ROOT/po/po_marshall.c,
+	$RTS_ROOT/collection/collection.c,
+	$RTS_ROOT/collection/coll_channel.c,
+	$RTS_ROOT/collection/coll_operation.c,
+	$RTS_ROOT/collection/forest.c,
+	$RTS_ROOT/collection/message_handlers.c,
+	$RTS_ROOT/collection/reduction_function.c,
+	$RTS_ROOT/collection/timeout.c,
+      	$RTS_ROOT/communication/amoeba/mp_channel.c,
+	$RTS_ROOT/communication/amoeba/grp_channel.c,
+	$RTS_ROOT/communication/amoeba/message.c,
+	$RTS_ROOT/communication/amoeba/rts_init.c,
+	$RTS_ROOT/util/map.c,
+	$RTS_ROOT/util/misc.c,
+	$RTS_ROOT/util/set.c,
+	$RTS_ROOT/util/graph.c,
+	$RTS_ROOT/util/error.c,
+	$RTS_ROOT/synchronization/amoeba/atomic_int.c,
+	$RTS_ROOT/synchronization/amoeba/lock.c,
+	$RTS_ROOT/synchronization/amoeba/po_timer.c,
+	$RTS_ROOT/synchronization/amoeba/condition.c,
+	$RTS_ROOT/synchronization/amoeba/sleep.c,
+};
+ 
+%cluster HAWK {
+%targets libhawk.a[type = archive];
+%sources $U_C;
+};
+
+%default libhawk.a;

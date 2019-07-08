@@ -1,0 +1,333 @@
+OBJECT IMPLEMENTATION SpecificationObject;
+
+
+FROM TspTypes IMPORT
+		Node,
+		NodeSubset,
+		NodeIndex,
+		NodeArray;
+FROM TspFunctions IMPORT
+		AppendString,
+		distance_MAN_2D,
+		distance_EUC_2D;
+FROM PresentationModule IMPORT
+		Warning, Error;
+FROM Finish IMPORT
+		Finish;
+FROM conversions IMPORT
+		StringToInt,
+		IntToString;
+FROM InOut IMPORT 
+		WriteLn, 
+		WriteString, 
+		WriteInt,
+		ReadString, 
+		ReadInt, 
+		OpenInputFile, 
+		CloseInput;
+
+
+nodes : NodeArray;
+name : string;
+comment : string;
+type : string;
+dimension : integer;
+edge_weight_type : string;
+deliveryBoys : integer;
+seqBadPaths : integer;
+pursueLimit : real;
+searchDepth : integer;
+
+debug_mode : boolean;
+
+intialized : boolean;
+
+
+
+OPERATION DebugMode () : boolean;
+BEGIN
+	RETURN debug_mode;
+END;
+
+
+OPERATION Nodes () : NodeArray;
+BEGIN
+	RETURN nodes;
+END;
+
+OPERATION NodesSet () : NodeSubset;
+	result : NodeSubset;
+BEGIN
+	FOR i IN LB(nodes)..UB(nodes) DO
+		INSERT (nodes[i].nr, result);
+	OD;
+	RETURN result;
+END;
+
+OPERATION Dimension () : integer;
+BEGIN
+	RETURN dimension;
+END;
+
+
+OPERATION SearchDepth () : integer;
+BEGIN
+	RETURN searchDepth;
+END;
+
+OPERATION PursuePaths () : real;
+BEGIN
+	RETURN pursueLimit;
+END;
+
+OPERATION SequentialBadPathsAllowed () : integer;
+BEGIN
+	RETURN seqBadPaths;
+END;
+
+
+OPERATION DeliveryBoys () : integer;
+BEGIN
+	RETURN deliveryBoys;
+END;
+
+
+OPERATION GetNode (n : NodeIndex) : Node;
+BEGIN
+	RETURN nodes[n];
+END;
+
+
+
+OPERATION Distance (i : NodeIndex; j : NodeIndex) : integer;
+BEGIN
+
+	# Optimize this so that it does not compare strings every time.
+	# This function must be terribly fast!
+	# But it must also deal with array ranges....
+
+	IF ((i > UB(nodes)) OR (i < LB(nodes))) THEN
+		Warning (AppendString ("Distance function: NodeIndex i out of bounds: ", IntToString (i)));
+		RETURN MAX(integer);
+	FI;
+	IF ((j > UB(nodes)) OR (j < LB(nodes))) THEN
+		Warning (AppendString ("Distance function: NodeIndex j out of bounds: ", IntToString (j)));
+		RETURN MAX(integer);
+	FI;
+
+	IF edge_weight_type = "MAN_2D" THEN
+		RETURN distance_MAN_2D (nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y);
+	FI;
+	IF edge_weight_type = "EUC_2D" THEN
+		RETURN distance_EUC_2D (nodes[i].x, nodes[i].y, nodes[j].x, nodes[j].y);
+	FI;
+
+	Error ("The specified edge weight type is not supported.");
+	Finish ();
+	RETURN 0;
+END;
+
+
+
+
+
+OPERATION Print ();
+BEGIN
+	WriteString ("   Name : ");
+	WriteString (name);
+	WriteLn ();
+	WriteString ("   Comment : ");
+	WriteString (comment);
+	WriteLn ();
+	WriteString ("   Type : ");
+	WriteString (type);
+	WriteLn ();
+	WriteString ("   Dimension : ");
+	WriteInt (dimension);
+	WriteLn ();
+	WriteString ("   Edge weight type : ");
+	WriteString (edge_weight_type);
+	WriteLn ();
+	WriteString ("   Search depth: ");
+	WriteInt (searchDepth);
+	WriteLn ();
+	WriteString ("   Debug mode: ");
+	IF debug_mode THEN
+		WriteString ("ON");
+	ELSE	
+		WriteString ("OFF");
+	FI;
+	WriteLn ();
+
+#	FOR i IN LB(nodes)..UB(nodes) DO
+#		WriteInt (nodes[i].nr);
+#		WriteString ("   X: ");
+#		WriteInt (nodes[i].x);
+#		WriteString ("   Y: ");
+#		WriteInt (nodes[i].y);
+#		WriteLn ();
+#	OD;
+
+	WriteLn ();
+#	FOR i IN LB(nodes)..UB(nodes) DO
+#		FOR j IN LB(nodes)..UB(nodes) DO
+#			WriteInt (distances[j,i]);
+#			WriteString (" ");
+#		OD;
+#		WriteLn ();
+#	OD;
+
+END;
+
+FUNCTION AllocateNodes (dimension : integer) : NodeArray;
+	nodes : NodeArray[0..dimension];
+BEGIN
+	FOR i IN 0..dimension DO
+		nodes[i].nr := 0;
+		nodes[i].x := 17;
+		nodes[i].y := 17;
+	OD;
+	RETURN nodes;
+END;
+
+
+
+OPERATION FromFile (filename : string);
+	CONST start_state = 1;
+	CONST end_state = 99;
+	CONST failure = 100;
+	ok : boolean;	
+	s : string;	
+	state : integer;
+	eaten : integer;
+BEGIN
+	ok := OpenInputFile (filename);
+
+	IF NOT ok THEN
+		Error (AppendString ("Could not open input file: ", filename));
+		Finish ();
+	FI;
+	
+	s := "";
+	state := start_state;
+	name := "";
+	comment := "";
+	type := "";
+	edge_weight_type := "";
+	dimension := 0;
+	debug_mode := false;
+	searchDepth := 3;
+	deliveryBoys := 4;
+
+	#
+	# FSA for parsing input file
+	#
+
+	WHILE ((state /= end_state) AND (state /= failure)) DO
+		ReadString (s);
+		CASE state OF
+		  start_state =>IF s = "NAME" THEN state := 2;
+				ELSE state := failure;
+				FI;
+		  | 2 => 	
+				IF s = ":" THEN state := 3;
+				ELSE state := failure;
+				FI;
+		  | 3 =>  	IF s = "COMMENT" THEN state := 4;
+				ELSE name := AppendString (AppendString (name, " "), s);
+				FI;
+		  | 4 =>	IF s = ":" THEN state := 5;
+				ELSE state := failure;
+				FI;
+		  | 5 =>	IF s = "TYPE" THEN state := 6;
+				ELSE comment := AppendString (AppendString (comment, " "), s);
+				FI;
+		  | 6 => 	IF s = ":" THEN state := 7;
+				ELSE state := failure;
+				FI;
+		  | 7 =>	IF s = "DIMENSION" THEN state := 8;
+				ELSE type := AppendString (type, s);
+				FI;
+		  | 8 =>	IF s = ":" THEN state := 9;
+				ELSE state := failure;
+				FI;
+		  | 9 =>	dimension := StringToInt (s, eaten);
+				IF eaten = 0 THEN Error ("The Dimension of the input file is not an integer or is unreadable. FSA failed.");
+				FI;
+				state := 10;
+		  | 10 =>	IF s = "EDGE_WEIGHT_TYPE" THEN state := 11;
+				ELSE state := failure;
+				FI;
+		  | 11 =>	IF s = ":" THEN state := 12;
+				ELSE state := failure;
+				FI;
+		  | 12 =>	IF s = "NODE_COORD_SECTION" THEN state := end_state;
+				ELSE 
+					# Optional parameters
+					IF s = "SEARCH_DEPTH" THEN state := 13; FI;
+					IF s = "DEBUG_MODE" THEN state := 15; FI;
+					IF s = "DELIVERY_BOYS" THEN state := 17; FI;
+					IF state = 12 THEN # else statement
+						edge_weight_type := AppendString (edge_weight_type, s);
+					FI;
+	
+				FI;
+		  | 13 =>   IF s = ":" THEN state := 14;
+				ELSE state := failure;
+				FI;
+		  | 14 =>   searchDepth := StringToInt (s, eaten);
+				IF eaten = 0 THEN 
+					Error ("The search depth was incorrectly specified. FSA failed.");
+				FI;
+				state := 12;
+		  | 15 =>   IF s = ":" THEN state := 16;
+				ELSE state := failure;
+				FI;
+		  | 16 =>   IF s = "ON" THEN
+				debug_mode := true;
+			    ELSE
+				debug_mode := false;
+			    FI;
+			   state := 12;
+		  | 17 =>   IF s = ":" THEN state := 18;
+				ELSE state := failure;
+				FI;
+		  | 18 =>   deliveryBoys := StringToInt (s, eaten);
+				IF eaten = 0 THEN 
+					Error ("The number of deliveryboys was incorrectly specified.");
+					deliveryBoys := 4;
+				FI;
+				state := 12;
+
+		  ELSE
+				Error ("Corrupt input file. FSA failed.");
+				Finish ();
+		ESAC;
+
+	OD;
+
+	nodes := AllocateNodes (dimension);
+
+	FOR i IN 0..dimension DO
+		ReadString (s);
+		IF (s = "EOF") THEN
+			EXIT;
+		FI;
+		nodes[i].nr := StringToInt (s, eaten);
+		ReadInt (eaten);
+		nodes[i].x := eaten;
+		ReadInt (eaten);
+		nodes[i].y := eaten;
+	OD;
+	CloseInput ();
+END;
+
+
+BEGIN
+	seqBadPaths := 3;
+	pursueLimit := 0.99;
+	intialized := false;
+END;
+
+
+

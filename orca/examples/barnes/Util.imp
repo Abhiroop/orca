@@ -1,0 +1,131 @@
+MODULE IMPLEMENTATION Util;
+
+FROM InOut IMPORT WriteString;
+FROM Time IMPORT SysMilli;
+FROM Math IMPORT sqrt;
+IMPORT Reducer;
+FROM GlobalVars IMPORT seed, report;
+FROM vectmath IMPORT PRTV, Vectmath;
+IMPORT Node;
+
+# IMPORT GlobalMemory;
+
+CONST MULT =      1103515245;
+CONST Add  =           12345;
+CONST Mask =      7FFFFFFFH;
+CONST TWOTO31 = 2147483648.0;
+
+
+# lastrand =  the last random number 
+
+FUNCTION Init(A,B,randx : OUT integer);
+# return a random double in [0, 1.0)
+BEGIN
+    A:=1;
+    B:=0;
+    randx:=1;
+END;
+
+FUNCTION prand( randx:SHARED integer;A,B:integer):real;
+    lastrand : integer;
+BEGIN
+    lastrand := randx;
+    randx := (A*randx+B) & Mask;
+    RETURN FLOAT(lastrand)/TWOTO31;
+END;
+
+
+# generate floating-point random number
+ 
+FUNCTION xrand(lo, hi:real;A,B:integer;randx: SHARED integer) : real;
+	      # lastrand: OUT integer):real;
+BEGIN
+     RETURN lo + (hi - lo) * prand(randx,A,B);
+END;
+
+
+FUNCTION pranset(A,B,randx:OUT integer);
+BEGIN
+    A := 1;
+    B := 0;
+    randx := (A*seed+B) & Mask;
+    A := (MULT * A) & Mask;
+    B := (MULT*B + Add) & Mask;
+END;
+
+
+# scream and die quickly
+
+FUNCTION error(msg, a1, a2, a3, a4:string);
+BEGIN
+    WriteString(msg);
+    WriteString(a1);
+    WriteString(a2);
+    WriteString(a3);
+    WriteString(a4);
+    ASSERT(false);
+END;
+
+FUNCTION timer_clear_and_start(timer: OUT real);
+BEGIN
+    timer := FLOAT(SysMilli());
+END;
+
+
+FUNCTION print_report(allnodes: SHARED Node);
+    v : Vectmath;
+BEGIN
+    IF UB(report) >= LB(report) THEN
+	WriteLine("                pos                       vel                     cost");
+	FOR i IN LB(report) .. UB(report) DO
+	    Write("   body[", report[i], "] : ");
+	    allnodes$Pos(report[i], v);
+	    PRTV(v);
+	    Write(" ");
+	    allnodes$Vel(report[i], v);
+	    PRTV(v);
+	    Write(" ", allnodes$Cost(report[i]));
+	    WriteLine();
+	OD;
+	WriteLine();
+    FI;
+END;
+
+
+FUNCTION timer_stop_and_print(time : SHARED Reducer; timer :real;
+			      allnodes: SHARED Node);
+.ifdef PRINT_TIME
+    self, nprocs : integer;
+    avg, std, t1, t2 : real;
+.endif
+BEGIN 
+.ifdef PRINT_TIME
+    t1 := FLOAT(SysMilli());
+    t1 := (t1 - timer)*1.0E-3;
+    #*(1.0E-6) ; # Mcycles 
+
+    self   := MYCPU();
+    nprocs := NCPUS();
+    t2 := t1 * t1;
+
+    time$add( t1);
+    t1 := time$wait();
+    time$add( t2);
+    t2 := time$wait();
+
+    avg := t1 / FLOAT(nprocs);
+    std := sqrt(t2 / FLOAT(nprocs) - (avg * avg));
+
+    IF self = 0 THEN
+	# GlobalMemory$print(1);
+	WriteLine( avg, " +- ", std, " ", nprocs, " ", t1, " ", t2);
+	print_report(allnodes);
+    FI;
+.else
+    IF MYCPU() = 0 THEN
+	print_report(allnodes);
+    FI;
+.endif
+END;
+
+END;

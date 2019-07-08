@@ -1,0 +1,330 @@
+
+
+
+
+
+
+oc(U)			 User Program			  oc(U)
+
+
+_N_a_m_e
+
+oc -  Orca compiler
+
+_S_y_n_o_p_s_i_s
+
+
+_o_c _a_r_g_u_m_e_n_t_s
+
+
+_D_e_s_c_r_i_p_t_i_o_n
+
+_O_C is the driver for the Orca compiler.	 Its task is to	call
+the  Orca  compiler,  which  translates	Orca modules/objects
+into ANSI C modules, then call an ANSI C compiler to process
+the  Orca  compiler  output,  and then call a link editor to
+combine	the object files and the Orca runtime system into  a
+binary.
+
+Users are  expected  to	 use  the  _o_c  command	through	 the
+_o_c__p_a_n_d_a  shell	 script.  This shell script sets the various
+variables and options  right  for  the	runtime	 system	 and
+platform  chosen.   The	 Amoeba	 version  contains  only one
+runtime	system,	but there are several others.
+
+The usual mode of working is that the user  writes  an	Orca
+program,   consisting  of  a  number  of  specification	 and
+implementation modules/objects.	 He will then  run  _o_c__p_a_n_d_a
+on  the	 implementation	 module	 containing  the  Orca	main
+process	(called	_O_r_c_a_M_a_i_n).  _O_c__p_a_n_d_a will call _o_c which	will
+find  the modules/objects used if they reside in the current
+directory or any of the	other source directories given	with
+the -SSSS option, and recompile them if necessary.
+
+The input is taken from	the argument list.  In addition,  _o_c
+also  examines	import	lists  in  an attempt to collect the
+complete sources of the	Orca program.
+
+
+_O_p_t_i_o_n_s
+
+
+-SSSS_d_i_r_n_a_m_e
+     append _d_i_r_n_a_m_e to the list	of directories where sources
+     are  looked  for.	By default, this is only the current
+     directory.
+
+-IIII_d_i_r_n_a_m_e
+     append  _d_i_r_n_a_m_e  to  the  list  of	 directories   where
+     specifications are	looked for.  When the compiler needs
+     a specification,  it  is  first  searched	for  in	 the
+
+
+
+			 Amoeba	5.3			   1
+
+
+
+
+
+oc(U)			User Program		       oc(U)
+
+
+     current directory,	and then in the	directories given to
+     it	by the -IIII flag in the order given, and then  in	 the
+     directory	 containing   the   specifications  for	 the
+     standard	     Orca	  library,	   currently
+     $OC_HOME/$OC_LIBNAM/std.
+
+-LLLL     generate	line directives	in the C code.
+
+-CCCCHHHHKKKK
+     do	not generate runtime checks (for instance for  array
+     references, graph references).
+
+ - vvvv	 verbose  flag.	  Print	 commands  before  they	 are
+     executed.
+
+-wwww     suppress	warning	messages from the Orca compiler.
+
+-vvvvaaaalllluuuueeeessss
+     Only print	the values of the variables described below.
+
+-pppp, -ppppgggg
+     profiling.	This flag is passed on to  the	C  compiler,
+     and  a  profiling	version	 of  the  runtime  system is
+     selected.
+
+-cccc     compile,	but do not link.
+
+-uuuu     do not complain	about  functions  mentioned  in	 the
+     specification  but	 not  present in the implementation.
+     This may be useful	for functions that  are	 written  in
+     another language.
+
+--_f_l_a_g
+     pass the debug flag --_f_l_a_g	on  to	the  Orca  compiler.
+     Currently,	there is also a	--OOOO flag which turns on	some
+     optimizations in the Orca compiler.
+
+-oooo _f_i_l_e_n_a_m_e
+     produce the resulting binary in  _f_i_l_e_n_a_m_e,	 instead  of
+     aaaa....oooouuuutttt.
+
+
+_n_a_m_e=_v_a_l_u_e
+     _O_c	has a number of	variables with default values  which
+     can  be  changed  through	the  environment  or  on the
+     command line. See the "Environment	Variables" paragraph
+     for the names and default values of these variables.
+
+Unrecognized options (starting with a '-') are passed to the
+C compiler.  This "feature" can	be used	to pass	optimization
+flags on to the	C compiler.
+
+
+
+
+
+
+2			 Amoeba	5.3
+
+
+
+
+
+oc(U)			User Program		       oc(U)
+
+
+_E_n_v_i_r_o_n_m_e_n_t _V_a_r_i_a_b_l_e_s
+
+There are several variables  in	 the  driver  which  can  be
+changed	 by  the  user.	  Values in the	environment override
+default	 values,  and  values  given  on  the  command	line
+override  both	default	 values	and environment	values.	 The
+variables are:
+
+OC_HOME
+     This variable indicates the path to  the  root  of	 the
+     Orca tree.
+
+OC_LIBNAM
+     This variable indicates the path from $OC_HOME  to	 the
+     libraries.	 Its value usually is "lib".
+
+OC_SPECIAL
+     This  variable  indicates	a  special  version  of	 the
+     libraries,	for instance "optimized" or "profiling".
+
+OC_MACH
+     This variable contains a  <machine>_<operating  system>
+     combination, for instance "sparc_sunos4", and indicates
+     what kind of system the compilation is for.
+
+OC_RTSNAM
+     This variable indicates the name of  the  Orca  runtime
+     system, for instance "panda" or "unixproc".
+
+OC_COMP
+     This variable indicates the path to the Orca compiler.
+
+OC_FLAGS
+     This variable indicates the flags passed  to  the	Orca
+     compiler.
+
+OC_INCLUDES
+     This variable indicates a list of -I  options  for	 the
+     include directories for Orca.
+
+OC_RTSINCLUDES
+     This variable indicates a list of -I  options  for	 the
+     include  directories  of the Orca runtime system. These
+     are required for the C compilation	of the	resulting  C
+     programs.
+
+OC_CCOMP
+     This variable indicates the C compiler used.  This	must
+     be	an ANSI	C compiler.
+
+OC_CFLAGS
+     This variable indicated  the  flags  passed  to  the  C
+     compiler.
+
+
+
+
+			 Amoeba	5.3			   3
+
+
+
+
+
+oc(U)			User Program		       oc(U)
+
+
+OC_LD
+     This variable indicate the	linker used.
+
+OC_LDFLAGS
+     This variable indicates the flags passed to the linker.
+
+OC_STARTOFF
+     This variable indicated the runtime start-off used.
+
+OC_LIBS
+     This variable indicates a list of runtime libraries.
+
+The default  values  for  these	 environment  variables	 are
+suitable for running the Orca program with the unixproc	RTS.
+
+
+_D_i_a_g_n_o_s_t_i_c_s
+
+All warning and	error messages are written on standard error
+output.
+
+
+_F_i_l_e_s
+
+Usually, an Orca program consists of  several  specification
+and  implementation  modules.	Specification  modules	must
+reside in  files  with	names  having  a  ".spf"  extension.
+Implementation	modules	must reside in files having a ".imp"
+extension.  The	name of	the file in  which  a  specification
+module	is stored must be the same as the module-name, apart
+from the extension.
+
+Each Orca module compiles into a separate C module  (usually
+a  .c and a .h file, but for generic modules a .gc and a .gh
+file).	It  is	also  possible	to  just  compile  an	Orca
+specification,	 but   this   is   only	  needed   when	 the
+implementation is written  in  another	language.   In	this
+case,  the  relocatable	 object	file (or the C file) of	this
+implementation must be passed on to _o_c explicitly.
+
+To avoid cluttering up the working directory,  _o_c  uses	 its
+own  working  directory,  ._o_c__d_r_i_v_e_r,  and  other file names
+starting with a	'.'.
+
+The specifications for the standard modules can	be found  in
+the directory $OC_HOME/$OC_LIBNAM/std.
+
+_E_x_a_m_p_l_e_s
+
+
+	_o_c _a_s_p._i_m_p
+
+Compiles the source file asp.imp.
+
+
+
+
+4			 Amoeba	5.3
+
+
+
+
+
+oc(U)			User Program		       oc(U)
+
+
+
+	_o_c _O_C__H_O_M_E=/_h_o_m_e/_o_r_c_a -_C_H_K _a_s_p._i_m_p
+
+Compiles the source file asp.imp  using	 the  Orca  compiler
+that resides in	/home/orca and without runtime checks.
+
+_S_e_e _A_l_s_o
+
+oc_panda(U)
+
+"User's	Manual of the Programming Language Orca", by  Ceriel
+Jacobs.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			 Amoeba	5.3			   5
+
+

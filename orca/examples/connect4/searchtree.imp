@@ -1,0 +1,248 @@
+# ConnectFour
+# Opgave parallel programmeren
+# Authors : Fabian Breg    & Rob Buis
+#           fbreg@cs.vu.nl   rwlbuis@cs.vu.nl
+# File    : searchtree.imp
+
+OBJECT IMPLEMENTATION searchtree;
+
+    FROM misc IMPORT Columns, NrOfPlayers, Infinity, Min, PosType, OrderType;
+
+    CONST Childs   = Columns;
+
+    FROM gameboard IMPORT BoardType;
+
+    TYPE ItemName = NODENAME OF Tree;
+
+    TYPE Tree     = GRAPH
+			Root     : ItemName;
+		    NODES
+			Children : ARRAY [integer 1..Childs] OF ItemName;
+			ABRes    : integer;
+		    END;
+
+    TYPE CFJobType   = RECORD
+                           Position : PosType;
+                           Board    : BoardType;
+			   Alpha    : integer;
+			   Beta     : integer;
+                           Player   : integer;
+                       END;
+
+    OBJECT CFQueue = NEW GenericJobQueue(CFJobType);
+
+    CFJobs     : CFQueue;
+    Done       : boolean;
+    CFTree     : Tree;
+    NrOfJobs   : integer;
+    EndGame    : boolean;
+
+OPERATION DeleteNode(Node : ItemName);
+
+BEGIN
+    FOR i IN 1..Childs DO
+	IF CFTree[Node].Children[i] /= NIL THEN
+	    SELF$DeleteNode(CFTree[Node].Children[i]);
+	FI;
+    OD;
+    DELETENODE(CFTree, Node);
+END;
+
+OPERATION Delete();
+
+BEGIN
+    SELF$DeleteNode(CFTree.Root);
+END;
+
+
+OPERATION AddChildren(Node : ItemName; Level : integer; Depth : integer);
+
+BEGIN
+    FOR i IN 1..Childs DO
+        IF Level <= Depth THEN
+	    CFTree[Node].Children[i] := ADDNODE(CFTree);
+	    SELF$AddChildren(CFTree[Node].Children[i], Level + 1, Depth);
+	ELSE
+	    CFTree[Node].Children[i] := NIL;
+        FI;
+    OD;
+END;
+
+OPERATION CreateTree(Depth : integer);
+
+BEGIN
+    CFTree.Root := ADDNODE(CFTree);
+    SELF$AddChildren(CFTree.Root, 1, Depth);
+END;
+
+
+OPERATION InitNode(Node : ItemName; Level : integer); 
+
+BEGIN
+    IF (Level % NrOfPlayers) = Min THEN
+	CFTree[Node].ABRes := -Infinity;
+    ELSE
+	CFTree[Node].ABRes := Infinity;
+    FI;
+
+    FOR i IN 1..Childs DO
+	IF CFTree[Node].Children[i] /= NIL THEN
+	    SELF$InitNode(CFTree[Node].Children[i], Level + 1);
+	FI;
+    OD;
+END;
+
+OPERATION Init();
+
+BEGIN
+    CFTree[CFTree.Root].ABRes := -Infinity;
+    FOR i IN 1..Childs DO
+	IF CFTree[CFTree.Root].Children[i] /= NIL THEN
+            SELF$InitNode(CFTree[CFTree.Root].Children[i], 1);
+	FI;
+    OD;
+    CFJobs$Init();
+    Done := false;
+    NrOfJobs := 0;
+END;
+
+OPERATION AddJob(Board : BoardType; Pos : PosType; Player : integer;
+		 Alpha : integer; Beta : integer);
+
+    Job : CFJobType;
+
+BEGIN
+    Job.Board := Board;
+    Job.Position := Pos;
+    Job.Player := Player;
+    Job.Alpha := Alpha;
+    Job.Beta := Beta;
+    CFJobs$AddJob(Job);
+    NrOfJobs +:= 1;
+END;
+
+OPERATION GetJob(Board : OUT BoardType; Pos : OUT PosType; Player : OUT integer;
+		 Alpha : OUT integer; Beta : OUT integer): boolean;
+
+    Job : CFJobType;
+
+BEGIN
+    IF EndGame OR (NOT CFJobs$GetJob(Job)) THEN
+	RETURN false;
+    FI;
+
+    Board := Job.Board;
+    Pos := Job.Position;
+    Player := Job.Player;
+    Alpha := Job.Alpha;
+    Beta := Job.Beta;
+    RETURN true;
+END;
+
+OPERATION SetGameOver();
+
+BEGIN
+    EndGame := true;
+END;
+
+OPERATION GameOver():boolean;
+
+BEGIN
+    RETURN EndGame;
+END;
+
+
+OPERATION NoMoreJobs();
+
+BEGIN
+    Done := true;
+END;
+
+OPERATION WaitForJobs();
+
+BEGIN
+    GUARD Done AND (NrOfJobs = 0) DO
+	RETURN;
+    OD;
+END;
+
+OPERATION CalculateNode(Node : ItemName; Level : integer): integer;
+
+    BestAB, AB : integer;
+
+BEGIN
+    IF ABS(CFTree[Node].ABRes) /= Infinity THEN
+	BestAB := CFTree[Node].ABRes;
+    ELSE
+	IF (Level % NrOfPlayers) = Min THEN
+	    BestAB := -Infinity;
+	ELSE
+	    BestAB := Infinity;
+	FI;
+
+	FOR i IN 1..Childs DO
+	    IF CFTree[Node].Children[i] /= NIL THEN
+	        AB := SELF$CalculateNode(CFTree[Node].Children[i], Level + 1);
+		IF ABS(AB) /= Infinity THEN
+	            IF (Level % NrOfPlayers) = Min THEN
+		        IF AB > BestAB THEN
+		            BestAB := AB;
+		        FI;
+	            ELSE
+		        IF AB < BestAB THEN
+		            BestAB := AB;
+		        FI;
+	            FI;
+		FI;
+	    FI;
+	OD;
+    FI;
+    RETURN BestAB;
+END;
+		   
+OPERATION CalculateResult(Order : OrderType): integer;
+
+    Move, BestAB, AB : integer;
+
+BEGIN
+    Move := 0;
+    BestAB := -Infinity;
+    FOR i IN 1..Childs DO
+	IF CFTree[CFTree.Root].Children[Order[i]] /= NIL THEN
+            AB := SELF$CalculateNode(CFTree[CFTree.Root].Children[Order[i]], 1);
+	    IF ABS(AB) /= Infinity THEN 
+		IF AB > BestAB THEN
+	            BestAB := AB;
+	            Move := Order[i];
+		FI;
+	    FI;
+	FI;
+    OD;
+
+    RETURN Move;
+END;
+
+OPERATION SetResult(Pos : PosType; AB : integer; Depth : integer; Job : integer);
+
+    p : ItemName;
+    i : integer;
+
+BEGIN
+    i := 1;
+    p := CFTree.Root;
+    WHILE (i <= Depth) AND (Pos[i] > 0) DO
+        p := CFTree[p].Children[Pos[i]];
+        i +:= 1;
+    OD;
+
+    CFTree[p].ABRes := AB;
+    IF Job = 1 THEN
+	NrOfJobs -:= 1;
+    FI;
+END;
+
+BEGIN
+    EndGame      := false;
+    NrOfJobs     := 0;
+    Done         := false;
+END;

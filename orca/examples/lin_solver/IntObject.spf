@@ -1,0 +1,23 @@
+OBJECT SPECIFICATION IntObject;
+
+TYPE IntObjectVector = ARRAY[integer] OF IntObject;
+
+FUNCTION DynIntObjectVector(N : integer) : IntObjectVector;
+
+OPERATION dummy();  # used for benchmarks
+
+OPERATION value(): integer;
+
+OPERATION assign(v: integer);
+
+OPERATION add(v: integer);
+
+OPERATION subs(v: integer);
+
+OPERATION inc();
+
+OPERATION dec();
+
+OPERATION await(v: integer);
+
+END;

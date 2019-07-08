@@ -1,0 +1,185 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION Consts;
+
+FROM	Common		IMPORT	OrderType, PCC_Type, TLC_Type;
+FROM	InOut		IMPORT	WriteInt, WriteLongReal,
+				WriteString, WriteLn;
+FROM	Math		IMPORT	LongRealMax, IntToLongReal, pow;
+
+CONST	CUTOFFDEFAULT	= 0.0D;
+
+
+FUNCTION ComputePccConstants(N   : integer;
+			     C   : OUT TLC_Type;
+			     PCC : OUT PCC_Type);
+
+    ### N must be 7 (= NORDER + 1) for a sixth-order method
+
+	NN     : integer;
+	TN, TK : longreal;
+BEGIN
+
+    ### Calculate the coefficients of taylor series Expansion
+    ### for F(X), F"(X), F""(X), .... (with DELTAT**N/N1 included)
+    ### in C(1,1), ... C(1,2), ... C(1,3) ...
+
+	C[1] := 1.0D;
+
+	FOR N1 IN 2 .. N DO
+	    NN := N1 - 1;
+	    TN := IntToLongReal(NN);
+	    TK := 1.0D;
+	    C[N1] := 1.0D;
+
+	    FOR K1 IN 2 .. N1 DO
+		C[(K1 - 1) * N + NN] := C[(K1 - 2) * N + NN + 1] * TN / TK;
+		NN -:= 1;
+		TN -:= 1.0D;
+		TK +:= 1.0D;
+	    OD;
+	OD;
+
+
+    ### Calculate predictor-corrector constants for 2nd order
+    ### differential equatation
+
+	PCC[ACC] := 1.0D;
+
+	CASE N - 1 OF
+	    3 => PCC[  DISP] :=      1.0D /     6.0D;
+		 PCC[   VEL] :=      5.0D /     6.0D;
+		 PCC[ DER_3] :=      1.0D /     3.0D;
+	|
+	    4 => PCC[  DISP] :=     19.0D /   120.0D;
+		 PCC[   VEL] :=      3.0D /     4.0D;
+		 PCC[ DER_3] :=      1.0D /     2.0D;
+		 PCC[ DER_4] :=      1.0D /    12.0D;
+	|
+	    5 => PCC[  DISP] :=      3.0D /    20.0D;
+		 PCC[   VEL] :=    251.0D /   360.0D;
+		 PCC[ DER_3] :=     11.0D /    18.0D;
+		 PCC[ DER_4] :=      1.0D /     6.0D;
+		 PCC[ DER_5] :=      1.0D /    60.0D;
+	|
+	    6 => PCC[  DISP] :=    863.0D /  6048.0D;
+		 PCC[   VEL] :=    665.0D /  1008.0D;
+		 PCC[ DER_3] :=     25.0D /    36.0D;
+		 PCC[ DER_4] :=     35.0D /   144.0D;
+		 PCC[ DER_5] :=      1.0D /    24.0D;
+		 PCC[ DER_6] :=      1.0D /   360.0D;
+	|
+	    7 => PCC[  DISP] :=    275.0D /  2016.0D;
+		 PCC[   VEL] :=  19087.0D / 30240.0D;
+		 PCC[ DER_3] :=    137.0D /   180.0D;
+		 PCC[ DER_4] :=      5.0D /    16.0D;
+		 PCC[ DER_5] :=     17.0D /   240.0D;
+		 PCC[ DER_6] :=      1.0D /   120.0D;
+		 PCC[FORCES] :=      1.0D /  2520.0D;
+	|
+	    ELSE ;
+	ESAC;
+END;
+
+
+
+FUNCTION SetUpSystemConstants(NMOL  : integer;
+			      TSTEP : SHARED longreal;
+			      NATMO : OUT integer;
+			      CUTOFF, FPOT, FKIN, BOXH, BOXL,
+			      REF1,FHM, FOM : OUT longreal);
+BEGIN
+
+    ### Set up some sytem constants
+
+	TSTEP /:= UNITT;	### Time between steps
+	NATMO := NATOMS * NMOL;	### Total number of atoms in system
+	FPOT  := UNITM * UNITL * UNITL /
+		(UNITT * UNITT * BOLTZ * TEMP * IntToLongReal(NATMO));
+	FKIN  := 0.5D * FPOT / (TSTEP * TSTEP);
+
+
+    ### Computed length of the cubical "box".  Note that box size
+    ### is computed as being large enough to handle the input number
+    ### of water molecules
+
+	BOXL := pow(IntToLongReal(NMOL) * WTMOL * UNITM / RHO, 1.0D / 3.0D);
+
+
+    ### Normalized length of computational box
+
+	BOXL /:= UNITL;
+
+
+    ### Half the box length, used in computing cutoff radius
+
+	BOXH := BOXL * 0.5D;
+
+
+    ### Sqrt of cutoff radius; max of BOXH and default (= 0); i.e.
+    ### cutoff radius is set to half the normalized box length
+
+	CUTOFF := LongRealMax(BOXH, CUTOFFDEFAULT);
+	REF1   := -QQ / (CUTOFF * CUTOFF * CUTOFF);
+	FHM    := 0.5D * TSTEP * TSTEP / HMAS;
+	FOM    := 0.5D * TSTEP * TSTEP / OMAS;
+
+    WriteLine("TSTEP = ", TSTEP);
+    WriteLine("NATMO = ", NATMO);
+    # WriteLine("NATMO3 = ", NATMO3);
+    WriteLine("FPOT = ", FPOT);
+    WriteLine("FKIN = ", FKIN);
+    WriteLine("BOXL = ", BOXL);
+    WriteLine("BOXH = ", BOXH);
+    WriteLine("CUTOFF = ", CUTOFF);
+    WriteLine("REF1 = ", REF1);
+    # WriteLine("REF2 = ", REF2);
+    # WriteLine("REF4 = ", REF4);
+    # WriteLine("CUT2 = ", CUT2);
+    WriteLine("FHM = ", FHM);
+    WriteLine("FOM = ", FOM);
+    WriteLine("NMOL = ", NMOL);
+    # WriteLine("NMOL1 = ", NMOL1);
+
+END;
+
+
+
+FUNCTION PrintConstants(NSTEP, NMOL, NORDER : integer;
+			TSTEP, CUTOFF : longreal);
+BEGIN
+	WriteString("Using ");
+	WriteInt(NCPUS());
+	WriteString(" CPUs on ");
+	WriteInt(NSTEP);
+	WriteString(" steps of ");
+	WriteInt(NMOL);
+	WriteString(" molecules.");
+	WriteLn();
+	WriteLn();
+	WriteString("Temperature                 = ");
+	WriteLongReal(TEMP);
+	WriteString(" K");
+	WriteLn();
+	WriteString("Density                     = ");
+	WriteLongReal(RHO);
+	WriteString(" G/C.C.");
+	WriteLn();
+	WriteString("Time step                   = ");
+	WriteLongReal(TSTEP);
+	WriteString(" sec");
+	WriteLn();
+	WriteString("Order used to solve F = MA  = ");
+	WriteInt(NORDER);
+	WriteLn();
+	WriteString("Spherical cutoff radius     = ");
+	WriteLongReal(CUTOFF);
+	WriteString(" angstrom");
+	WriteLn();
+	WriteLn();
+END;
+
+
+END;

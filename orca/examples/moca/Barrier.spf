@@ -1,0 +1,16 @@
+OBJECT SPECIFICATION Barrier;
+
+##
+## Blocks until it is called NrWorkers times. Then, all processes
+## blocked are released, and the barrier is re-initialized.
+##
+FUNCTION Sync(Bar       : SHARED Barrier;
+	      NrWorkers : integer);
+
+##
+## Initialize the barrier for NrWorkers processes.
+##
+OPERATION Init(NrWorkers : integer);
+
+
+END;

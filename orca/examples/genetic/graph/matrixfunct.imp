@@ -1,0 +1,79 @@
+MODULE IMPLEMENTATION matrixfunct;
+
+FROM IntMatrix IMPORT IntMatrix;
+FROM BoolVector IMPORT BoolVector, BoolMatrix;
+FROM CromoVector IMPORT individual;
+
+#
+# includes functions related to adjacency matrix manipulation
+#
+
+
+FUNCTION test_symmetric (G: BoolMatrix; nb_nodes: integer): boolean;
+BEGIN
+	FOR i IN 0..nb_nodes-1 DO
+		FOR j IN 0..nb_nodes-1 DO
+			IF G[i,j] /= G[j,i] THEN 
+				RETURN false;
+			FI;
+		OD;
+	OD;
+	RETURN true;
+END;
+
+FUNCTION evaluation (A: IntMatrix; symmetric: boolean;
+		nb_nodes: integer; indiv: SHARED individual);
+	cut_size: integer; 
+BEGIN
+	cut_size := 0;
+	FOR i IN 0..nb_nodes-1 DO
+	   FOR j IN 1..A[i,0] DO
+		IF symmetric AND (A[i,j]>i) THEN EXIT; FI;
+		IF indiv.cromozom[i] /= indiv.cromozom[A[i,j]] THEN
+			cut_size +:= 1;
+		FI;
+	   OD;
+	OD;
+	indiv.eval := cut_size;
+END;
+
+
+#
+# transforms a chromosome into one with better performances
+#
+FUNCTION heuristic(A: IntMatrix; nb_nodes: integer;
+			 cromo: SHARED BoolVector);
+	h, f1, f0, m1, m0, p1, p0: integer;
+	v : boolean;
+BEGIN
+	f1 := 0; f0 := 0;
+	FOR k IN 0..nb_nodes-1 DO
+		v := cromo[k];
+		h := 0;
+		FOR i IN 1..A[k,0] DO
+		   IF cromo[i] = v THEN h -:=1; FI;
+		   IF cromo[i] /= v THEN h +:=1; FI;
+		OD;
+		IF NOT v THEN
+			IF (f1=0) OR (h>0) AND (m1<h) THEN
+				f1 := 1; 
+				m1 := h;
+				p1 := k;
+			FI;
+		ELSE
+			IF (f0=0) OR (h>0) AND (m0<h) THEN
+				f0 := 1; 
+				m0 := h;
+				p0 := k;
+			FI;
+		FI;
+	OD;
+	IF (m1>=0) AND (m0>=0) THEN
+		cromo[p1] := NOT cromo[p1];
+		cromo[p0] := NOT cromo[p0];
+	FI;
+	RETURN;
+END;
+
+END;
+

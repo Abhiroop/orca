@@ -1,0 +1,196 @@
+# ========================================================================
+# == File:      Comblist.imp  						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  implementation of comblist object			==
+# ========================================================================
+MODULE IMPLEMENTATION Comblist;
+
+FROM Types        IMPORT symbol_name_t;
+FROM Symbollist   IMPORT insert_elt_sl, create_sl, delete_sl;
+FROM StringObject IMPORT compare_string;
+
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+#
+# create() : create the combination list
+#
+FUNCTION create_cl(
+        comb_list  : SHARED comblist_t		# the list
+) : boolean;					# succes
+
+BEGIN
+	comb_list.head := NIL;
+	comb_list.tail := NIL;
+	comb_list.nr_elts := 0;
+
+	RETURN true;
+END;
+
+
+#
+# delete() : delete the vombination list
+#
+FUNCTION delete_cl(
+        comb_list  : SHARED comblist_t		# the list
+);
+
+	old_elt : comblist_node_t;		# pointer to element to be deleted
+BEGIN
+	FOR i IN 1..comb_list.nr_elts DO
+		old_elt := comb_list.head;
+		comb_list.head := comb_list[comb_list.head].next;
+		delete_sl(comb_list[old_elt].symbol_list);
+		DELETENODE(comb_list, old_elt);
+	OD;
+END;
+
+
+#
+# insert_comb() : insert new combination in the list
+#
+FUNCTION insert_comb_cl(
+        comb_list  : SHARED comblist_t;		# the list
+	comb_symbol : symbol_name_t; 		# combination symbol
+	new_symbol  : symbol_name_t		# resulting symbol
+) : boolean;
+
+	new_elt, ptr : comblist_node_t;
+	index : integer;
+BEGIN
+	IF is_in_cl(comb_list, comb_symbol, index) THEN
+
+		# add to its symbol list
+		ptr := comb_list.head;
+		FOR i IN 1..(index-1) DO
+			ptr := comb_list[ptr].next;
+		OD;
+		
+		RETURN insert_elt_sl(comb_list[ptr].symbol_list, new_symbol);
+	ELSE
+		new_elt := ADDNODE(comb_list);
+		comb_list[new_elt].comb_symbol := comb_symbol;
+
+		IF NOT (create_sl(comb_list[new_elt].symbol_list) AND
+			insert_elt_sl(comb_list[new_elt].symbol_list, new_symbol)) THEN
+			RETURN false;
+		FI;
+		comb_list[new_elt].next := NIL;
+
+		IF (comb_list.nr_elts = 0) THEN	
+			comb_list.head := new_elt;
+			comb_list.tail := new_elt;
+			comb_list.nr_elts +:= 1;
+			RETURN true;
+		FI;
+		
+		ptr := comb_list.head;
+
+		# should we insert as first element?
+		IF (compare_string(comb_list[ptr].comb_symbol, comb_symbol ) >= 0) THEN
+			comb_list[new_elt].next := comb_list.head;
+			comb_list.head := new_elt;
+			comb_list.nr_elts +:= 1;
+			RETURN true;
+		FI;
+
+		# insert at correct position
+		WHILE (comb_list[ptr].next /= NIL) DO
+			IF (compare_string(comb_list[comb_list[ptr].next].comb_symbol, 
+					   comb_symbol) >= 0) THEN
+				comb_list[new_elt].next := comb_list[ptr].next;
+				comb_list[ptr].next := new_elt;
+				comb_list.nr_elts +:= 1;
+        	        	RETURN true;
+			FI;
+			ptr := comb_list[ptr].next;
+	        OD;
+	
+		# insert as new tail
+		comb_list[comb_list.tail].next := new_elt;
+		comb_list.tail := new_elt;
+		comb_list.nr_elts +:= 1;	
+	FI;
+	RETURN true;
+END;
+
+
+#
+# num_elts() : return number of elements in the list
+#
+FUNCTION num_elts_cl(
+        comb_list  : comblist_t
+) : integer;					# nr of elements in the list
+
+BEGIN
+	RETURN comb_list.nr_elts;
+END;
+
+
+#
+# give_ith_elt() : give info on i-th element in list
+#
+FUNCTION give_ith_elt_cl(
+        comb_list   : comblist_t;		# the list
+	index 	    : integer; 			# index in list
+	comb_symbol : OUT symbol_name_t; 	# combination symbol on position i
+	symbol_list : SHARED comblist_node_t	# symbol list on position i
+) : boolean;
+
+	ptr : comblist_node_t;			# pointer to element in list
+BEGIN
+	IF ((index < 1) OR (index > comb_list.nr_elts)) THEN
+		RETURN false;
+	FI;
+	
+	ptr := comb_list.head;
+	
+	FOR i IN 1..(index-1) DO
+		ptr := comb_list[ptr].next;
+	OD;
+	
+	comb_symbol := comb_list[ptr].comb_symbol;
+	symbol_list := ptr;
+	RETURN true;
+END;
+	
+
+#
+# is_in() : return if an element is in the list
+#
+FUNCTION is_in_cl(
+        comb_list   : comblist_t;		# the list
+	comb_symbol : symbol_name_t; 		# symbol to search for
+	index       : OUT integer		# index in list
+) : boolean;
+
+	ptr : comblist_node_t;			# pointer to element in list
+	cmp : integer;				# result of comparison
+BEGIN
+	ptr := comb_list.head;
+
+	FOR i IN 1.. comb_list.nr_elts DO
+		cmp := compare_string(comb_list[ptr].comb_symbol, comb_symbol);
+
+		#list is sorted, so check if we can break
+		IF (cmp > 0) THEN
+			RETURN false;
+		FI;
+	
+		IF (cmp = 0) THEN
+			index := i;
+			RETURN true;
+		FI;
+		ptr := comb_list[ptr].next;
+	OD;
+	RETURN false;
+END;
+
+END;
+
+
+
+

@@ -1,0 +1,263 @@
+MODULE IMPLEMENTATION Testgen;
+
+        FROM Finish IMPORT Finish;
+
+        FROM Time IMPORT SysMilli, PrintTime;
+
+	FROM AtpgTypes IMPORT Logic_Value,Possible_Fault;
+
+	FROM TruthTable IMPORT Truth_Table,Init_PDC_Table;
+
+	FROM Circuit IMPORT Circuit,Testvector,Init_Circuit,Init_Circuit_Fault,
+			    Init_Circuit_State,Get_Testvector,
+			    Write_PI_Assignments,Get_PI_Assignments,
+			    Make_PI_Assignments,Write_Gate_Description;
+# DEBUG
+#	FROM Circuit IMPORT Do_Test;
+# END DEBUG
+
+	FROM Fault IMPORT Fault_Rec_Set,Init_Faultset,Get_Next_Fault,
+			  Partition,Partition_Fault_Set,Size_Of_Set;
+
+	FROM Fault_Sim IMPORT Fault_Sim;
+
+	FROM Config IMPORT Config_Rec,Init_Config,Simulate,Communicate,
+			   Be_Verbose;
+
+	IMPORT sema;
+
+	IMPORT IntObject;
+
+	IMPORT Report;
+
+
+	FUNCTION Print_Testpattern(circuit:Circuit;fault:Possible_Fault;
+				   test_found:boolean;address:integer;
+				   config:Config_Rec;print:SHARED sema);
+
+	# The testpattern is written to stdout if config is VERBOSE
+
+	BEGIN
+		IF Be_Verbose(config) THEN
+			print$Pass();
+			WriteLine("Report of CPU: ",MYCPU());
+			Write_Gate_Description(circuit,address);
+			Write("Fault = ");
+			CASE fault OF 
+				Stuck_At_0 => WriteLine("Stuck_At_0");
+			     |	Stuck_At_1 => WriteLine("Stuck_At_1");
+			ESAC;
+			Write("Pattern = ");
+			IF test_found THEN
+				Write_PI_Assignments(circuit);
+			ELSE
+				WriteLine("No testvector found");
+			FI;
+			print$Free();
+		FI;
+	END; # FUNCTION Print_Testpattern
+	
+	PROCESS Worker( report: SHARED Report;
+			config: Config_Rec;
+			print:SHARED sema;
+			workersactive:SHARED IntObject;
+			trigger:SHARED IntObject);
+
+	address:integer;
+	fault:Possible_Fault;
+	faultrecset:Fault_Rec_Set;
+	partition:Partition;
+	circuit: Circuit;
+	testvector: Testvector;
+	truthtable:Truth_Table;
+
+	BEGIN
+		print$Pass();
+		WriteLine(MYCPU()," starting...");
+		print$Free();
+		IF Init_Circuit(circuit,config) THEN
+			# Following is needed because these can not be passed
+			# as parameters (run time errors occurred)
+			report$Initialize();
+			Init_PDC_Table(truthtable);
+		        Init_Faultset(circuit,faultrecset);
+# DEBUG, no of partitions depends on no of processors used !
+		        Partition_Fault_Set(faultrecset,NCPUS(),partition);
+# END DEBUG
+			faultrecset:=partition[MYCPU()];
+			# ===================================================
+			trigger$dec();
+			trigger$AwaitValue(0);
+			WriteLine();
+			WriteLine(MYCPU()," trigger passed...go");
+			WHILE Get_Next_Fault(faultrecset,address,fault) DO
+				Init_Circuit_Fault(circuit,address,fault);
+				Init_Circuit_State(circuit);
+				IF NOT Get_Testvector(circuit,truthtable) THEN
+					Print_Testpattern(circuit,fault,false,
+							  address,config,print);
+					# Report fault aborted
+					report$Inc_Aborted();
+				ELSE
+					Print_Testpattern(circuit,fault,true,
+							  address,config,print);
+					# Report testvector found
+					report$Inc_Testvectors();
+					report$Inc_Detected();
+					# If necessary communicate pattern found
+					IF Communicate(config) THEN
+						Get_PI_Assignments(circuit,
+							testvector);
+						report$Communicate_Tv(MYCPU(),
+							testvector);
+					FI;
+					# If necessary perform fault simulation
+					IF Simulate(config) THEN
+						Fault_Sim(circuit,truthtable,
+							  faultrecset,report,
+							  config,print);
+					FI;
+				FI;
+				IF Communicate(config) THEN
+					WHILE report$Get_Tv(MYCPU(),testvector)
+					DO
+						Make_PI_Assignments(circuit,
+								testvector);
+						Fault_Sim(circuit,truthtable,
+							  faultrecset,report,
+							  config,print);
+					OD;
+				FI;
+			OD;
+		ELSE
+			trigger$dec();
+			WriteLine("CPU = ",MYCPU()," can't initialize");
+		FI;
+		print$Pass();
+		WriteLine(MYCPU()," finishes...");
+		print$Free();
+		workersactive$dec();
+	END; # PROCESS Worker
+
+
+	FUNCTION Worker_Sim(circuit:SHARED Circuit;
+			    truthtable:Truth_Table;
+			    faultrecset:SHARED Fault_Rec_Set;
+		            report:SHARED Report;
+			    config: Config_Rec;
+			    print: SHARED sema);
+
+	# Simulate worker on processor 0, it is not possible to FORK on
+	# processor 0 due to memory requirements.
+
+	address: integer;
+	fault:Possible_Fault;
+	testvector: Testvector;
+
+
+	BEGIN
+		report$Initialize();
+		WriteLine();
+		WriteLine(MYCPU()," .................go");
+		WHILE Get_Next_Fault(faultrecset,address,fault) DO
+			Init_Circuit_Fault(circuit,address,fault);
+			Init_Circuit_State(circuit);
+			IF NOT Get_Testvector(circuit,truthtable) THEN
+				Print_Testpattern(circuit,fault,false,
+							address,config,print);
+				# Report fault aborted
+				report$Inc_Aborted();
+			ELSE
+				Print_Testpattern(circuit,fault,true,
+							address,config,print);
+				# Report testvector found
+				report$Inc_Testvectors();
+				report$Inc_Detected();
+				# If necessary communicate pattern found
+				IF Communicate(config) THEN
+					Get_PI_Assignments(circuit,testvector);
+					report$Communicate_Tv(NCPUS(),
+								   testvector);
+				FI;
+				# If necessary perform fault simulation
+				IF Simulate(config) THEN
+					Fault_Sim(circuit,truthtable,
+						faultrecset,report,
+						config,print);
+				FI;
+			FI;
+			IF Communicate(config) THEN
+				WHILE report$Get_Tv(NCPUS(),testvector) DO
+					Make_PI_Assignments(circuit,testvector);
+					Fault_Sim(circuit,truthtable,
+							faultrecset,report,
+							config,print);
+				OD;
+			FI;
+		OD;
+		print$Pass();
+		WriteLine(MYCPU()," finishes...");
+		print$Free();
+	END; # FUNCTION Worker_Sim
+
+
+	PROCESS OrcaMain();
+
+	circuit		: Circuit;	
+	truth_table 	: Truth_Table;
+	start,stop	: integer;
+	faultrecset	: Fault_Rec_Set;
+	partition	: Partition;
+	report		: Report;
+	config		: Config_Rec;
+	print		: sema;
+	trigger		: IntObject;
+	workersactive	: IntObject;
+	
+
+	BEGIN
+		Write("Initializing PDC-table....");
+		Init_PDC_Table(truth_table);
+		WriteLine("Done");
+		Write("Initializing circuit-model....");
+		IF Init_Config(config) AND
+		   Init_Circuit(circuit,config) THEN
+		   WriteLine("Done");
+# DEBUG
+#		Do_Test(circuit,truth_table);
+# END DEBUG
+		   Write("Initializing fault set....:");
+		   Init_Faultset(circuit,faultrecset);
+		   WriteLine("Done");
+		   report$Initialize();
+		   report$Assign_No_Faults(Size_Of_Set(faultrecset));
+		   Write("Partitioning fault set....:");
+# DEBUG, no of partitions depends on no of cpus used
+		   Partition_Fault_Set(faultrecset,NCPUS(),partition);
+# END DEBUG
+		   WriteLine("Done");
+		   WriteLine("Start....workers");
+		   trigger$assign(NCPUS());
+		   workersactive$assign(NCPUS());
+		   FOR i IN 0..NCPUS()-1 DO
+			FORK Worker(report,config,print,workersactive, trigger)
+				ON (i);
+		   OD;
+		   trigger$AwaitValue(0); # Wait until circuit is read
+		   		          # and initialized by all workers
+		   start:=SysMilli();
+#		   Worker_Sim(circuit,truth_table,partition[NCPUS()],
+#			   report,config,print);
+		   workersactive$AwaitValue(0);
+		   stop:=SysMilli();
+		   PrintTime("ATPG", stop-start);
+		ELSE
+		   WriteLine("ERROR...cannot initialize");
+		FI;
+		report$Write_Results();
+		WriteLine();
+		WriteLine("Manager finishes");
+		Finish();
+	END; # PROCESS OrcaMain
+
+END; # MODULE IMPLEMENTATION Testgen 

@@ -1,0 +1,201 @@
+MODULE IMPLEMENTATION fft;
+
+# Author: 	Tim Ruhl
+#
+# Date:		Fri Apr 12 18:22:28 MET DST 1996
+# 
+# fft
+#	Implements a queue of 1D-FFT operations. Original code Irina/Ceriel.
+
+
+IMPORT Matrix; FROM Matrix IMPORT ComplexArray_T;
+FROM Time IMPORT SysMilli, Sleep;
+FROM args IMPORT Argc, Argv;
+FROM conversions IMPORT StringToInt;
+IMPORT JobQueue; FROM JobQueue IMPORT Job_T;
+IMPORT barrier; FROM barrier IMPORT sync;
+IMPORT Random;
+IMPORT AckQueue; FROM AckQueue IMPORT Ack_T;
+
+TYPE intarray = ARRAY[integer] OF integer;
+
+PROCESS Timer(ack_queue: SHARED AckQueue; b: SHARED barrier; nr: integer);
+
+latency: integer;
+delay: integer;
+ack: Ack_T;
+
+BEGIN
+	sync(b);
+
+	latency := 0;
+	delay := 0;
+	FOR i IN 1 .. nr DO
+		ack_queue$Get(ack);
+		latency +:= ack.time;
+		delay +:= SysMilli() - ack.start;
+	OD;
+
+	latency /:= nr;
+	delay /:= nr;
+
+	sync(b);
+	sync(b);
+	WriteLine("Average FFT latency (ms): ", latency);
+	WriteLine("Average FFT delay (ms): ", delay);
+	sync(b);
+END;
+
+PROCESS Consumer(in: SHARED JobQueue; ack_queue: SHARED AckQueue;
+		 b: SHARED barrier; nr: integer);
+
+res: boolean;
+job: Job_T;
+ack: Ack_T;
+
+BEGIN
+	sync(b);
+
+	FOR i IN 1 .. nr DO
+		res := in$GetJob(job);
+		ASSERT(res);
+
+		WriteLine("Received job: ", job.id);
+
+		ack.start := job.start;
+		ack.time := job.time;	
+		ack_queue$Add(ack);
+	OD;
+
+	sync(b);
+	sync(b);
+	sync(b);
+END;
+
+PROCESS Worker(in, out: SHARED JobQueue; b: SHARED barrier; 
+	       start, cluster: integer; nr: integer);
+	
+matrix: Matrix[0 .. (1 << nr) - 1];
+proc: intarray[0 .. cluster - 1];
+job: Job_T;
+
+BEGIN
+	#WriteLine("Worker at ", start, " nr processors ", cluster," started");
+
+	# Since all processors get all partition at every operation (I think)
+	# we don't deal with smaller partitions yet.
+	matrix$$partition((1 << nr) / (UB(proc) - LB(proc) + 1));
+
+	FOR i IN 0 .. cluster - 1 DO proc[i] := start + i; OD;
+	matrix$$distribution(proc);
+
+	sync(b);
+
+	WHILE in$GetJob(job) DO
+		WriteLine("Worker at ", start, " gets job ", job.id);
+	
+		job.time := SysMilli();
+		matrix$Initialize(job.work);
+		FOR i IN 1 .. nr DO
+			matrix$Compute_phase(nr - i);
+		OD;
+		#matrix$Get(job.work);
+		#job.work := matrix$Get2();
+		job.work := matrix$Get3();
+		job.time := SysMilli() - job.time;
+		out$AddJob(job);
+		#WriteLine("Worker at ", start, " finishes job");
+	OD;	
+
+	#WriteLine("Worker at ", start, " nr processors ", nr, " finished");
+	sync(b);	
+	sync(b);
+	sync(b);	
+END;
+
+FUNCTION NewArray(size: IN integer; 
+		job: OUT ComplexArray_T[0 .. (1 << size) - 1]);
+r: Random;
+BEGIN
+	FOR i IN LB(job) .. UB(job) DO
+		job[i].real := r$val01() * 10.0;
+		job[i].imag := r$val01() * 10.0;
+	OD;
+END;
+
+FUNCTION NewJob(size: IN integer; job: OUT Job_T);
+BEGIN
+	NewArray(size, job.work);
+END;
+
+PROCESS OrcaMain();
+
+workers, cluster: integer;
+ack_queue: AckQueue;
+n, nr_fft: integer;
+in, out: JobQueue;
+dummy: integer;
+delay: integer;
+time: integer;
+b: barrier;
+job: Job_T;
+
+BEGIN
+	IF Argc() /= 5 THEN
+		WriteLine("Usage: ", Argv(0), 
+			  " <2log(size)> <nr fft> <nr workers> <delay ms>");
+		RETURN;
+	FI;
+
+	n       := StringToInt(Argv(1), dummy);
+	nr_fft  := StringToInt(Argv(2), dummy);
+	workers := StringToInt(Argv(3), dummy);
+	delay   := StringToInt(Argv(4), dummy);
+
+	cluster := NCPUS() / workers;
+	ASSERT(NCPUS() % workers = 0);
+
+	NewJob(n, job);
+
+	# Barrier with workers, OrcaMain, Timer, and Consumer
+	b$init(workers + 3);
+
+	# Consumer of FFTs
+	FORK Consumer(out, ack_queue, b, nr_fft) ON NCPUS() - 1; 
+
+	# Fork Timer daemon on same processor as OrcaMain (job generator)
+	# so that we can do delay measurements.
+	FORK Timer(ack_queue, b, nr_fft);
+
+	FOR i IN 0 .. workers - 1 DO
+		FORK Worker(in, out, b, i * cluster, 
+			    cluster, n) ON i * cluster;
+	OD;
+
+	WriteLine("Performing ", nr_fft, " 1D FFTs of size ", 1 << n,
+		  " on ", NCPUS(), " processors with clusterisze ", 
+		  cluster);
+	sync(b);
+	
+	time := SysMilli();
+	FOR i IN 1 .. nr_fft DO
+		job.start := SysMilli();
+		job.id := i;
+		in$AddJob(job);
+		IF delay /= 0 THEN
+			Sleep(delay / 1000, (delay % 1000) * 1000000);
+		FI;
+	OD;
+	in$NoMoreJobs(); 
+
+	sync(b);
+	time := SysMilli() - time;
+	WriteLine("Performing ", nr_fft, " 1D FFTs of size ", 1 << n,
+		  " on ", NCPUS(), " processors with clusterisze ", 
+		  cluster);
+	sync(b);
+	sync(b);
+	WriteLine("Total execution time: ", time, " delay: ", delay);
+END;
+
+END;

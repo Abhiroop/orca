@@ -1,0 +1,141 @@
+ ## ===========================================================================
+ ##
+ ##    File:    matrix_m.imp
+ ##    Type:    module implementation
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ MODULE IMPLEMENTATION matrix_m;
+
+ ## ===========================================================================
+ ##
+ ##  Local Functions:
+ ##
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ vv_fsub           - Perform
+ ##
+ ##      from : integer  - over a range
+ ##        to : integer  - of elements: from <= i <= to
+ ##    factor : real     - the subtraction of the multiplication of a factor
+ ##        v1 : vector   - and vector element v1[ i ]
+ ##        v2 : vector   - from vector element v2[ i ]
+ ##
+
+ FUNCTION vv_fsub( factor :        real
+		 ;   from :        integer 
+	         ;     to :        integer
+		 ;     v1 :        vector
+		 ;     v2 : SHARED vector
+	        );
+
+ BEGIN FOR i IN from .. to
+       DO  v2[ i ] -:= v1[ i ] * factor;
+       OD  ;
+ END   ;
+ 
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ vv_fadd           - Perform 
+ ##
+ ##      from : integer  - over a range
+ ##        to : integer  - of elements: from <= i <= to
+ ##    factor : real     - the addition of the multiplication of a factor
+ ##        v1 : vector   - and vector element v1[ i ]
+ ##        v2 : vector   - to vector element v2[ i ]
+ ##
+
+ FUNCTION vv_fadd(   from :        integer 
+	         ;     to :        integer
+		 ; factor :        real
+		 ;     v1 :        vector
+		 ;     v2 : SHARED vector
+	        );
+
+ BEGIN FOR i IN from .. to
+       DO  v2[ i ] +:= v1[ i ] * factor;
+       OD  ;
+ END   ;
+
+
+ ## ===========================================================================
+ ##
+ ##  Exported Functions:
+ ##
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ getreal         - Transform an
+ ##
+ ##    iv : intvector  - `integer' vector
+ ##    ov : vector     - into an identical `real' vector
+ ##
+
+ FUNCTION getreal( iv :     intvec
+		 ; ov : OUT vector[ LB( iv )..UB( iv )]
+		);
+
+ BEGIN FOR i IN LB( iv )..UB( iv )
+       DO  ov[ i ] := FLOAT( iv[ i ]);
+       OD  ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ vv_prod         - Determine inner product
+ ##
+ ##    from : integer  - over a specified
+ ##      to : integer  - common range.
+ ##      v1 : vector   - of two
+ ##      v2 : vector   - vectors,
+ ##
+ ##         : real     - and return the result.
+ ##
+ 
+ FUNCTION vv_prod( from : integer
+		 ;   to : integer
+		 ;   v1 : vector
+		 ;   v2 : vector
+	        )       : real ; 
+
+ r : real    ;
+ 
+ BEGIN r := 0.0 ;
+ 
+       FOR i IN from .. to
+       DO  r +:= v1[ i ] * v2[ i ] ;
+       OD  ;
+ 
+       RETURN r ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ mv_prod     - Perform multiplication of
+ ##
+ ##    M : matrix  - a matrix
+ ##    x : vector  - and a vector
+ ##    y : vector  - return the resulting vector.
+ ##
+
+ FUNCTION  mv_prod( M :     matrix
+		  ; x :     vector
+		  ; y : OUT vector[ 1 .. M.N ]
+		 );
+
+ BEGIN FOR i IN 1 .. M.N
+       DO  y[ i ] :=   M.U[ i ][ i ] * x[ i ]
+                     + vv_prod( LB( M.L[i]), i-1,       M.L[i], x );
+           #########
+	               vv_fadd( LB( M.U[i]), i-1, x[i], M.U[i], y );
+       OD  ;
+ END   ;
+ 
+  
+ ## ===========================================================================
+ 
+ END ;

@@ -1,0 +1,44 @@
+#ifndef __PAN_RPC_UPCALL_CI__
+#define __PAN_RPC_UPCALL_CI__
+
+
+#include <stdlib.h>
+#include <assert.h>
+
+#include "pan_sys_msg.h"
+#include "pan_upcall.h"
+
+
+#ifndef STATIC_CI
+#  define STATIC_CI	static
+#endif
+
+
+
+STATIC_CI void
+pan_rpc_upcall_start(void)
+{
+}
+
+
+STATIC_CI void
+pan_rpc_upcall_end(void)
+{
+}
+
+
+STATIC_CI rpc_hdr_p
+pan_rpc_hdr_push(pan_msg_p msg)
+{
+    return pan_msg_push(msg, sizeof(rpc_hdr_t), alignof(rpc_hdr_t));
+}
+
+
+STATIC_CI rpc_hdr_p
+pan_rpc_hdr_pop(pan_msg_p msg)
+{
+    return pan_msg_pop(msg, sizeof(rpc_hdr_t), alignof(rpc_hdr_t));
+}
+
+
+#endif

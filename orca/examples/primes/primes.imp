@@ -1,0 +1,95 @@
+# parallel prime-number generator, adapted from the Linda-version
+# described in Yale report RR-628
+#
+# this program may be ideally suited for a distributed implementation
+# based on replication, as the primetab will change relatively infrequently
+
+MODULE IMPLEMENTATION primes;
+
+IMPORT primetab;
+IMPORT IntQueue;
+FROM InOut IMPORT WriteInt, WriteLn, WriteString;
+FROM Time IMPORT GetTime;
+FROM Finish IMPORT Finish;
+IMPORT SharedInt;
+
+CONST LIMIT = 5000;
+CONST GRAIN = 500;
+
+FUNCTION isprime(x: integer; pt: SHARED primetab): boolean;
+	i , prime, square: integer;
+BEGIN
+	i := 1;
+	DO
+		pt$GetPrime(i, prime, square);
+		IF x % prime = 0 THEN
+			RETURN false;
+		ELSIF square > x THEN
+			RETURN true;
+		ELSE
+			i +:= 1;
+		FI;
+	OD;
+END;
+
+PROCESS worker(pt: SHARED primetab; q: SHARED IntQueue;
+	       NrChildren: SHARED SharedInt);
+	n, lim: integer;
+BEGIN
+	NrChildren$inc();
+	pt$wait();
+	WriteLine ("Hello ", MYCPU());
+	DO
+		n := q$Dequeue();
+		IF n = -1 THEN
+			q$Enqueue(-1);
+			EXIT;
+		ELSE
+			lim := n + GRAIN;
+			IF lim > LIMIT THEN
+				lim := LIMIT;
+				q$Enqueue(-1);
+			ELSE
+				q$Enqueue(lim);
+			FI;
+		FI;
+		WriteLine("CPU ", MYCPU(), " generate primes");
+		FOR x IN n .. lim-1 DO
+			IF isprime(x, pt) THEN
+				pt$AddPrime(x);
+			FI;
+		OD;
+	OD;
+	WriteLine("leaving ",MYCPU());
+	NrChildren$dec();
+END;
+
+
+PROCESS OrcaMain();
+	pt: primetab;
+	q: IntQueue;
+	NrChildren: SharedInt;
+	start, stop: integer;
+	pr, sq: integer;
+BEGIN
+	NrChildren$assign(0);
+	FOR i IN 1 .. NCPUS() DO
+		FORK worker(pt,q, NrChildren) ON(i-1);
+	OD;
+	NrChildren$AwaitValue(NCPUS());
+	WriteString("OrcaMain uses #processors: "); WriteInt(NCPUS()); WriteLn();
+	start := GetTime();
+	q$Enqueue(7);
+	pt$init(LIMIT);
+	NrChildren$AwaitValue(0);
+	stop := GetTime();
+	WriteString("elapsed time = "); WriteInt(stop - start); WriteLn();
+	WriteLine("Job done!!!");
+	FOR i IN 1..pt$NPrimes() DO
+		pt$GetPrime(i, pr, sq);
+		WriteLine(pr);
+	OD;
+	Finish();
+END;
+
+END;

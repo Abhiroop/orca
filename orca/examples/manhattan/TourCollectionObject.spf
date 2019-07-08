@@ -1,0 +1,53 @@
+# TourCollectionObject.spf
+#
+# The TourCollectionObject (TCO) is as main purpose a collection
+# of tours for the deliveryboys. Upon this collection of tours 
+# some well defined operations have been constructed. These 
+# are the operations that will be performed on the TourObjects
+# in the collection by the different processes during the
+# objects way through the chain of processing. Thus the basis
+# of a TCO is a distribution and the TourObjects that are formed
+# by this distribution.
+#  A TCO also contains age information, that is how many times
+# has it been run through the processing chain. This information
+# is used for instance to know when to terminate the program
+# (search depth) and to know how many levels the object
+# has gotten worse solutions.
+
+OBJECT SPECIFICATION TourCollectionObject;
+	
+	IMPORT SpecificationObject;
+	IMPORT TourObject;
+
+	FROM TspTypes IMPORT
+		DistributionChange,
+		NodeDistribution;
+	FROM CollectionTypes IMPORT
+		TourCollection;
+
+
+	OPERATION Initialize (nd : NodeDistribution; spec : SpecificationObject);
+	OPERATION CreateFromArray (new : TourCollection; spec : SpecificationObject);
+	OPERATION Load (name : string; spec : SpecificationObject);
+	OPERATION Save (name : string);
+	OPERATION SetBounds (l, u : integer);
+	OPERATION Improve ();
+	OPERATION NewDistribution (nd : NodeDistribution);
+	OPERATION ChangeDistribution (dc : DistributionChange);
+	OPERATION RevertDistributionChange (dc : DistributionChange);
+	OPERATION Print ();
+	OPERATION Consistent () : boolean;
+
+	OPERATION EvaluationLevel () : integer;
+	OPERATION IncreaseLevel ();
+	OPERATION DecreaseLevel ();
+	OPERATION Pursue () : boolean;
+	OPERATION Value () : real;
+
+	OPERATION Tours () : TourCollection;
+	OPERATION Distribution () : NodeDistribution;
+	OPERATION ImproveHistory () : integer;
+
+	OPERATION SetTourIfBetter (nr : integer; t : TourObject) : boolean;
+END;
+

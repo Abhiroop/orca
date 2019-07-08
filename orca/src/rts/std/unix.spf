@@ -1,0 +1,40 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: unix.spf,v 1.4 1995/07/31 09:04:16 ceriel Exp $
+
+MODULE SPECIFICATION unix;
+	TYPE iobuf = string;
+	FUNCTION open(name: string; mode: integer): integer;
+	FUNCTION creat(name: string; mode: integer): integer;
+	FUNCTION read(	fildes: integer;
+			buffer: OUT iobuf;
+			nbytes: integer) : integer;
+	FUNCTION write(	fildes: integer;
+			buffer: iobuf;
+			nbytes: integer): integer;
+	FUNCTION close(fildes: integer): integer;
+	FUNCTION getpid(): integer;
+	FUNCTION getuid(): integer;
+	FUNCTION geteuid(): integer;
+	FUNCTION getgid(): integer;
+	FUNCTION getegid(): integer;
+	FUNCTION link(name1, name2: string): integer;
+	FUNCTION lseek(fildes, offset, whence: integer): integer; 
+	FUNCTION unlink(name: string): integer;
+
+
+	FUNCTION WriteChar(fildes: integer; c : char);
+	FUNCTION WriteInt(fildes: integer; i : integer);
+	FUNCTION WriteReal(fildes: integer; r : real);
+	FUNCTION WriteLn(fildes: integer);
+	FUNCTION WriteSpaces(fildes: integer; n : integer);
+	FUNCTION WriteString(fildes: integer; str: string);
+
+	FUNCTION ReadChar(fildes: integer): char;
+	FUNCTION ReadInt(fildes: integer): integer;
+	FUNCTION ReadReal(fildes: integer): real;
+	FUNCTION ReadString(fildes: integer): string;
+
+END;

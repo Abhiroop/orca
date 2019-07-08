@@ -1,0 +1,83 @@
+
+            Monte Carlo: Informatie + Gebruiksaanwijzing
+            --------------------------------------------
+
+Deze directory bevat de volledige versie van het Monte Carlo programma,
+en is bedoeld voor de Faculteit Natuur- en Sterrenkunde.
+
+
+Input-files
+-----------
+Het programma verwacht 2 input-files: 'fort.20' en 'c3h6.i'.
+De file 'fort.20' bevat de initiele posities van de ionen in een
+cluster. De posities van de (bijbehorende) electronen worden run-
+time bepaald.
+De file 'c3h6.i' bevat extra gegevens, zoals de gebruikte electronen-
+verdelings functie e.d. Ook zijn hierin de zgn. reduction-constants
+opgenomen, die bij een parallelle run bepalen wanneer een process-
+reduction wordt uitgevoerd. Let hierbij op dat de waarden voor Myri-
+net en Ethernet verschillen.
+Daarnaast kan in de file 'c3h6.i' worden aangegeven of een globale
+(shared) random number generator moet worden gebruikt (zodat de re-
+sultaten _altijd_ identiek zijn, ongeacht het aantal processoren),
+of dat ieder proces een eigen (lokale) random number generator heeft.
+
+Overigens kan een filenaam als command-line optie worden meegegeven.
+Als de opgegeven file bestaat, wordt deze gebruikt i.p.v. 'c3h6.i'.
+
+
+Random numbers
+--------------
+De input-file 'fort.20' bevat de initiele posities van de ionen in een
+cluster. Met het meegeleverde programma 'random' is een input-file voor
+een willekeurig aantal elementen te maken. Bijvoorbeeld:
+
+	random 5
+
+levert:
+	        10
+	-3.5414925E-12 -3.7816181E-10 -3.9292521E-12
+	 0.5416521E-11  1.5052945E-10 -6.9434125E-09
+	 8.7276785E-09  1.3054563E-11  6.9614361E-11
+	 2.9430189E-10  2.3612725E-11  2.5438525E-09
+	 4.9658569E-12  9.1690725E-11  8.5072909E-09
+		 2
+	 4.4141102E-10  2.1915001E-09 -5.9105006E-11
+		 2
+	 4.4141102E-10  2.1915001E-09 -5.9105006E-11
+		 :
+		 :
+		 :
+
+Het gaat hier alleen om het eerste blok, waarin aangegeven staat dat
+er totaal 10 elementen (5 ionen + 5 electronen) in het systeem zijn,
+gevolgd door de X, Y en Z posities van de 5 aanwezige ionen.
+
+
+Grote probleem-grootten
+-----------------------
+Zolang het aantal elementen in het systeem niet boven de 2000 komt,
+treden er geen problemen op. Als het aantal echter groter is dan 2000
+kan het voorkomen dat het aantal recombinaties in een time-step te
+groot wordt (melding: IREC > MREC). In dit geval is het verstandig de
+waarde voor MREC (zie 'Common.spf') te vergroten.
+
+
+Aangepast Run Time System
+-------------------------
+Om er voor te zorgen dat er geen onnodige communicatie optreedt als
+nog slechts 1 process aan het werk is, is een aanpassing gemaakt aan
+het Orca RTS. Het is verstandig altijd te compileren met deze aange-
+paste versie. Gebruik daarvoor: /home/koen/bin.sh/oc_p. In de meege-
+leverde 'Makefile' is dit ook opgenomen.
+
+
+Vragen?
+-------
+Als er nog vragen zijn, dan ben ik (tot eind augustus '96) bereikbaar
+via e-mail: fjseins@cs.vu.nl. Misschien is het ook verstandig mijn
+scriptie door te lezen: /usr/proj/orca/papers/seinstra/moca.ps
+
+Succes!
+
+Frank.

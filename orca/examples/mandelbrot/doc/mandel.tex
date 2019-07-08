@@ -1,0 +1,700 @@
+\documentstyle[epsf,11pt,fleqn,a4]{article}
+
+\def\Skip{\par\bigskip\nobreak}
+\def\sect#1{\section{#1}\small}
+\def\subsect#1{\subsection{#1}\small}
+\def\subsubsect#1{\subsubsection{#1}\small}
+
+\def\drawpsfig#1#2{
+  \begin{figure}[hbt]
+    \mbox{\epsffile{#1}}\\
+    {\scriptsize \caption{#2}}
+  \end{figure}
+}
+
+\title{A Mandelbrot Program in Orca}
+
+
+\author{Peter Boncz \\
+	Vrije Universiteit Amsterdam \\
+	boncz@cs.vu.nl}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper describes the design and implementation of a simple Mandelbrot Set
+computation program in the parallel language Orca.
+The author's experiences with the Amoeba implementation of Orca are 
+summarized, and the performance of this implementation is then discussed.
+\end{abstract}
+\newpage
+
+\sect{Designing the Program}
+The purpose of this project was to implement a Mandelbrot Set calculator
+using Orca \cite{orca-refman}, an Algol-like language with explicit support 
+for shared objects on distributed-memory machines.
+
+An obvious way to organize such a program is:
+\begin{itemize}
+\item Worker processes will compute parts of the Mandelbrot.
+\item A display window will display their results on the screen,
+as they are computed. 
+\item A controller process will control the cooperation of all processes and
+measure execution times.
+\end{itemize}
+The fact than more than one worker can simultaneously work on the problem, 
+creates the parallelism in this design.
+
+The bitmap display cannot be done by the controller process 
+itself, because this process should measure the pure computation time. As 
+displaying starts as soon as the results come in, it probably will end well
+after computation has ceased. This would create an unacceptable 
+difference in the time measurement. 
+\Skip
+Coming to these issues in more detail, take note of the following:
+\begin{itemize}
+\item {\em scheduling policy}
+
+The workers that compute the Mandelbrot, a need to distribute
+the work in patches. The scheduling algorithm chosen was guided-self-scheduling
+algorithm, as described in \cite{gss}.
+
+The to-be-computed Mandelbrot bitmap is treated as if it were one long string
+of points, by conceptually concatenating all horizontal scanlines of the 
+bitmap, from top to bottom. A {\em work\_pointer} points to the position up 
+to which all points have already been handed out to some worker. When a
+worker asks for work, the {\em work\_pointer} is incremented. The worker then 
+will have to compute the interval  
+[{\em work\_pointer}$_{old}$,{\em work\_pointer}$_{new}$).
+
+The size of the patch is determined by the
+basic principle of guided-self-scheduling: divide the remaining work by the
+number of workers.  
+
+\item {\em user interaction}
+
+To make this a user-friendly program, some user interaction was added
+to the design:
+\begin{itemize}
+\item {\em zoom. } 
+The user can zoom into a specific part of the Mandelbrot, by selecting a
+rectangle with the mouse in the currently computed Mandelbrot bitmap. 
+\item {\em resize. } 
+When the Mandelbrot bitmap is resized, it will be computed anew, displaying
+the same part, but in a new scale of detail, reflecting the new window-size.
+\item {\em reset. } 
+This option will bring the user back to a view of the entire Mandelbrot.
+\item {\em dwell\footnote{The dwell is the number of iterations that
+the Mandelbrot algorithm executes to determine whether or not a given point
+belongs to the Mandelbrot Set. The lower the dwell, the faster the 
+algorithm will run. The higher, the more detail the graphic will show).}.} 
+This option will enable the user to select a new dwell. The currently
+displayed part of the Mandelbrot will then be computed anew with the new 
+parameters
+\end{itemize}
+
+\item {\em graphics display}
+
+A final thing to note is that Orca does not support programming interactive
+graphic applications. A simple C module that uses the X Toolkit to display
+bitmaps was therefore implemented. The interface of this module
+will be described in Section \ref{label:display}. 
+Whenever something needs to be drawn, the Orca program calls up the C routines
+of this module, providing the correct parameters. The {\em xdisplay} module
+(as it is called), will be kept quite simple, leaving all intelligent
+work to the Orca program.
+\end{itemize}
+\Skip
+The below figure displays an overview of the Mandelbrot program.
+\drawpsfig{mandel.eps}{The decomposition of Mandelbrot computation in Orca processes and shared objects.}
+
+\clearpage
+
+
+
+\sect{How It Works}
+
+As already described, the program will have three types of processes: one 
+controller, one display process, and the worker processes.
+
+\subsect{The Controller}
+The code of the controller is as follows:
+\begin{verbatim}
+ 1 BEGIN
+ 2     n_workers := NCPUS()-1;
+ 3     work$Init(n_workers); # init the Scheduler shared object.
+ 4     draw_queue$Init();    # init the Draw JobQueue shared object.
+ 5     request$Reset();      # init the User Request shared object.
+ 6
+ 7     FORK CreateDisplay(WIDTH, HEIGHT, draw_queue, request) ON 0;
+ 8
+ 9     # fork the workers 
+10     FOR i IN 1..n_workers
+11         DO FORK Worker(work, draw_queue) ON i; OD;
+12
+13     work$AllIdle(); # wait till all workers are waiting for work.
+14
+15     WHILE (request$Next(req_data))
+16     DO
+17         time := SysMilli();      # record the current time
+18         work$GiveWork(req_data); # give the workers.. work! 
+19
+20         work$AllIdle();          # wait for all computation to terminate
+21         draw_queue$NoMoreJobs(SysMilli()-time);  # unblock the displayer
+22     OD;
+23     work$NoMoreWork();
+24     Finish();
+25 END;
+\end{verbatim}
+
+The first FORK is that of the display process (on processor zero). Then,
+the worker processes are forked, each on a different processor (lines 7-11).
+Due to problems as described in section \ref{label:Amoeba}, workers
+are not overloaded opn processors.
+
+After that, the controller synchronizes with all workers on line 13: it blocks
+until all workers are waiting for work.
+\Skip
+For each user request, a Mandelbrot pixmap will then be computed in the loop
+from line 15 to 22. Note that the {\em request}\ object has been initialized
+in line 5 with the {\bf Reset()} operator, which calls for the computation
+of the entire Mandelbrot picture. 
+
+For each iteration of the loop, the new work description will be distributed 
+(line 18), and the controller then waits until all computation has terminated 
+(line 20). It then signals to the display process, that the last drawing job 
+has been added to its queue in line 21, and then start to wait for a new user 
+request.
+
+If the user selects the quit button, the operation on line 15 will unblock
+and evaluate to false. For all other user requests, it unblocks and
+evaluates to true, returning a new work description. 
+\Skip
+Finally, the operation on line 23 will cause all workers to die. The display
+process will already have died after receiving the quit request.
+This means that all other processes than the controller will be dying, so
+{\bf Finish()} is called in line 24.
+\Skip
+All communication in Orca happens via its concept of shared variables.
+As can be seen in lines 3-5, there are three shared objects:
+\begin{itemize}
+\item a {\bf Scheduler} object ({\em work}). 
+\item a {\bf Draw JobQueue} object ({\em draw\_queue}).  
+\item a {\bf User Request} object ({\em request}).
+\end{itemize}
+
+\subsubsect{The Scheduler} \label{label:scheduler}
+
+This is an enhanced integer-object, that provides a fetch-and-add operation 
+on the already discussed {\em work\_pointer}.  It takes care of applying 
+guided-self-scheduling to compute the patch sizes. To do that, it has to know 
+the number of workers, and the size of the work. This first parameter is given
+to it when the object is initialized at line 3 with the {\bf Init()} operation.
+The second parameter is supplied for each user request with the, at line 18, 
+with the {\bf GiveWork()} operation.
+
+As computation proceeds, the GSS size computation algorithm will give out
+jobs of steadily decreasing sizes. Taking this to the letter, the last few
+sizes will be down to as low as 1 pixel. At this point, communication overhead
+will already outweigh the benefits of good load balancing. Clearly,
+there is a need for some MIN\_JOB\_SIZE constant. 
+
+Also, as we will see in Section \ref{label:draw}, the graphics window expects
+each drawing job to be a rectangle with a width that is a multiple of 32 (for
+optimization reasons). It was therefore decided that the scheduler would always
+assign jobs consisting of a sequence of entire scanlines (as the width
+of the bitmap is always a multiple of 32).  
+
+So, this choice fulfills the wish for a minimum job size and sizes multiples
+of 32 in one go. The {\bf NewJob()} operation of Scheduler, will do all
+the above, returning a new job assignment as an OUT parameter.
+
+As to the earlier shown code, the {\bf Init()} and {\bf GiveWork()} put 
+job information into the object.
+Since the Scheduler has knowledge of both the number of workers, and the 
+number of blocked workers (they block in one of its own operations), 
+this enables it to manage the synchronization operation {\bf AllIdle()}.
+This operation blocks until all workers are idle.
+
+Finally, the {\bf NoMoreWork()} operations tells the scheduler that it should 
+turn workers down that ask for more work. 
+
+
+\subsubsect{The DrawJobQueue}  
+
+This is a JobQueue (an object from the standard libraries of Orca) which
+contains jobs for the display process. That is, it contains patches
+of the bitmap that need to be drawn on the screen. 
+\begin{verbatim}
+TYPE store_t = ARRAY [integer] OF char;
+
+TYPE job_t = RECORD
+                 start: integer; # start position in the bitmap. 
+                 size: integer;  # size of the patch
+                 results: store_t; # the patch data
+             END;
+\end{verbatim}
+The above should have made clear, that it are the worker processes who
+will generate the jobs in the queue, using the operator {\bf PutJob()}.
+The display process will eat them up, by repeatedly calling {\bf GetJob()}.
+
+The {\bf NoMoreJobs()} operation tells the queue-reader (i.e. the display
+process), that is should not wait for more jobs once the queue gets empty.
+As a parameter, it gets the time it took to compute the request. When it
+has drawn all jobs, the display process will also display this statistic
+in the graphics window.
+
+Note that the queue will be reused in each iteration. So, the 
+queue needs to be reinitialized with {\bf Init()} at the start of each 
+iteration. As we will see later, the display process takes care of this. 
+
+
+\subsubsect{The User Request}
+
+A user request is an object that manages access to a record 
+\begin{verbatim}
+TYPE request_t = RECORD
+                     scale: real;
+                     x_left: real;
+                     y_up : real;
+                     width: integer;
+                     height : integer;
+                     dwell : integer;
+                 END;
+\end{verbatim}
+that describes which part of the Mandelbrot currently has to be computed.
+The semantics of the record fields are straightforward.
+\Skip\noindent
+For each user request, a separate operation exists. They have the following meaning:
+\begin{itemize}
+\item {\bf Reset()}
+Reset the viewpoint to a view of the entire Mandelbrot fractal.
+\item {\bf Zoom(x, y, w, h)}
+The user selected a zoom rectangle at screen pixel (x,y), width
+\item {\bf Resize(w, h)}
+The user resized the display window to a window with width 
+``w'' and height ``h''. 
+\item {\bf NewDwell(x)}
+The user selected a new dwell ``x'' to be used in future computations.
+\item {\bf Quit()}
+The user selected the quit button.
+\end{itemize}
+The {\bf Next()} operation blocks until a request has been done. 
+That is, until one of the above operations has been invoked. This is
+done by the user via the display process, which has also acces to the Request 
+object. The very first time the program reached line 15 however, it 
+will unblock immediately, since the controller initializes the
+Request object in line 5, executing the {\bf Reset()} operation. 
+When {\bf Next()} deblocks, it gets the current request record as an 
+OUT parameter. 
+
+\newpage
+\subsect{The Workers}
+
+The code of the workers is as follows:
+\begin{verbatim}
+ 1 PROCESS Worker( work: SHARED Scheduler;
+ 2                 draw_queue: SHARED JobQueue);
+ 3         job: job_t;
+ 4         req_data: request_t;
+ 5 BEGIN
+ 6     # do jobs for the same request
+ 7     WHILE (GetWork(work, job, req_data))
+ 8     DO
+ 9         # write the results (exactly the right array size) 
+10         job.results := MandelArea(req_data, job.start, job.size);
+11
+12         draw_queue$AddJob(job);  # add the job to be drawn 
+13     OD;
+14 END;
+\end{verbatim}
+This is simple. The worker repeatedly asks the Scheduler object {\em work} for
+a job (line 7), and then calls on the function {\bf MandelArea()} to compute it
+(line 10).  The use of a function to return the resulting array is the 
+only way allocate variable-sized (run-time) arrays in Orca. 
+
+Allocating an array of fixed (i.e. maximum) size would cause the RTS to
+communicate an array of maximum size always, also when large parts of 
+the array would actually be unused. 
+
+The function {\bf MandelArea()} is a straightforward implementation of a 
+Mandelbrot computation. It determines for each point whether or not it belongs
+to the Mandelbrot Set. The result of each such a computation is a char.
+These chars represent color values. We assume that the display hardware
+has N\_COLORS colors, of which we leave N\_RESERVED to the system. These 
+constants are defined in the file Mandelbrot.spf. Our range of color values 
+thus is [N\_RESERVED, N\_COLORS). The first value, N\_RESERVED, represents 
+black, and is used for points not in the Mandelbrot Set. The other
+values in the range represent points that do belong to the Mandelbrot
+Set. Their values depend upon the number of iterations it took
+to discover so.
+\Skip
+After each job has been computed, it is added to the drawing queue (line 12).
+
+
+\newpage
+\subsect{The Displayer} \label{label:display}
+
+A graphics display module has been implemented, written as C module, using 
+the X Window system, and the X Toolkit, and the Athena Widgets libraries.
+The implementation details of this module will not be described in this 
+paper\footnote{"Use the source, Luke!", as they say at MIT.}. It has 
+the following interface:
+\begin{verbatim}
+FUNCTION create(n_colors, n_reserved, width, height : IN integer;
+                queue: SHARED JobQueue; request: SHARED Request);
+
+FUNCTION draw(  start, size: IN integer; 
+                results: IN store_t; direct: IN integer);
+
+FUNCTION ready(time: IN integer);
+\end{verbatim}
+
+
+
+\subsubsect{Creating the Graphics Window}
+
+The {\bf create()} function, creates the empty graphics window on the screen.
+It will invoke a C routine, that uses the first four integer parameters to 
+create the window. The last 2 SHARED objects will simply be cast to a (void *),
+and will be stored in a safe location, for later use. 
+\Skip
+The display process simply consists of a call to {\bf create()}:
+\begin{verbatim}
+1 PROCESS CreateDisplay(width, height: IN integer;
+2                       draw_queue: SHARED JobQueue;
+3                       request: SHARED Request);
+4 BEGIN
+5     Xdisplay.create(N_COLORS, N_RESERVED, width, height, 
+6                     draw_queue, request);
+7 END;
+\end{verbatim}
+
+There was one problem with this: to put the window on the screen, 
+the C module has to enter the so-called {\bf XtAppMainLoop() }, which is
+a mainloop that never returns. You cannot leave this loop: that would destroy
+the window. 
+
+Windowing systems like X11 usually work with {\em callbacks}, and that is what
+happens here also. These callbacks can be registered in the mainloop, and will
+be called by it, when certain conditions get fulfilled.
+
+In the case of {\bf create()}, it will trigger a timeout (after 1 second,
+currently) that calls back the Orca function {\bf DrawCallback()}.
+This function can then read jobs from the queue and draw them on the screen,
+as described below.
+
+
+
+\subsubsect{Drawing Graphics} \label{label:draw}
+
+The {\bf draw()} function is a straightforward 
+function that, after execution, directly returns (no callbacks needed). 
+
+It will draw an array of chars at position ``start'' in the bitmap. 
+Every character in the array prepresents one point. The char value N\_RESERVED
+will be represented as black, the other values will be painted in shiny colors 
+(on color monitor, that is. In B/W everything else than N\_RESERVED is 
+represented as white).
+
+For optimization reasons, the array of char should have a size that is a
+multiple of 32 bytes.
+\Skip
+The following is the code of the callback function {\bf DrawCallback()}, as 
+mentioned earlier: 
+\begin{verbatim}
+ 1 FUNCTION DrawCallback(draw_queue: SHARED JobQueue);
+ 2 job: job_t;
+ 3 t: integer;
+ 4 BEGIN
+ 5     # this routine is called back one by Xdisplay for each request.
+ 6     WHILE (draw_queue$GetJob(job, t))
+ 7     DO
+ 8         # draw the job.
+ 9         Xdisplay.draw(job.start, job.size, job.results, 1);
+10     OD;
+11     draw_queue$Init(); # re-init the queue for later use.
+12
+13     Xdisplay.ready(t); # go wait for new request. 
+14 END;
+\end{verbatim}
+The {\bf GetJob()} operation on the queue retrieves a job from it, as long
+as there are. The second parameter is unused, until {\bf GetJob()} evaluates
+to false. It then holds the number of milliseconds
+it took to compute all jobs in the queue.
+\Skip
+There is a catch here. The problem is the way in which the Orca-to-C compiler
+turned out to represent arrays. They wind up in an {\em array descriptor},
+which is a C struct like:  
+\begin{verbatim}
+typedef struct {  
+        void *a_data; 
+        int upperbound, lowerbound; 
+	/* more stuff... */
+} orca_array_t;
+\end{verbatim}
+So, first comes the pointer to the array itself ({\em a\_data}), then some more
+fields. This means that, when {\bf draw()} is called, it actually passes a
+pointer to the {\em array descriptor}, rather than to the array itself!
+So, the C module has to dereference one pointer to reach the real data.
+\Skip
+This potential crisis was solved by putting a typedef like the above in 
+the C file, {\bf orca\_link.h}, which is included by the C module. 
+It also contains most other dependencies with Orca, such as the \#defines
+for the callback functions.
+
+
+
+\subsubsect{Incorporating User Actions}
+
+After the entire bitmap has been drawn, the {\bf DrawCallback()} operation
+of the previous section calls the {\bf ready()} function.
+Its one parameter is a time in milliseconds. This time statistic
+will be displayed in the window header.  
+The {\bf ready()} function waits for a new user request. In Section 1 I already
+touched upon the requests: resize, zoom, reset and quit. 
+\Skip
+The C module will catch the user actions and pass them to Orca with a second 
+callback: {\bf RequestCallback()}.
+\begin{verbatim}
+ 1 FUNCTION RequestCallback(request: SHARED Request; 
+ 2                          request_type, x, y, w, h: IN integer);
+ 3 BEGIN
+ 4      # the user did a request (quit, reset, zoom or resize)
+ 5      CASE request_type OF
+ 6         REQUEST_QUIT   => request$Quit();          |
+ 7         REQUEST_RESET  => request$Reset();         |
+ 8         REQUEST_RESIZE => request$Resize(w, h);    |
+ 9         REQUEST_DWELL  => request$NewDwell(x);     |
+10         REQUEST_ZOOM   => request$Zoom(x, y, w, h);	
+11     ELSE
+12         WriteLine("ERROR: unknown request ", request_type, ".");
+13     ESAC;
+14 END;
+\end{verbatim}
+The request and its parameters are passed to the Orca callback routine. It
+then applies the corresponding operation on the SHARED request object. 
+They have as effect that the Mandelbrot parameters inside the {\em request}
+object change correspondingly. Also, it causes any blocked processes on the
+{\bf NextRequest()} operation to be revived, returning the new data. In
+concrete terms, any of the operations will revive the blocked controller,
+and trigger a new iteration of Mandelbrot computation (expect for the 
+{\bf Quit()} operation, which will cause the program to terminate).
+\Skip
+Please take some time to deduce from the code for which purposes the five 
+integer parameters of {\bf RequestCallback()} are used, in the different cases.
+\Skip
+Note that in both Orca callback functions, the shared parameters
+are passed back from the C module. As explained before, the {\bf create()}
+function had cast them (void *), and stored them in a safe location. Now, 
+they are simply cast back to Orca SHARED objects. 
+
+Amazingly, this actually works!
+
+\newpage
+
+\sect{Running it on Amoeba} \label{label:Amoeba}
+
+This section starts with a description of the problems that were 
+encountered running the initial program on the distributed operating 
+system Amoeba \cite{amoeba:652}. 
+
+It continues with a discussion of the fixes which were applied to make it work.
+
+Finally, an overview of performance measurements will be given.
+
+\subsect{Problems \&\& Fixes}
+
+The oc\_unixproc RTS, which simulates parallellism wusing threads on 
+a single UNIX platform, turned out to be a useful tool for developing and 
+debugging the Mandelbrot program outside its (true) parallel environment.
+
+After having got the program up and running under this RTS, moving it
+to the bcast-rpc RTS \cite{orca-rts} on Amoeba caused some problems.
+
+\subsubsect{No Fragmentation}
+
+The bcast-rpc RTS on Amoeba does not provide support for fragmentation
+of messages. Of course, thinking about message and their sizes should 
+not be a duty of an Orca programmer.
+\Skip
+The deciding question is, whether the operations on the shared objects have 
+parameters that occupy more than the maximum message size. 
+\Skip
+If they occupy more, there will be trouble. You can, however, put the
+message size of the RTS on a (fixed) higher size, by giving the -m M option to 
+{\bf gax} (M is the log2 of the preferred message size).
+However, this -m option is limited by the physical memory size of the pool
+processors. Experimentin learned that -m 15 (32768 bytes) is the largest 
+message size possible.
+
+For larger sizes, processes die with ``out of memory'' errors.  
+\Skip
+This problem was resolved by putting a MAX\_JOB\_SIZE in the Scheduler object.
+The limiting factor in the Mandelbrot program are the {\bf PutJob()} and
+{\bf GetJob()} operations, which store and fetch jobs from the JobQueue. The
+sizes of these jobs, however, are determined in the {\bf NewJob()} operation
+of Scheduler.
+
+In all, since a MIN\_JOB\_SIZE was already added to Scheduler (as described
+in Section \ref{label:scheduler} one can ask oneself to what degree the 
+Scheduler object still reflects guided-self-scheduling.
+
+
+\subsubsect{Memory limitations}
+
+This problem has just been mentioned. But it also turns up when message
+sizes are not the problem. Running the program with the -m 15 (32K)
+command-line option to gax on more than 20 workers, gax aborted due to lack
+ of memory. With less 20 processors, the program ran fine. 
+So it seems that the number of forked processes also plays in this.
+\Skip
+When the named MAX\_JOB\_SIZE is lowered sufficiently (to 8K), this 
+problem ceases to occur.
+
+
+
+\subsubsect{Overloading Processors}
+
+When forking more than once on the same processor, you are in dangerous 
+waters on Amoeba. With more than one worker active on one processor,
+the processes exit with signal 11 (memory violation).
+
+This seems to be due to a bug in Amoeba (?).
+\Skip
+The Mandelbrot program does not overload worker processes any more. As a
+consequence, the minimal number of processes the Mandelbrot program runs on 
+is 2: the controller and the X process on 0 and one worker on 1.
+
+
+
+\subsubsect{RTS bug with OUT object parameters}
+
+The same type of problem (signal 11, memory violation) was encountered, with
+a program containing a SHARED object with an operation that had a simple,
+non-shared, object as an OUT parameter.
+The bug did not occur on operations that had an simple-type (e.g. integer)
+OUT parameter.
+\Skip
+This problem was circumvented,
+rather than having to wait for the fix (using a RECORD instead of an
+object also made my code run faster, since objects cause lots of RTS
+procedure calls).
+
+
+
+\subsubsect{Forced replication with lots of ($>$20) workers}
+
+If an object is only WRITTEN by the workers, clearly, the
+better strategy for the RTS is to store that object on one processor.
+Replication would cause lots of overhead with all those writes.
+
+Usually, the RTS handles this correctly. However, an operation on a shared
+object in the non-replicated case uses RPC. A blocking (guarded) operation 
+on a object can cause a RPC-thread to created on the processor where the
+object is located.
+
+But Amoeba is afraid of having the system brought down by the fact that,
+say N (N$>$20) workers do a blocking call on such an object (creating each
+a thread to wait on).
+This is why the RTS on objects that are written by more than 20 processes
+always decide to replicate. 
+
+This, in its turn, can cause very poor performance, which can be the more
+grieving for programmers who know that there never would be that much blocking
+workers.
+\Skip
+
+In the OrcaMain() a special Orca function call was added:
+\begin{verbatim}
+	Strategy(draw_queue, 0, 0); 
+\end{verbatim}
+This states that {\em draw\_queue} should not be replicated and should
+be stored with the X process (which is on proc. nr. 0).
+This only workes using a special version of the RTS, in which the 
+automated replecation strategy choosing mechanism is disabled.
+
+
+
+\subsubsect{Stopping Program Execution}
+
+First of all, the controlling process (probably OrcaMain()) should use:
+\begin{verbatim}
+	Finish();
+\end{verbatim}
+to announce to the RTS that execution should terminate now. Forgetting that,
+will hang the program. 
+\Skip
+Not very serious, allthough a bit annoying, is that somethimes Amoeba
+gives a message like:
+\begin{verbatim}
+    1: endcommunication: rpc_trans failed server not found
+    gax: member 1 (pid 38) exited with status 1
+\end{verbatim}
+CTRL-C is necessary then. 
+\Skip
+
+
+\subsect{Results}
+Measurements of the Mandelbrot program performance were done on both
+the the sequential {\bf unixproc} and the parallel {\bf bcast-rpc} RTS's. 
+\Skip
+The comparison is not a fair one, since both machines on which the unixproc
+application ran were both not comparable with the pool processors of Amoeba.
+
+The kits is much faster, whereas the jol is far slower.
+Because of that, the bcast-rts version with one worker (and
+two additional processes - on 1 processor - for the controller and the 
+displayer) was chosen as a benchmark for the speedup calculations. 
+\Skip
+It should be made clear that the measured times stem from the {\bf SysMilli()}
+function. So, the data may be flawed by contention on the network due to
+other pool jobs, or even other processes running on Amoeba without me knowing
+it.
+
+\subsubsect{Measurements}
+\begin{verbatim}
+Platform          #Workers   Sec.     Speedup    Remarks
+===============================================================
+unix_proc             1    161.260               (kits, 1 proc)
+unix_proc             1    612.260               (jol, 1 proc)
+Amoeba bcast-rpc      1    231.740      1.00     (zoo, #Workers+1)
+"              "      2    122.557      1.91     "            "
+"              "      3     75.680      3.06     "            "
+"              "      4     56.850      4.08     "            "
+"              "      5     45.340      5.11     "            "
+"              "      6     37.380      6.20     "            "
+"              "      7     33.778      6.86     "            "
+"              "      8     29.444      7.87     "            "
+"              "      9     24.983      9.27     "            "
+"              "     10     22.856     10.10     "            "
+"              "     11     21.540     10.76     "            "
+"              "     12     20.469     11.32     "            "
+"              "     13     18.388     12.60     "            "
+"              "     14     16.968     13.66     "            "
+"              "     15     15.796     14.67     "            "
+"              "     16     15.782     14.68     "            "
+"              "     17     13.942     16.62     "            "
+"              "     18     13.197     17.56     "            "
+         Computation of a rectangle of Mandelbrot points. 
+(X,Y)=(-0.669643, -0.387500), 960x640, scale=0.000156, dwell=300.
+\end{verbatim}
+It is interesting to observe that the parallel program outruns the
+display processes for most Mandelbrot jobs by a factor of 2. That is, using 
+standard dwells, such as in the range [50-150]. With higher dwells, however,
+workers have a harder time, and displaying happens as the computed pieces
+come in.
+\Skip
+Computing with a higher dwell gives a more detailed view of the Mandelbrot
+fractal. Seen in a different light, this can be interpreted as a {\em scale-up}
+advantage of the parallel program, adding to the clear {\em speedup} 
+advantages, showed in both the table and the figures. 
+
+\drawpsfig{measurements.eps}{Mandelbrot Speedup for Computation of a 960x640 Grid}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}             % End of document.

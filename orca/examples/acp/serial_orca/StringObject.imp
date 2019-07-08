@@ -1,0 +1,66 @@
+#=======================================================================
+#==== StringObject.imp : some string function definitions           ====
+#==                                                                   ==
+
+MODULE IMPLEMENTATION StringObject;
+
+#=======================================================================
+# == operations                                                       ==
+#=======================================================================
+
+#
+# compare-string() : return ordering of two strings ({-1, 0, 1}
+#                   S1 is lexicographically {smaller, equal, larger} than S2
+#
+
+FUNCTION compare_string(
+string1 : string;				# first string
+string2 : string				# second string
+) : integer;					# string 1 {<, =, >} string 2
+
+	length1, length2 : integer;		# lengths of string1 resp. string2
+	min_length : integer;
+BEGIN
+	length1 := length_string(string1);
+	length2 := length_string(string2);
+
+	IF (length1 < length2 ) THEN
+		min_length := length1;
+	ELSE
+		min_length := length2;
+	FI;
+
+
+	FOR i IN 1..min_length DO
+		IF string1[i] < string2[i] THEN
+			RETURN -1;
+		ELSIF string1[i] > string2[i] THEN
+			RETURN 1;
+		FI;
+	OD;
+
+	IF length1 < length2 THEN
+		RETURN -1;
+	ELSIF length2 < length1 THEN
+		RETURN 1;
+	ELSE
+		RETURN 0;
+	FI;
+END;
+
+
+#
+# length_string() : return length of a string
+#
+
+FUNCTION length_string(
+	str : string                            # string to return length of
+) : integer;                                    # the length
+
+BEGIN
+	RETURN UB(str);
+END;
+
+END;
+
+

@@ -1,0 +1,51 @@
+#!/bin/csh -f
+
+# if (! $?PANDA_PROJ) set PANDA_PROJ = /net/panda
+
+set BIN		= /net/panda/bin
+set max_fds	= `$BIN/max_fd`
+set RM		= /bin/rm
+
+set FILENAMES	=
+set outfile	= "-"
+
+set args	= ""
+
+while ($#argv > 0)
+switch ($1)
+case -o:
+	shift
+	set outfile=$1
+	set VERBOSE
+	breaksw
+case -v:
+	set VERBOSE
+	set args = "$args $1"
+	breaksw
+case -*:
+	echo No such flag: $1
+	breaksw
+default:
+	set FILENAMES=($FILENAMES $1)
+	breaksw
+endsw
+shift
+end
+
+@ max_fds = $max_fds - 3
+
+if ($#FILENAMES <= $max_fds) then
+	$BIN/trc_sm -o $outfile $FILENAMES
+else
+	set i = 1
+	set TMPFILES =
+	while ($i <= $#FILENAMES)
+		@ upb = $i + $max_fds - 1
+		if ($upb > $#FILENAMES) set upb = $#FILENAMES
+		$BIN/trc_sm $FILENAMES[$i - $upb] > /tmp/trc_merge.$$.$i
+		set TMP_FILES = "$TMP_FILES /tmp/trc_merge.$$.$i"
+		@ i = $upb + 1
+	end
+	$BIN/trc_pp $args -o $outfile $TMP_FILES
+	$RM $TMP_FILES
+endif

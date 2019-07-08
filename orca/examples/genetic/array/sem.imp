@@ -1,0 +1,19 @@
+OBJECT IMPLEMENTATION sem;
+
+	x: integer;
+
+OPERATION V();
+BEGIN
+	x +:= 1;
+END;
+
+OPERATION P();
+BEGIN
+	GUARD x>0 DO
+		x -:=1;
+	OD;
+END;
+
+BEGIN
+	x := 1;
+END;

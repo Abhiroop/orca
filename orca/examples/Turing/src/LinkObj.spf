@@ -1,0 +1,59 @@
+#===============================================================
+#=======        LinkObj.spf: Links the processors       ========
+#===                                                        ====
+OBJECT SPECIFICATION LinkObj;
+# This object links two processors
+
+FROM Turing IMPORT CellType;
+
+	OPERATION MoveTo(Pred: integer; Prey: integer);
+        # Set the link's number of migrants
+
+	OPERATION GetMovers(Pred, Prey: OUT integer);
+	# Get the link's animals moving in
+
+	OPERATION GetPred(): integer;
+        # Get the link's predators moving in
+
+	OPERATION GetPrey(): integer;
+        # Get the link's preys moving in
+
+	OPERATION DropCell(Cell: CellType);
+        # Store a cell in the link for our neighbour
+
+	OPERATION OverLoad(): boolean;
+        # return true if the link contains a cell
+
+	OPERATION OverLoadCell(): CellType;
+        # Return the cell the neighbour stored in the link.
+
+
+	OPERATION SetInitInfo(Load: IN integer; LoadDiff: IN integer);
+	# Set worker's load and loaddiff
+
+	OPERATION GetInitInfo(Load: OUT integer; LoadDiff: OUT integer);
+	# Get worker's load and loaddiff
+
+	OPERATION SetLoad(Load: IN integer);
+        # Set worker's load.
+
+	OPERATION GetLoad(Load: OUT integer);
+	# Get worker's load.
+
+	OPERATION SetLoadDiff(LoadDiff: IN integer);
+	# Set worker's possible load difference, i.e. load of border cell.
+
+	OPERATION GetLoadDiff(LoadDiff: OUT integer);
+	# Get worker's possible load difference, i.e. load of border cell.
+
+	OPERATION SetFLoad(FLoad: IN integer);
+	# Set worker's expected load.
+
+	OPERATION GetFLoad(FLoad: OUT integer);
+	# Get worker's expected load.
+
+END;
+
+#===                                                        ====
+#=======        LinkObj.spf                             ========
+#===============================================================

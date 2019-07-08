@@ -1,0 +1,245 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/* Numbered message buffer implementation built on top of fifo message buffer.
+ *
+ * Two varieties of many functions:
+ *  1 really implements it
+ *  2 locks the buffer, calls 1, unlocks the buffer
+ */
+
+
+#ifndef __PAN_GRP_HIST_CI__
+#define __PAN_GRP_HIST_CI__
+
+
+#include <stdio.h>
+
+#include "pan_sys.h"
+
+#include "grp_global.h"
+#include "grp_header.h"
+#include "grp_hist.h"
+
+
+
+
+	/* Percentage at which buffer is considered nearly full */
+#ifndef BUF_NEARLY_FULL
+#  define BUF_NEARLY_FULL	50	/* 75 */
+#endif
+#ifndef BUF_NEEDS_ACK
+#  define BUF_NEEDS_ACK		40	/* 75 */
+#endif
+
+int pan_hist_nearly_full_perc = BUF_NEARLY_FULL;
+int pan_hist_send_status_perc = BUF_NEEDS_ACK;
+
+
+#define HISTMOD(h, i)		((i) & ((h)->size - 1))
+#define HISTBUF(h, i)		((h)->buf[HISTMOD(h, i)])
+
+
+STATIC_CI boolean
+pan_hist_nearly_full(hist_p hist)
+{
+    return (100 * (hist->next - hist->last) >=
+		pan_hist_nearly_full_perc * hist->size);
+}
+
+
+STATIC_CI int
+pan_hist_upb(hist_p hist)
+{
+    return hist->last + hist->size;
+}
+
+
+STATIC_CI boolean
+pan_hist_full(hist_p hist)
+{
+    return (hist->next == pan_hist_upb(hist));
+}
+
+
+
+STATIC_CI int
+pan_hist_next_accept(hist_p hist)
+{
+    return hist->next;
+}
+
+
+
+STATIC_CI int
+pan_hist_reserve(hist_p hist)
+{
+    return hist->next++;
+}
+
+
+
+STATIC_CI pan_fragment_p
+pan_hist_look(hist_p hist, int seqno)
+{
+/* Return the message contained in message buffer slot "seqno".
+ */
+    assert(seqno >= hist->last);
+    assert(seqno < hist->next);
+
+    return HISTBUF(hist, seqno);
+}
+
+
+
+STATIC_CI void
+pan_hist_copy(hist_p hist, pan_fragment_p frag, int idx, int preserve)
+{
+    pan_fragment_p copy;
+    grp_hdr_p      hdr;
+
+    assert(idx <= hist->next);
+#ifdef HISTORY_POINTERS
+    assert(HISTBUF(hist, idx) == NULL);
+#endif
+
+    if (idx < hist->last) {		/* release has overtaken the accept.
+					 * This is possible in the case of
+					 * dedicated sequencer */
+#ifndef NOVERBOSE
+	if (pan_nr_platforms() > 1) {
+	    printf("S%d: Warning: history commit of msg already released\n",
+		   pan_grp_me);
+	}
+#endif
+	return;
+    }
+
+#ifdef HISTORY_BUFFERS
+    copy = HISTBUF(hist, idx);
+#else
+    copy = pan_fragment_create();
+#endif
+    pan_fragment_copy(frag, copy, preserve);
+    hdr = pan_fragment_header(copy);
+    hdr->flags |= HDR_is_rexmit;
+
+    HISTBUF(hist, idx) = copy;
+    while (idx >= hist->next) {
+	++hist->next;
+    }
+}
+
+
+
+
+STATIC_CI void
+pan_hist_release_upto(hist_p hist, int new_last)
+{
+/* Release messages that are no longer needed in the buffer.
+ * last is kept consistent.
+ */
+#ifndef HISTORY_BUFFERS
+    int n;
+    int last;
+    pan_fragment_p *b;
+#endif
+
+    assert(new_last <= hist->next);
+
+#ifndef HISTORY_BUFFERS
+    n = 0;
+    for (last = hist->last; last < new_last; last++) {
+	++n;
+	b = &HISTBUF(hist, last);
+	if (*b == NULL) {
+#ifndef NOVERBOSE
+	    if (pan_nr_platforms() > 1) {
+		printf("S%d: Warning: history release of msg not yet committed\n",
+		       pan_grp_me);
+	    }
+#endif
+	} else {
+	    pan_fragment_clear(*b);
+	    *b = NULL;
+	}
+    }
+#endif
+
+    hist->last = new_last;
+}
+
+
+STATIC_CI pan_fragment_p
+pan_hist_locate(hist_p hist, int sender, int messid, grp_msg_t tp)
+{
+/* Locate the message starting from hist->next - 1.
+ */
+    pan_fragment_p  frag;
+    int             i;
+    grp_hdr_p       hdr;
+
+    assert(hist->last <= hist->next);
+
+    for (i = hist->next - 1; i >= hist->last; i--) {
+	frag = HISTBUF(hist, i);
+	if (frag != NULL) {
+	    hdr = pan_fragment_header(frag);
+	    if (hdr->sender == sender && hdr->type == tp &&
+		hdr->messid == messid) {
+		return frag;
+	    }
+	}
+    }
+
+    return NULL;
+}
+
+
+
+STATIC_CI void
+pan_hist_init(hist_p hist, int size)
+{
+    int       i;
+
+    size = pan_grp_upround_twopower(size);
+    hist->buf = pan_malloc(size * sizeof(void *));
+
+    hist->size = size;
+    for (i = 0; i < size; i++) {
+#ifdef HISTORY_BUFFERS
+	hist->buf[i] = pan_fragment_create();
+#else
+	hist->buf[i] = NULL;
+#endif
+    }
+    hist->last = 0;
+    hist->next = 0;
+}
+
+
+
+STATIC_CI int
+pan_hist_clear(hist_p hist)
+{
+    int        i;
+    int        n;
+
+    n = 0;
+    for (i = 0; i < hist->size; i++) {
+	if (hist->buf[i] != NULL) {
+	    pan_fragment_clear(hist->buf[i]);
+	    ++n;
+	}
+    }
+
+    pan_free(hist->buf);
+
+    return n;
+}
+
+
+#endif

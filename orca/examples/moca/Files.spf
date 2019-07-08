@@ -1,0 +1,34 @@
+MODULE SPECIFICATION Files;
+
+FROM	Common	IMPORT	StringType, ConstType;
+
+CONST	CONSTFILE = "c3h6.i";
+
+
+##
+## Read a line from the current standard input
+##
+FUNCTION ReadLine(Array : OUT StringType);
+
+
+##
+## Print a line on the current standard output
+##
+FUNCTION PrintLine(Array : StringType);
+
+
+##
+## Read the constant file (CONSTFILE or, if given, Argv1)
+##
+FUNCTION ReadConstFile(CNST         : OUT ConstType;
+		       Argc         : integer;
+		       Argv0, Argv1 : string) : boolean;
+
+
+##
+## Read the data file (usually 'fort.20') found in CONSTFILE
+##
+FUNCTION ReadDataFile(CNST          : SHARED ConstType;
+		      MaxEltsPerCPU : OUT integer) : boolean;
+
+END;

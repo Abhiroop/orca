@@ -1,0 +1,114 @@
+\section{Previous Work}
+\label{sPrevWork}
+
+The most important previous work on this topic is Smith
+\cite{Smith92}. His experiences are summarised here.
+
+Smith used a generalisation of the Turing Ring in two dimensions
+called the Turing Torus. 
+Every cell had four neighbours, one in each of four directions. The
+equations \ref{migrX} and \ref{migrY} 
+from Section \ref{sTuringRing} were generalised
+as follows:
+\begin{eqnarray}
+        \frac{dX_{i,j}}{dt} & = & f(X_{i, j}, Y_{i, j}) +
+	\mu(X_{i \pm 1, j} - 2X_i + X_{i, j \pm 1}) \\
+        \frac{dY_{i,j}}{dt} & = & g(X_{i, j}, Y_{i, j}) +
+	\nu(Y_{i \pm 1, j} - 2Y_i + Y_{i, j \pm 1} )
+\end{eqnarray}
+Distributing the cells over a grid of 16k processors on a CM-200 
+yielded a speed-up of 844 compared to a Sun 4/20
+workstation. However, to avoid load imbalance the populations were not
+updated probabilistically (using random numbers) but deterministically
+(using fixed numbers).
+
+The CM-200 is a SIMD architecture. This means that there is only one
+stored program which is executed by every processor at the same time.
+If one processor has to do more work than others, the other processors
+have to do the same number of operations, even if they have no more
+work to do. These operations are then made ineffective using `masking'
+techniques, to prevent them affecting the results, but they obviously
+affect execution time.
+
+As stated in Section \ref{sTuringRing}, the (stochastic) Turing Ring (or
+Torus) behaves
+very chaotically. In order to use probabilistic updates, a load
+balancing strategy had to be devised. Using spatial decomposition
+(distributing the cells over a grid of processors) load
+balancing is very impractical (Figure \ref{fShift2Dim}).
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsffile{shift2dim.eps}
+\caption{Shifting cells in a two-dimensional system}
+\label{fShift2Dim}
+\end{figure}
+
+Initially, the CPU at location $(a,b)$ in the grid processes a block of
+cells ($(i, j)$, $(i+1, j)$, $(i, j+1)$ and $(i+1, j+1)$.) The
+small arrows in the figure denote the data exchange between cells
+caused by migration. It is clear that CPU $(a,b)$ must communicate with
+its neighbours to exchange information to and from its border cells.
+(Two neighbouring CPUs are shown.)
+
+If CPU $(a,b)$ has a very high load, it would want to get rid of some
+of the work it does. It could decide to shift the cell at $(i+1, j+1)$
+(shown highlighted) to one of its neighbours, either right
+or below. It would then have less work to do, while the other CPU
+would have more work. This way better load balance can be achieved.
+
+However, one problem arises immediately. CPU $(a,b)$ will still have
+information to pass to this cell, so it needs to know were it resides.
+This is not as easily determined as before, particularly if cells
+float away from their original processor further over time. After a while
+it will be
+very difficult to find out which cell is where, while in the
+initial situation every CPU knew who to address.
+
+As a result, either some global data (known to at least groups of CPUs) is
+required, or CPUs should always shift a complete row or column to their
+neighbours. This might make efficient load balancing very difficult.
+
+Instead of trying to solve these problems, Smith took a completely different
+approach. A different decomposition was used: the individuals
+of each species were distributed amongst the processors instead of the
+locations they lived in. Their location was kept in a local data
+structure. This decomposition is depicted in Figure \ref{fSOS}.
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{sos.eps}
+\caption{Data structure to implement Scan-Order-Scan strategy}
+\label{fSOS}
+\end{figure}
+
+This posed a new problem. In order to make the necessary calculations
+about birth and death, a CPU must know the population of an animal's
+location. This information is no longer readily available. A solution
+to this is to store these
+numbers in a local data structure for each animal.
+However, to keep these numbers
+up-to-date a lot of inter-processor communication might be needed,
+since the animals of one cell are scattered all over the processors.
+
+The final system was implemented using a technique called
+Scan-order-scan (SOS). Each processor kept a
+list of animals, sorted by location. Then birth and death was calculated
+locally, after which the list was reorganised to remove the gaps caused
+by death and to insert the newly born animals. Migration was also done locally,
+as it only involved changing the location coordinates of migrating animals.
+After this the list
+was resorted. The new population numbers could then be determined by each
+processor; they then spread their calculated fraction of the total
+population among all processors who have at least one animal from the
+location in question. This way the population
+information for every animal's location could be updated.
+
+Smith proposed some further improvements for efficiency. One would be
+to have two arrays on each processor: one with
+the animals as explained above, and one with the populations in every
+location of the world. This way a CPU could look up the population
+of an animal's home cell in the population matrix. A possible problem with
+this scheme is that heavily loaded cells would become bottlenecks in
+the population matrix, as the same data might be needed for many animals.
+

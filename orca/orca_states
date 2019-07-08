@@ -1,0 +1,5 @@
+1 "block on guard" "guard true" red blocked
+2 "send bcast; block" "got bcast; continue" purple bcast
+3 "issue rpc; block" "rpc reply; continue" maroon rpc
+4 "start upcall" "end upcall" yellow upcall
+5 "RPC request" "RPC done" green "rpc client"

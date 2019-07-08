@@ -1,0 +1,23 @@
+.\"
+.\" (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+.\" For full copyright and restrictions on use see the file COPYRIGHT in the
+.\" top level of the Orca distribution.
+.\"
+.\" $Id: oc_sinproc.1,v 1.3 1998/10/27 15:43:18 ceriel Exp $
+.TH OC_SINPROC 1
+.ad
+.SH NAME
+oc_sinproc \- Orca with the sinproc runtime system
+.SH SYNOPSIS
+.B oc_sinproc
+.RI [ option ] 
+.I sources
+.SH DESCRIPTION
+This command compiles an Orca program for the sinproc runtime system.
+The sinproc runtime system does not allow FORK's, so only Orca programs
+without parallelism can be run.
+.LP
+This command is just a simple front-end for
+.IR oc (1).
+.SH "SEE ALSO"
+oc(1)

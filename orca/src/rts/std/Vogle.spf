@@ -1,0 +1,229 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+#========================================================================
+#== File:      Vogle.spf					       ==
+#== Program:   Orca<->Vogle interface				       ==
+#== Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994        ==
+#== Contains:  specification of interface routines 		       ==
+#==								       ==
+#========================================================================
+
+OBJECT SPECIFICATION Vogle;
+
+#=======================================================================
+#== operations							      ==
+#==								      ==
+#== NOTE: all x and y coordinates are in WORLD-coordinates (i.e	      ==
+#==       coordinates IN the window), unless stated differently       ==
+#=======================================================================
+
+#
+# Backbuffer() : Where possible VOGLE allows for front and  back
+#		 buffers  to enable  things  like  animation  and
+#		 smooth updating of the screen. The operation Backbuffer()
+#		 is used to initialise  double buffering. Returns  false
+#		 if  the device is not up to it. See also SwapBuffer().
+OPERATION BackBuffer(
+) : boolean;				# can we backbuffer?
+
+
+
+#
+# Circle() : Draw a circle. x and y are values in worldcoordinates.
+#	     col is the color the circle will be drawn in.
+#	     If polyfill is true, the circle will be filled.
+OPERATION Circle(
+	col : integer;			# the drawing colormap index
+	polyfill : boolean;		# filled or not
+	x, y : real;			# center point
+	radius : real			# radius
+);
+
+
+
+#
+# Circle_Seg(): same as Circle. nsegs is the number of segments used  
+#		to draw the circle. The default is defined in VTypes.spf
+#
+#
+OPERATION Circle_Seg(
+	col : integer;			# the drawing colormap index
+	polyfill : boolean;		# filled or not
+	nsegs : integer;		# number of segments
+	x, y : real;			# center point
+	radius : real			# radius
+);
+
+
+
+#
+# Clear() : clear the window with color col.
+#
+OPERATION Clear(
+	col : integer			# background colormap index
+);
+
+
+
+#
+# Color() : set the color for subsequent drawing routines.
+#
+OPERATION Color(
+	col : integer			# colormap index
+);
+
+
+
+#
+# DrawStr(): put the string str on position (x,y). col is the color of
+#	     the string.
+#
+# 
+OPERATION DrawStr(	
+	col : integer;			# colormap index
+	x,y : real;			# bottom left hand corner
+	str : string			# the orca string
+);
+
+
+
+#
+# Exit() : close the window. The user should press 'q' in the window.
+#          NOTE: Exit() should be the last operation called.
+OPERATION Exit();
+
+
+
+#
+# Init() : initialize interface. 
+#          NOTE: This should be the first operation called. 
+#                Exceptions to this rule are the operations Ortho(),
+#                PrefSize() and PrefPosition().
+#
+OPERATION Init();
+
+
+
+#
+# Line() : draw a line in color col, from (x1, y1) to (x2, y2)
+#
+OPERATION Line(
+	col : integer;			# colormap index
+	x1, y1,				# starting point
+	x2, y2 :real			# end point
+);
+
+
+
+#
+# MapColor() : create your own colormap by specifying the 
+#              (red, green, blue) values.
+#	       Red, green and blue should be values in between 0 and 255
+#	       NOTE: Some default colors have been defined in VTypes.spf
+#
+OPERATION MapColor(
+        index :  integer;		# colormap index
+        red :    integer;		# red value
+        green :  integer;		# green value
+        blue :   integer		# blue value
+);
+
+
+
+#
+# Ortho() : Define the x (left, right) and y (bottom, top) clipping planes.
+#	     This operation can be used to scale and/or rotate your interface
+#	     window. By default these values are: 
+#	     (left, right, bottom, top) = (-1.0, 1.0, -1.0, 1.0). So,
+#	     by default the origin is in the middle of the window. 
+#	     Example: To create a window with a 10 units width and 
+#                     50 units height and the origin in the lower left
+#		      corner, call Ortho(0.0, 10.0, 0.0, 50.0);
+OPERATION Ortho(
+	left, right,			# see above
+	bottom, top : real
+);
+
+
+
+#
+# Point() : draw a point at (x,y) in color col.
+#
+OPERATION Point(
+	col : integer;			# colormap index
+        x, y : real			# point coordinates
+);
+
+
+
+#
+# PrefPosition(): Specify the preferred position of the window opened
+#		  by Init()
+#
+OPERATION PrefPosition(
+	x, y : integer			# x and y coordinates in device space
+);
+
+
+
+#
+# PrefSize() : Specify the preferred width and height of the window
+#	       opened by Init()
+#
+OPERATION PrefSize(
+	width, height : integer		# width and height
+);
+
+
+
+#
+# Rect() : Draw a rectangle. col and polyfill are analogous to the
+#	   Circle() parameters.
+#
+OPERATION Rect(
+	col : integer;			# colormap index
+	polyfill : boolean;		# filled or not
+	x1, y1, 			# first corner
+	x2, y2 : real			# second corner
+);
+
+
+
+#
+# SwapBuffers() : Swap the front and back buffers. Used in combination
+#		  with the BackBuffer() routine.
+#
+OPERATION SwapBuffers();
+
+
+
+#
+# On the X11 device considerable speedups  in display can be achieved
+# by not flushing each graphics primitive call to  the  actual
+# display  until  necessary. Flushing is automatically delayed when
+# double buffering (the flush is only done within swapbuffers).
+# The following two operations contol flushing
+
+#
+# VsetFlush() : set global flushing status. If yesno = false
+#  		then don't  do  any  flushing  (except  in swapbuffers(), or
+#	        vflush()). If yesno = 1 true then do the flushing as
+#		described above. 
+# 
+OPERATION VsetFlush(
+	yesno : boolean			# do flushing or not?
+);
+
+
+
+#
+# Vflush() : Call the device flush or syncronisation  routine. This
+#            forces a flush.
+#
+OPERATION Vflush();
+
+
+END;
+

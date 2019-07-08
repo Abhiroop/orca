@@ -1,0 +1,157 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+#ifndef __PAN_BUFFER_CI__
+#define __PAN_BUFFER_CI__
+
+
+#include <string.h>
+
+#include <fm.h>
+
+#include "pan_global.h"
+#include "pan_buffer.h"
+#include "pan_fragment.h"
+#include "pan_message.h"
+#include "pan_error.h"
+
+
+#define upround_2power(n, r)	(((n) + (r) - 1) & ~((r) - 1))
+
+
+static void
+free_fm_buf(pan_sys_buffer_p buf)
+{
+    FM_free_buf(buffer2fm(buf));
+}
+
+
+STATIC_CI INLINE void
+pan_sys_buffer_start(void)
+{
+    if (sizeof(pan_sys_buffer_t) > sizeof(struct FM_buffer)) {
+	pan_panic("sizeof(pan_sys_buffer_t) > sizeof(struct FM_buffer)");
+    }
+    if (! aligned(BUFFER_DESCR_SIZE, UNIVERSAL_ALIGNMENT)) {
+	pan_panic("! aligned(BUFFER_DESCR_SIZE, UNIVERSAL_ALIGNMENT)");
+    }
+    if (! aligned(PACKET_SIZE, UNIVERSAL_ALIGNMENT)) {
+	pan_panic("! aligned(PACKET_SIZE, UNIVERSAL_ALIGNMENT)");
+    }
+}
+
+
+STATIC_CI INLINE void
+pan_sys_buffer_end(void)
+{
+}
+
+
+STATIC_CI INLINE pan_sys_buffer_p
+pan_sys_buffer_create(int size) 
+{
+    pan_sys_buffer_p buf;
+
+    size = upround_2power(size, PACKET_SIZE);
+    buf = pan_malloc(BUFFER_DESCR_SIZE + size);
+
+    assert(aligned((long int)buffer_data(buf), UNIVERSAL_ALIGNMENT));
+
+    buffer_offset(buf) = 0;
+    buffer_size(buf)   = size;
+    buffer_type(buf)   = BUF_NORMAL;
+
+    return buf;
+}
+
+
+STATIC_CI INLINE void
+pan_sys_buffer_clear(pan_sys_buffer_p buf)
+{
+    if (buffer_type(buf) & BUF_FM_BUFFER) {
+	free_fm_buf(buf);
+    } else {
+	pan_free(buf);
+    }
+}
+
+
+STATIC_CI INLINE void *
+pan_sys_buffer_push(pan_sys_buffer_p buf, int size)
+{
+    void *p;
+
+    assert(aligned(size, UNIVERSAL_ALIGNMENT));
+    assert(buffer_offset(buf) + size <= buffer_size(buf));
+
+    p = &buffer_data(buf)[buffer_offset(buf)];
+    buffer_offset(buf) += size;
+
+    return p;
+}
+
+
+STATIC_CI INLINE void *
+pan_sys_buffer_pop(pan_sys_buffer_p buf, int size, int align)
+{
+    if (buffer_offset(buf) == 0 && size != 0){
+	return NULL;
+    }
+    
+    if (align > UNIVERSAL_ALIGNMENT){
+	/* may not be properly aligned */
+	pan_panic("alignment");
+    }
+
+    buffer_offset(buf) -= univ_align(size);
+    assert(buffer_offset(buf) >= 0);
+
+    return &buffer_data(buf)[buffer_offset(buf)];
+}
+
+
+STATIC_CI INLINE void *
+pan_sys_buffer_look(pan_sys_buffer_p buf, int size, int align)
+{
+    if (buffer_offset(buf) == 0){
+	return NULL;
+    }
+    
+    if (align > UNIVERSAL_ALIGNMENT){
+	/* may not be properly aligned */
+	pan_panic("alignment");
+    }
+
+    assert(buffer_offset(buf) >= univ_align(size));
+
+    return &buffer_data(buf)[buffer_offset(buf) - univ_align(size)];
+}
+
+
+STATIC_CI INLINE void
+pan_sys_buffer_copy(pan_sys_buffer_p buf, pan_sys_buffer_p copy)
+{
+    assert(buffer_size(copy) >= buffer_size(buf));
+    assert(buffer_offset(copy) == 0);
+
+    memcpy(buffer_data(copy), buffer_data(buf), buffer_offset(buf));
+    buffer_offset(copy) = buffer_offset(buf);
+}
+
+
+STATIC_CI INLINE void
+pan_sys_buffer_append(pan_sys_buffer_p buf, pan_sys_buffer_p next,
+		      int offset, int size)
+{
+    assert(buffer_offset(buf) + size <= buffer_size(buf));
+    assert(buffer_offset(buf) > 0);
+
+    memcpy(&buffer_data(buf)[buffer_offset(buf)], buffer_data(next), size);
+    buffer_offset(buf) += size;
+}
+
+
+#endif

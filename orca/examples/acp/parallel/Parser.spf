@@ -1,0 +1,29 @@
+# ========================================================================
+# == File:      Parser.spf   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Functions exported by parser module			==
+# ========================================================================
+MODULE SPECIFICATION Parser;
+
+FROM Dictionary IMPORT dictionary_t;
+FROM Grammar IMPORT grammar_t;
+FROM Symbollist IMPORT symbollist_t;
+
+# ========================================================================
+# == function prototypes						==
+# ========================================================================
+
+FUNCTION read_grammar(                     
+        grammar : SHARED grammar_t;        # Out : the grammar to be read
+        dict :    SHARED dictionary_t;     # Out : the dictionary to be read
+	symbols : SHARED symbollist_t;     # Out : the list of symbols
+	print   : boolean		   # In  : print verbose info?
+) : boolean;				   # Out : can the grammar be read ?
+
+
+END;
+
+
+
+

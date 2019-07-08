@@ -1,0 +1,131 @@
+#===============================================================
+#=======        LinkObj.imp: Links the processors       ========
+#===                                                        ====
+OBJECT IMPLEMENTATION LinkObj;
+# This object links two processors
+
+FROM Turing IMPORT CellType;
+
+TYPE LinkType = 
+	RECORD
+                PredIn: integer;        # The predators to move in
+                PreyIn: integer;        # The preys to move in
+                OverLoad: boolean;      # Is there an Overload cell?
+                OverLoadCell: CellType; # Cell to shift in
+                Load: integer;          # Workload
+                LoadDiff: integer;      # Possible difference when shifting
+                FLoad: integer;         # Expected load
+	END;
+
+        Link: LinkType;                 # The data for this object
+
+
+OPERATION MoveTo(Pred: integer; Prey: integer);
+BEGIN
+	Link.PredIn +:= Pred;
+	Link.PreyIn +:= Prey;
+END;
+
+
+OPERATION GetMovers(Pred, Prey: OUT integer);
+BEGIN
+	Pred := Link.PredIn;
+	Link.PredIn := 0;
+	Prey := Link.PreyIn;
+	Link.PreyIn := 0;
+END;
+
+
+OPERATION GetPred(): integer;
+	Pred: integer;
+BEGIN
+	Pred := Link.PredIn;
+	Link.PredIn := 0;
+	RETURN Pred;
+END;
+
+
+OPERATION GetPrey(): integer;
+	Prey: integer;
+BEGIN
+	Prey := Link.PreyIn;
+	Link.PreyIn := 0;
+	RETURN Prey;
+END;
+
+OPERATION DropCell(Cell: CellType);
+BEGIN
+	Link.OverLoadCell := Cell;
+	Link.OverLoad := true;
+END;
+
+OPERATION OverLoad(): boolean;
+BEGIN
+	RETURN Link.OverLoad;
+END;
+
+OPERATION OverLoadCell(): CellType;
+BEGIN
+	ASSERT(Link.OverLoad);
+	Link.OverLoad := false;
+	RETURN Link.OverLoadCell;
+END;
+
+OPERATION SetInitInfo(Load: IN integer; LoadDiff: IN integer);
+# Set worker's load and LoadDiff.
+BEGIN
+	Link.Load := Load;
+	Link.LoadDiff := LoadDiff;
+END;
+
+OPERATION GetInitInfo(Load: OUT integer; LoadDiff: OUT integer);
+# Set worker's load and LoadDiff.
+BEGIN
+	Load := Link.Load;
+	LoadDiff := Link.LoadDiff;
+END;
+
+OPERATION SetLoad(Load: IN integer);
+# Set worker's load.
+BEGIN
+	Link.Load := Load;
+END;
+
+OPERATION GetLoad(Load: OUT integer);
+# Get worker's load.
+BEGIN
+	Load := Link.Load;
+END;
+
+OPERATION SetLoadDiff(LoadDiff: IN integer);
+# Set worker's possible load difference, i.e. load of border cell.
+BEGIN
+	Link.LoadDiff := LoadDiff;
+END;
+
+OPERATION GetLoadDiff(LoadDiff: OUT integer);
+# Get worker's possible load difference, i.e. load of border cell.
+BEGIN
+	LoadDiff := Link.LoadDiff;
+END;
+
+OPERATION SetFLoad(FLoad: IN integer);
+# Set worker's expected load.
+BEGIN
+	Link.FLoad := FLoad;
+END;
+
+OPERATION GetFLoad(FLoad: OUT integer);
+# Get worker's expected load.
+BEGIN
+	FLoad := Link.FLoad;
+END;
+
+
+BEGIN
+	Link.OverLoad := false;
+END;
+
+#===                                                        ====
+#=======        LinkObj.imp                             ========
+#===============================================================

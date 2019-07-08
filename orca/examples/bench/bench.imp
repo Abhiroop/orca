@@ -1,0 +1,108 @@
+MODULE IMPLEMENTATION bench;
+	IMPORT IntObject;
+	FROM Time IMPORT GetTime;
+	FROM Finish IMPORT Finish;
+
+	# Measure the overhead of operation invocations
+
+	PROCESS worker(x: SHARED IntObject; finish: SHARED IntObject; fval: integer);
+	BEGIN
+		finish$AwaitValue(fval);
+		finish$inc();
+	END;
+
+	# Description of the manager process
+	PROCESS OrcaMain();
+		x: IntObject;  # nonshared
+		y: IntObject;  # shared
+		finish: IntObject;	# set to 1 if worker may exit
+		z: integer; # normal integer;
+		tmp: integer;
+		start, stop: integer;
+		CONST N = 100000;
+	BEGIN
+		finish$assign(0);
+		# Strategy(y, 0, NCPUS()-1);
+		FOR i IN 0 .. NCPUS()-1 DO
+			FORK worker(y, finish, i+1) ON(i);
+		OD;
+
+		y$assign(0);
+		x$assign(0);
+		z := 0;
+
+		# NON-OBJECT READ
+		start := GetTime();
+		FOR i IN 1..N DO
+			tmp := z;
+		OD;
+		stop := GetTime();
+		WriteLine(N, " reads of local integer: ", stop-start);
+
+		# NON-OBJECT WRITE
+		start := GetTime();
+		FOR i IN 1..N DO
+			z +:= 1;
+		OD;
+		stop := GetTime();
+		WriteLine(N, " increments of local integer: ", stop-start);
+
+		# LOCAL DUMMY OPERATION
+		start := GetTime();
+		FOR i IN 1..N DO
+			x$dummy();
+		OD;
+		stop := GetTime();
+		WriteLine(N, " dummy operations on nonshared object: ",
+			  stop-start);
+
+		# SHARED DUMMY OPERATION
+		start := GetTime();
+		FOR i IN 1..N DO
+			y$dummy();
+		OD;
+		stop := GetTime();
+		WriteLine(N, " dummy operations on shared object: ",
+			  stop-start);
+
+
+		# LOCAL OBJECT READ
+		start := GetTime();
+		FOR i IN 1..N DO
+			tmp := x$value();
+		OD;
+		stop := GetTime();
+		WriteLine(N, " read operations on nonshared object: ",
+			  stop-start);
+
+		# SHARED OBJECT READ
+		start := GetTime();
+		FOR i IN 1..N DO
+			tmp := y$value();
+		OD;
+		stop := GetTime();
+		WriteLine(N, " read operations on shared object: ", stop-start);
+
+		# LOCAL OBJECT WRITE
+		start := GetTime();
+		FOR i IN 1..N DO
+			x$inc();
+		OD;
+		stop := GetTime();
+		WriteLine(N, " write operations on nonshared object: ",
+			  stop-start);
+
+		# SHARED OBJECT WRITE
+		start := GetTime();
+		FOR i IN 1..N DO
+			y$inc();
+		OD;
+		stop := GetTime();
+		WriteLine(N, " write operations on shared object: ",
+			  stop-start);
+		finish$assign(1);
+		finish$AwaitValue(NCPUS()+1);
+		Finish();
+
+	END;
+END;

@@ -1,0 +1,56 @@
+# build_libdir creates the directories and Makefiles for the libraries.
+# If there are arguments, there must be two. The first one indicates a list
+# of runtime systems, the second one indicates a list of platforms.
+# If there are no arguments, the following environment variables are used:
+# - RTSNAMES	the runtime systems for which this must be done.
+# - PLATFORMS	the platforms for which this must be done.
+
+echo "Building lib directories and Makefiles ..."
+
+if [ -d ${ORCA_HOME=.}/lib_src ]
+then	:
+else	echo "Could not find $ORCA_HOME/lib_src directory" 1>&2
+	exit 1
+fi
+
+case $# in
+2)	RTSNAMES="$1"
+	PLATFORMS="$2"
+	;;
+0)	;;
+*)	echo "Usage: $0 [ rtsnames platforms ]" 1>&2
+	exit 1
+	;;
+esac
+
+if mkdir -p $TARGET/lib
+then	:
+else	echo "Could not create $TARGET/lib directory" 1>&2
+	exit 1
+fi
+
+cd $TARGET/lib
+
+( cd $ORCA_HOME/lib_src ; tar cf - . ) | tar xf -
+find . -name CVS -exec rm -rf {} \; > /dev/null 2>&1
+
+currdir=`pwd`
+
+for rts in $RTSNAMES
+do
+	cd $rts
+	for plat in $PLATFORMS
+	do	
+		p=`pwd`;
+		if [ -d $plat ]
+		then
+		    cd $plat
+		else	continue
+		fi
+		( cd $p/makes ; tar cf - . ) | tar xf -
+		cd $p
+	done
+	cd $currdir
+done
+
+echo "lib directories and Makefiles done"

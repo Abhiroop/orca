@@ -1,0 +1,46 @@
+DATA MODULE IMPLEMENTATION global;
+
+  FROM args IMPORT Argv;
+  FROM conversions IMPORT StringToInt;
+  FROM Math IMPORT cos, sin, PI;
+
+  TYPE intarray =  ARRAY [integer] OF integer;
+
+  CONST TWOPI = 2.0 * PI;
+
+  FUNCTION mk_arrays(n: integer; w: OUT complexarray[0..(1<<n)-1]); 
+	p: intarray[0..(1<<n)-1];
+	number, pw, sz: integer;
+	alpha: real;
+  BEGIN
+	p[0] := 0;
+	pw := (1 << (n-2));
+	sz := 1 << n;
+	number := 1;
+	FOR j IN 1..n-1 DO
+		FOR l IN number..number*2-1 DO
+			p[l] := p[l-number] + pw;
+		OD;
+		pw := pw >> 1;
+		number := number << 1;
+	OD;
+	FOR j IN sz >> 1 .. sz - 1 DO
+		p[j] := p[j - (sz >> 1)];
+	OD;
+	alpha := - TWOPI/FLOAT(sz);
+	FOR j IN 0 .. sz-1 DO
+		w[j].wr := cos(alpha * FLOAT(p[j]));
+		w[j].wi := sin(alpha * FLOAT(p[j]));
+	OD;
+  END;
+
+  FUNCTION initialize();
+	dummy, n: integer;
+  BEGIN
+	n := StringToInt(Argv(1), dummy);
+	mk_arrays(n, w);
+  END;
+
+BEGIN
+  initialize();
+END;

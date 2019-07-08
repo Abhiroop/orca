@@ -1,0 +1,52 @@
+OBJECT IMPLEMENTATION primetab;
+
+	TYPE table = ARRAY[integer] OF
+		RECORD
+		    prime: integer;
+		    square: integer;
+		END;
+	nprimes: integer;
+	tab: table;
+	go: boolean;
+
+	OPERATION initvar();
+	BEGIN
+		go := false;
+	END;
+
+	OPERATION wait();
+	BEGIN
+		GUARD go DO OD;
+	END;
+
+	OPERATION init(limit: integer);
+		t: table[1..limit];
+	BEGIN
+		t[1].prime := 2; t[1].square := 4;
+		t[2].prime := 3; t[2].square := 9;
+		t[3].prime := 5; t[3].square := 25;
+		nprimes := 3;
+		tab := t;
+		go := true;
+	END;
+
+	OPERATION AddPrime(p: integer);
+	BEGIN
+		nprimes +:= 1;
+		tab[nprimes].prime := p;
+		tab[nprimes].square := p*p;
+	END;
+
+	OPERATION GetPrime(i: integer; prime, square: OUT integer);
+	BEGIN
+		GUARD nprimes >= i DO
+			prime := tab[i].prime;
+			square := tab[i].square;
+		OD;
+	END;
+
+	OPERATION NPrimes(): integer;
+	BEGIN
+		RETURN nprimes;
+	END;
+END;

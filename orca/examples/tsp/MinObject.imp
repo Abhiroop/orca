@@ -1,0 +1,44 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: MinObject.imp,v 1.2 1999/04/21 10:05:24 ceriel Exp $
+
+OBJECT IMPLEMENTATION MinObject;
+	FROM TspTypes IMPORT PathType;
+
+	len: integer;
+	path: PathType;
+
+	OPERATION minval(): integer;
+	BEGIN
+		RETURN len;
+	END;
+
+	OPERATION min(v: integer; p: PathType): integer;
+	BEGIN
+		GUARD v < len DO
+			len := v;
+			path := p;
+			RETURN len;
+		OD;
+		GUARD v >= len DO
+			RETURN len;
+		OD;
+	END;
+
+	OPERATION minpath() : PathType;
+	BEGIN
+		RETURN path;
+	END;
+
+	OPERATION assigni(v: integer);
+	BEGIN
+		len := v;
+	END;
+
+	OPERATION assignp(p: PathType);
+	BEGIN
+		path := p;
+	END;
+END;

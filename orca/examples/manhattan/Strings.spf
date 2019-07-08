@@ -1,0 +1,8 @@
+MODULE SPECIFICATION Strings;
+
+FUNCTION EmptyString (s : string) : boolean;
+FUNCTION NextInteger (s : string) : integer;
+FUNCTION ReduceString (s : string) : string;
+# FUNCTION AppendChar (str : string; c : char) : string;
+
+END;

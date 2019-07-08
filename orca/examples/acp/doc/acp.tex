@@ -1,0 +1,715 @@
+\documentstyle[a4, code, fullpage,11pt]{article}
+\input{psfig}
+
+% define fonts
+%   phv = Helvetica
+%   ptm = Times
+\newfont{\fsectionfont}{phvb at 15pt}
+\newfont{\ftitlefont}{phvb at 25pt}
+\newfont{\fsubsectionfont}{phvr at 14pt}
+\newfont{\fsubsubsectionfont}{phvr at 13pt}
+
+
+% define new commands
+%\newcommand{\fsection}[1]{\section {\fsectionfont #1}}
+%\newcommand{\ftitle}[1]{\title {\ftitlefont #1}}
+%\newcommand{\fsubsection}[1]{\subsection {\fsubsectionfont #1}}
+%\newcommand{\fsubsubsection}[1]{\subsubsection {\fsubsubsectionfont #1}}
+
+\newcommand{\fsection}[1]{\section { #1}}
+\newcommand{\ftitle}[1]{\title { #1}}
+\newcommand{\fsubsection}[1]{\subsection { #1}}
+\newcommand{\fsubsubsection}[1]{\subsubsection { #1}}
+
+
+
+%\newcommand{\inbox}[1]{\framebox[\textwidth][l]{ \parbox{\textwidth}{\verbatim #1 \endverbatim }}}
+
+
+
+
+
+\title{Parallel Implementation of an Active Chart Parser in Orca}
+\author{A. R. Sukul}
+%\date
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Active Chart Parsing is an efficient strategy used to
+generate all possible parsings of a sentence given an ambiguous
+grammar. This document describes several serial and parallel
+implementations of an Active Chart
+Parser. Timing results show that for this fine grained parallel application no
+speedup can be achieved on a LAN of workstations. 
+\end{abstract}
+
+
+\section{Introduction}
+
+{\em Active Chart Parsing} is a technique that is used to efficiently generate all
+possible derivations of a sentence given an ambiguous grammar. For large
+grammars and for large sentences this can be a very computationally
+intensive task. This paper describes a parallel implementation of an Active
+Chart Parser using the Orca language \cite {orca}.
+
+This paper starts with a
+short introduction to Active Chart Parsing. The next three sections
+describe a serial ANSI C, a serial Orca and a parallel Orca implementation. In
+section 6 we present some performance results. Finally, in section 7
+we discuss our experiences with the Orca programming language.
+
+\section{Active Chart Parsing}
+
+Consider the sentence ``Jane saw Fred in the park with the green
+telescope''. Depending upon how it it is parsed, it can have several
+meanings:
+\begin {itemize}
+\item
+Jane and Fred were both in the park and Jane was using a green telescope; or
+\item
+Jane was not in the park, but Fred was and Fred had a green telescope; or
+\item
+Jane saw Fred in the park in which a green telescope is located; or ...
+\end{itemize}
+
+The reason why we can parse this sentence in so many different ways is
+that the grammar from which it is drawn (shown
+in Figure~\ref{grammar}) is ambiguous. The purpose of the program is
+to generate all possible derivations of such a sentence using a
+given (ambiguous) grammar. 
+
+\footnotesize
+\begin{figure}
+\begin{center} 
+\begin{tabular}{l@{      $\rightarrow$      }l}
+{\em Sentence} & {\em NounPhrase VerbPhrase} \\
+{\em Sentence} & {\em VerbPhrase} \\
+{\em NounPhrase} & {\em determiner NounPhrase2} \\
+{\em NounPhrase} & {\em NounPhrase2} \\
+{\em NounPhrase} & {\em NounPhrase PrepPhrase} \\
+{\em NounPhrase2} & {\em Noun} \\
+{\em NounPhrase2} & {\em Adjective NounPhrase2} \\
+{\em PrepPhrase} & {\em NounPhrase} \\
+{\em VerbPhrase} & {\em Verb} \\
+{\em VerbPhrase} & {\em Verb NounPhrase} \\
+{\em VerbPhrase} & {\em VerbPhrase PrepPhrase} \\ [3mm]
+
+{\em Adjective} & {\sf green} \\
+{\em Determiner} & {\sf the, to} \\
+{\em Noun} & {\sf Jane, Fred, park, telescope } \\
+{\em Preposition} & {\sf in, with} \\
+{\em Verb} & {\sf saw}
+\end{tabular}
+\caption{Example ambiguous grammar}
+\label{grammar}
+\end{center}
+\end{figure}
+\normalsize
+
+Solving this problem can be done in different ways \cite {terry},
+of which the {\em bottom-up} and the {\em top-down} approach are the
+best known. Each of these strategies has its own advantages and
+disadvantages. 
+In this section we will describe an algorithm called {\em active
+chart parsing} which combines the advantages of
+the strategies mentioned above. 
+
+Basically the active chart parser follows a bottom-up strategy,
+but differs from the usual bottom-up algorithms in that it saves
+results computed in earlier stages of the algorithm. Thus, once the
+algorithm knows a certain part of the sentence is a {\em NounPhrase},
+this result is stored and can be used later on to determine
+higher-order categories (e.g.\ a {\em sentence}). Furthermore, since
+active chart parsing is 
+a bottom-up strategy it avoids the backtracking overhead involved with
+top-down strategies \cite {terry}.
+
+The algorithm starts with inserting one node between each word and two extra
+nodes respectively before the first and after the last word in the
+sentence (Figure~\ref{example}). Note that this figure is not
+complete (e.g\ the {\em Verb} arc between nodes 2 and 3 can be
+expanded to a {\em VerbPhrase}, which leads to new arcs). In the initialization step
+(level 1 in Figure~\ref{example}), the algorithm connects adjacent nodes with one
+arc (or edge) for each of the categories to which the intervening word
+belongs. In the next steps (levels 2-5) the algorithm tries to create
+new categories from the existing edges in one of the following ways:
+\begin{itemize}
+
+\item  $Expanding$.
+	If an edge of category $X$ connects nodes $n_{src}$ and $n_{dest}$ and
+	the grammar contains the rule $Y$ {$\rightarrow$} $X$, then
+	a new edge of category $Y$ may be inserted between nodes $n_{src}$
+	and $n_{dest}$. An example of this rule is the expansion of a
+	$Noun$ to a $NounPhrase2$.
+
+\item	$Combining$.
+	If a node $n$ has an incoming edge from node $n_{src}$ of
+	category $X$ and an outgoing edge to node $n_{dest}$ of category
+	$Y$ and the grammar contains the rule $Z$ {$ \rightarrow $} $X$
+	$Y$, then a new edge of category $Z$ may be inserted between
+	nodes $n_{src}$ and $n_{dest}$. An example of this rule is the
+	combination of a $NounPhrase$ and a $VerbPhrase$ which can be
+	combined to a $Sentence$.
+\end{itemize}
+
+This process continues until no further arcs can be added. Each time a
+$Sentence$ arc spanning all nodes is found, the active chart
+parser has found a new derivation of the given sentence.
+
+\begin{figure}[tbh]
+\centerline{
+\psfig{figure=example.eps}
+}
+\caption{Example chart}
+\label{example}
+\end{figure}
+
+\section{Serial implementation of ACP in ANSI C}
+
+To implement the algorithm, typically the following data structures
+are needed:
+
+\begin{enumerate}
+
+\item
+A data structure which stores the reverse of the grammar shown in
+Figure~\ref{grammar}. Instead of recording the rules by which a single
+term may be expanded, this structure records the ways in which pairs
+of terms might be generated. The reason for storing the grammar in
+this order is to support the bottom-up strategy used by the active
+chart parser. If there are $T$ terms in the grammar, a $T$ $\times$
+$T$ matrix of lists of terms can be used. However, for large grammars,
+this can be quite expensive in memory usage, so a list of lists or some
+other irregular  structure is preferred, as it requires less memory
+while increasing access time slightly.
+
+\item
+A data structure for the dictionary. This is stored as a list for each
+terminal which shows the terms to which that terminal belongs.
+
+\item
+A data structure for the chart. The chart is represented as a list of
+nodes, with each node containing information on incoming and outgoing
+arcs (see below).
+
+\item
+Information for each arc, including:
+
+	\begin {itemize}
+	
+	\item	The source and destination node of the arc.
+	\item	The name of the terminal or non-terminal the arc
+		represents.
+	\item	The constituent edges. Once a sentence has been found,
+		we need information on how the parse-tree is build in
+		order to print that parse tree. Therefore each arc should contain
+		information on the arcs it combines. 
+	\end {itemize}
+
+\item
+A data structure for storing arcs which have
+been generated by rule firings, but have not been added to the chart
+yet. This may be managed as a stack, a queue or some form of priority
+queue if the program is using heuristics to guide parsing.
+
+\end {enumerate}
+
+Most of the data structures above can be translated directly into C
+data structures. The Pending Edges Table (the fifth data structure)
+was implemented as a queue 
+(hereafter called the {\em PEQ}).
+The most notable data structure  in the C-implementation is the arc
+data structure which is defined as shown in Figure~\ref{cstruct}.
+
+\footnotesize
+\begin{figure}
+\begin{center}
+\framebox{\parbox[t]{4.in} {
+\hspace*{.10in}typedef struct edge\_struct{ \\
+\hspace*{.25in}int \hspace{.80in} from\_node; \hspace{.10in} /* source node */  \\
+\hspace*{.25in}int \hspace{.80in} to\_node; \hspace{.25in} /* destination node */ \\
+\hspace*{.25in}int \hspace{.80in} symbol\_name; /* label of edge */ \\
+\hspace*{.25in}struct edge\_struct *comp\_1; \hspace{.25in} /* first constituting component */ \\
+\hspace*{.25in}struct edge\_struct *comp\_2; \hspace{.25in} /* second component */ \\
+\hspace*{.10in}} Edge\_t;
+}}
+\end{center}
+\caption{Arc data structure in ANSI-C}
+\label{cstruct}
+\end{figure}
+\normalsize
+
+
+Looking closely we see that this data structure is in fact a
+representation of a tree, in our case the parse tree of the
+derivation. The usage of the data structures is illustrated in
+Figure~\ref{datas}. In this figure the contents of the incoming and
+outgoing edge lists of each of the nodes is given after all the
+possible edges for the sentence ``Jane saw'' have been added to the
+chart . Note that the incoming edgelist of 
+the first node and the outgoing edgelist of the last node will always
+be empty. For the sake of simplicity we have represented the arcs as triplets 
+\{ {\em name, src\_node, dest\_node} \} and have not included
+information on their constituent edges. 
+
+\begin{figure}[tbh]
+\centerline{
+\psfig{figure=datas1.eps}
+}
+\caption{Illustration of the data structures}
+\label{datas}
+\end{figure}
+
+Given the data structures described above, the algorithm for a serial
+implementation of the ACP is given in Figure~\ref{mainloop}
+in pseudo code.
+
+\footnotesize
+\begin{figure}
+\begin{center}
+\framebox{\parbox[t]{5.in} {
+\hspace*{.10in}    read sentence \\
+\hspace*{.10in}    {\bf for} each word W {\bf do} \\
+\hspace*{.25in}add all categories to which W belongs to the PEQ \\
+\hspace*{.10in}    {\bf od} \\ [1mm]
+
+\hspace*{.10in}    {\bf while} PEQ not empty {\bf do} \\
+\hspace*{.25in}{\em elt} = dequeue(PEQ) \\
+\hspace*{.25in}{\bf if }({\em elt} is a sentence) {\bf then} print\_sentence {\bf fi} \\
+\hspace*{.25in}add {\em elt} to the chart \\
+\hspace*{.25in}expand {\em elt} by applying the expansion rule. Add new arcs to PEQ. \\
+\hspace*{.25in}combine {\em elt} with left and right neighbours of its \\
+\hspace*{.25in}source and destination node. Add new arcs to PEQ. \\
+\hspace*{.10in}{\bf od}
+}}
+\end{center}
+\caption{The Serial ACP algorithm}
+\label{mainloop}
+\end{figure}
+\normalsize
+
+\section{Serial Implementation of ACP in Orca}
+
+Most of the data structures used in the serial C version can be
+translated directly into their Orca equivalents. The dynamic
+structures, including the PEQ, are implemented using
+Orca {\em graphs} \cite{orca}. However, one problem arises when trying to
+translate the {\em arc} data structure (see section 3.1) to Orca. One
+of the main problems of Orca is that it has no direct equivalent of
+pointers. In particular, there is no such thing as a dereferencing
+mechanism to access information associated with a pointer. In Orca
+``pointers'' are implemented as elements (called {\em nodes}) of the most general
+structure found in Orca, the graph. Information on a node can be accessed by
+using the graph to which that node belongs, using a construct
+analogous to array element selection \cite {orca}.
+
+To implement pointers we must therefore introduce an object of type graph
+and implement functions for creating nodes, assigning values to
+nodes, and retrieving information from nodes. The Orca implementation
+of the arc data structure is given in Figure~\ref{orcastruct}.
+
+\subsection{Comparing the Serial-Orca ACP and the Serial-C ACP}
+
+When first translating the serial C version into serial Orca,
+one is inclined to use software engineering principles, like
+the use of ADTs and information hiding. In Orca these principles are
+implemented by means of {\em objects}. Each object has its private data
+which can only be accessed by means of {\em operations} defined on
+that object. As elegant as this may be, in the current
+implementation of Orca objects in Orca are slow due to an enormous amount of
+copying being done. Therefore, the serial Orca version of ACP was implemented
+without the use of Orca objects.
+
+Since most constructs used in C were directly implemented in Orca,
+there was no significant difference in the number of lines of code.
+The serial Orca version was about 5 times slower than the serial C
+version, which can be explained by run-time system overhead and the heavy use
+of the graph construct to implement the many dynamic data structures.
+
+\footnotesize
+\begin{figure}
+\begin{center}
+\framebox{\parbox[t]{4.in} {
+\hspace*{.10in}TYPE edge\_p = \\
+\hspace*{.25in}	       NODENAME OF edge\_t; \\ [1mm] \\
+
+\hspace*{.10in}TYPE edge\_info\_t = \\
+\hspace*{.25in}        RECORD \\
+\hspace*{.35in}                from\_node :     integer; \hspace{.10in} \# source node \\
+\hspace*{.35in}                to\_node :       integer; \hspace{.30in}\# destination node \\
+\hspace*{.35in}                symbol\_name :   integer; \# label of the edge \\
+\hspace*{.35in}                comp\_1 :        edge\_p; \hspace{.35in}\# left component \\
+\hspace*{.35in}                comp\_2 :        edge\_p; \hspace{.35in}\# right component \\
+\hspace*{.25in}        END; \\ [1mm] \\
+
+\hspace*{.10in}TYPE edge\_t =   \\
+\hspace*{.25in}        GRAPH \\
+\hspace*{.25in}        NODES \\
+\hspace*{.35in}                data : edge\_info\_t; \\
+\hspace*{.25in}        END; \\ [1mm]
+}}
+\end{center}
+\caption{Arc data structure in Orca}
+\label{orcastruct}
+\end{figure}
+\normalsize
+
+\section{Parallel implementation of ACP in Orca}
+
+Parallelization of the Active Chart Parser is done by creating one
+worker process for each node (i.e. word) and allocating each worker to
+one processor (in a pure parallel version) or allocating several
+workers to one processor (in a multi-tasking version). Note that in the
+parallel version there will be as many workers as there are words, since
+the last node does not represent any word. Each worker keeps track of
+its incoming and outgoing edges.
+
+In the parallel version, each worker executes the algorithm shown
+in Figure~\ref{parloop}. After the local initializations have finished,
+each worker adds one edge to its PEQ for each category to which
+the word it handles belongs. Since edges connect {\em two} nodes,
+the destination node (i.e. worker) should somehow also be able to add
+the new edge to its PEQ. In a message passing system
+this would be done by explicitly sending the information to the
+destination worker. Since communication in Orca is implemented by
+means of {\em shared objects} \cite {orca}, the most obvious way to
+implement the communication is to pass a ``mailbox'' structure to all
+workers as a shared parameter. The mailbox is implemented as an array
+of PEQs (one for each worker) and is passed as a (shared)
+parameter to all workers (the third parameter in
+Figure~\ref{parloop}). Each time a higher-order edge is generated by a
+worker, it updates the PEQs of the source and
+destination nodes by means of the mailbox. Note that in the parallel
+version of ACP, the PEQ has to be an object, since only objects may be
+shared between processes.
+
+The {\em EdgeCollection} object implements the {\em graph} from which edge
+pointers can be created, queried and assigned, as discussed in section
+4. 
+
+\footnotesize
+\begin{figure}
+\begin{center}
+\framebox{\parbox[t]{5.in} {
+{\bf PROCESS} worker( \\
+\hspace*{.10in}W: word\_t; \hspace{1.05in} \# the word this node represents\\
+\hspace*{.10in}node\_nr  : integer; \hspace{.70in} \# the node number \\
+\hspace*{.10in}M: SHARED mailbox\_t; \hspace{.30in} \# mailbox of pending edges queues\\
+\hspace*{.10in}EC: SHARED EdgeCollection; \# the collection of edges \\
+\hspace*{.10in}work: SHARED Work; \hspace{.40in} \# information on termination \\
+\hspace*{.10in}...\\
+); \\ [3mm]
+\hspace*{.10in}do local initializations \\
+\hspace*{.10in}add all categories to which W belongs to M[node\_nr] and M[node\_nr + 1] \\ [1mm]
+\hspace*{.10in}{\bf while} M[node\_nr] not empty {\bf do} \\
+\hspace*{.25in}elt = dequeue(M[node\_nr]) \\
+\hspace*{.25in}{\bf if} (elt is a sentence) {\bf then} print\_sentence {\bf fi} \\
+\hspace*{.25in}add elt to local incoming/outgoing edges \\
+\hspace*{.25in}add new edges that can be created by the addition of elt to local list \\
+\hspace*{.10in}{\bf od} \\
+{\bf END}
+}}
+\end{center}
+\caption{The Parallel ACP algorithm}
+\label{parloop}
+\end{figure}
+\normalsize
+
+Special care has to be taken when the {\em expansion} rule is applied
+on an edge in the parallel version. Say that edge $Y$ connecting nodes
+$n_{src}$ and $n_{dest}$ is expanded by rule $X$ {$\rightarrow$} $Y$ and
+that edge $X$ is expanded by rule $Z$ {$\rightarrow$} $X$, then both
+nodes $n_{src}$ and $n_{dest}$ would contain double entries of edge
+$Z$, since both nodes will (eventually) expand edge $X$ in the same
+way. To prevent this situation, workers will only expand {\em
+outgoing} edges.
+
+
+\subsection{Termination Detection}
+
+In both of the serial versions of the ACP, the algorithm could safely
+terminate once there were no more edges in the PEQ,
+since there was only one process dealing with this data structure. 
+In the parallel version, the algorithm stops when all workers are
+done. However, it is not trivial for a worker $W$ to determine when to
+stop. The fact that its PEQ is empty is no reason to
+stop, since other workers may still be busy, which can possibly lead
+to new edges being added to the PEQ of $W$. This
+problem is analogous to termination detection in the Arc
+Consistency Problem \cite {acp}. Termination of all workers (and
+therefore the algorithm) can safely be done only when both of the following
+conditions are met:
+
+\begin{enumerate}
+
+\item
+The number of active workers is 0.
+
+\item
+No other worker has any edge in its PEQ (which
+results in new edges being added).
+
+\end{enumerate}
+
+The information on the number of active workers and contents of the
+PEQs is stored in an object shared by all the workers
+(the fifth parameter in Figure~\ref{parloop}). The number of active
+workers is maintained as an integer and is initialized to the number
+of words in the sentence. The information on the contents of the
+PEQs is maintained as an array of booleans, one
+element for each PEQ. Each time a worker 
+adds a new edge to the PEQ of another worker, the
+corresponding field in the array of the {\em Work} object is set to
+{\em true}. Each time a worker, representing node $N$ enters the while loop in
+Figure~\ref{parloop} it sets the $N^{th}$ field of the array to {\em
+false} (not shown in Figure~\ref{parloop}).
+
+Whenever the worker exits the while loop in Figure~\ref{parloop}, it
+decreases the number of active workers by calling an operation from
+the {\em Work} object. Then it calls an operation of the {\em Work}
+object which checks for the termination condition. If the termination
+condition is false, the number of active workers is incremented and
+the worker process re-enters the while loop to see if new work has to be done.
+If the termination condition is true, the worker process (and all other
+workers) can safely terminate. 
+
+\subsection{Optimizations}
+
+There are two optimizations which can be included in the parallel
+version of ACP in order to reduce communication. It
+should be noted that the EdgeCollection object and the Work object
+have a major impact on the number of messages sent. Therefore
+optimizations can be found by adapting these objects.
+
+First of all the EdgeCollection implements a shared address space
+between all processors. Although this approach is the most natural
+way to implement the storage of the parse tree (see Section 3), it
+will be slow, since there will be a lot of communication involved.
+Furthermore for a large number of processes, this object can become a
+bottleneck. What we would like is to implement ``local pointers'',
+i.e. let each node have its own address space with respect to its
+``own'' (outgoing) edges. Thus edges can now be identified by a
+$<${\em node\_nr, index}$>$-pair, where {\em index} is an index in the
+outgoing list of node {\em node\_nr}. Thus, instead of storing
+``pointers'' to constituent edges (see Figure~\ref{orcastruct}), we
+use the tuples as defined above to identify these edges.
+
+There is one problem in the parallel version when
+trying to implement this strategy: since an edge is added to both the
+PEQs of its source and destination node, we would like to know in
+advance its index in the outgoing edgelist of its source node.
+However, since an edge is first added to the {\em PEQ} of the source
+node, it is impossible to know in advance (or without any communication)
+what this index will (eventually) be. In order to still implement this
+strategy, the following scheme is used: each node $N$ maintains an
+array {\em o\_cnt} of integers, one for each node. {\em o\_cnt[i]}
+indicates the number of edges that $N$ has added (i.e. sent) to node
+$N_i$.  The triplet $<$ {\em src\_node, N, N[src\_node]} $>$ then
+uniquely identifies
+an edge added by node $N$ to node {\em src\_node}. At the end of the
+algorithm, all nodes store their outgoing edges in an object storing
+this information for all nodes. By scanning through
+the outgoing edge list of the first node, one can find all sentence arcs
+and print the corresponding parse tree using the
+identification mechanism described above. Although this scheme is
+slightly more expensive in memory usage, the advantage of less
+communication is expected to be significant. 
+
+The next optimization that can be made is the adaption of
+termination detection control. As explained in section 5.1, a 
+{\em Work} object was introduced that kept information on
+termination (an array of booleans indicating which PEQs were
+still non-empty and an integer indicating the number of active
+workers). 
+Each time the worker entered its main loop and each time a worker announced a
+new edge to the source and destination node of that new edge, the Work
+object (and in particular the boolean array) had to be updated.
+
+The following strategy is expected to decrease the communication
+involved in updating the boolean array: let each node $N$ maintain an
+array {\em work\_arr} of integers, one for each other node. 
+{\em work\_arr[i]} denotes the number of pending edges that have been
+added (or extracted) to node $i$ by $N$ during its main loop. After its main loop, each
+worker sends the {\em work\_arr} to the {\em Work} object which keeps
+track of the number of pending edges for each of the PEQs (i.e. also
+an array of integers, one for each node). The {\em Work} object then
+adds each of the elements in the {\em work\_arr} array to the
+corresponding entries in its array. The second part of the termination
+condition (see section 5.2) then becomes:
+
+\begin{itemize}
+
+\item
+All entries in the integer array maintained by the {\em Work} object
+should be 0 (i.e. there are no outstanding pending edges)
+
+\end{itemize}
+
+With this implementation, we do not have to send a message to the {\em Work}
+object each time a PEQ is updated. Instead all the updates on the
+PEQs are stored locally and send to the {\em Work} object after the
+worker exits its main loop.
+
+\section{Test results}
+
+\subsection{Discussion}
+
+Before starting to give the test results, we will begin
+with a short discussion on the parallelization of the ACP. First of
+all it should be noted that the ACP is very fine grained. That is,
+there is a lot of communication,  
+in comparison with the number of computations performed. We
+therefore do not expect to have any speedup when running
+the parallel version of ACP on top of Amoeba. Besides the fact that a
+large number of edges have to be transmitted between nodes, the shared
+address space (the {\em EdgeCollection} object) in the non-optimized
+version also contributes to
+the amount of communication; each time the EdgeCollection object is
+changed, all possible replicas 
+of the object must be uniformly updated. This means that a broadcast has to
+be done in order to keep all copies of the object (when replicated)
+consistent. One can influence the amount of communication by {\em
+pinning} the {\em EdgeCollection} object to one processor, which means
+that only one master copy of the object has to be kept up to date.
+However, this strategy (which can be obtained by using the Orca {\em
+Strategy()} library call) has one major disadvantage: it can become
+a potential bottleneck since many processes are
+simultaneously trying to access the same object.
+
+The use of the {\em Strategy()}-call can also be used to pin each
+pending edges queue $P$ (i.e. the $P^{th}$ element of the mailbox
+array) to the processor which handles node $P$ in the sentence. It is
+expected that this strategy will also reduce the amount of communication.
+
+As a final remark, one has to note that the parallel ACP has a fixed
+number of processes, since the number of words in the sentence
+determines the number of workers and therefore the number of
+processes. ``Speedup'' in our case will have to be measured by {\em
+multitasking}, i.e. by allocating several workers to one processor.
+
+
+\subsection{Timing Results}
+
+For testing the parallel version of ACP, we used a sentence containing
+29 words, resulting in 29 processes in total. An extended version of
+the grammar shown in Figure~\ref{grammar} was used. Using this
+extended grammar, a total of 6760 derivations could be found.
+The serial C version on top of UNIX (running on a SPARC), the 6760
+derivations were found in 5.4 seconds. The serial Orca
+version on top of UNIX, using the {\em oc\_unix\_proc} Orca run-time
+system needed 26.9 seconds. 
+
+The figures for the parallel version of ACP are depicted in
+Figure~\ref{results}. The tests were executed on top of Amoeba
+\cite{amoeba1}. Two versions of ACP were tested, 
+one with the EdgeCollection object and one without. Both versions
+implemented the revised termination detection algorithm. The strategy call
+was {\em not} used, since this caused a segmentation fault on top of
+Amoeba when multitasking.
+
+As can be seen and as explained in the previous section, the parallel
+version is much slower than the serial Orca
+version. There are a number of points one should keep in mind when
+looking at the graph in Figure~\ref{results}. First of all, one should note that the
+ACP implicitly has a fixed number of processes. Since processes are
+assigned round-robin to the processors, there will be a lot of load
+imbalance which is reflected in the timing results. Furthermore,
+increasing the number of processors implies an increase in the number
+of messages to be sent and therefore an increase in the time needed
+by the parser.
+
+Finally, to illustrate the fact that assigning each mailbox entry to
+its corresponding processor (using the {\em Strategy()}-call) will
+reduce communication: the time needed by the versions with and
+without the EdgeCollection using 29 workers are 238.958 and 152.534 seconds. 
+
+\begin{figure}
+\begin{center}
+\input{gr.tex}
+\end{center}
+\caption{Timing results for Parallel ACP}
+\label{results}
+\end{figure}
+
+\section {Some Remarks on Orca}
+
+Using Orca to implement the parallel version of ACP was relatively
+easy since communication in Orca is done implicitly using the shared
+object data model \cite {orca}. Since parallel ACP is a highly
+asynchronous application, the implicit communication is a great relief
+for the programmer. However, as said before there are also some
+criticisms which can be made on Orca.
+
+First of all, an enormous amount of data copying is done in Orca
+which makes things slow. To illustrate this fact, one bug
+in the serial version of ACP turned out to be the fault of the
+compiler which forgot to make copies of an object which was passed as a
+parameter to an operation. After the bug was fixed the program became
+35 times slower. To overcome this slow-down, the object was removed
+and implemented in the traditional way (as in the C version) which
+resulted in the serial Orca version which was ``only'' 5 times slower than the
+serial C version. 
+
+Furthermore, using profiling information on the serial Orca version,
+it turned out that explicitly assigning fields of a record to
+copy the record was faster than using the record assignment operator. 
+
+As a last example of the inefficient implementation of Orca,
+consider the implementation of the dictionary, which is a list of
+lists. Since the dictionary can dynamically grow, this had to be
+implemented using the graph construct of Orca. In the initialization
+phase of the serial Orca version, we would like to know all categories
+to which a word belongs (see section 3). Since the dictionary stores
+exactly this information per word, the dictionary contains a function
+{\em give\_ith\_elt\_dict(i, symbollist)}, which returns the list of
+non-terminals to which the $i^{th}$ word in the dictionary belongs. To
+speed things up, this can be efficiently done by returning a {\em
+pointer} to the symbollist. However, in Orca this is done by returning
+a {\em copy} of the list which is again very slow and inefficient,
+since we will use the list only for reading.
+
+So even though Orca takes away the burden of explicit message passing
+and provides the user with indivisible operations on shared data,
+there is still a lot to be done to enhance the efficiency of the Orca
+implementation and to the programmer concentrate on its own
+problem(s) instead of concentrating on the ways to avoid the slow Orca
+constructs.
+
+\bibliographystyle{unsrt}
+\begin{thebibliography}{99}
+
+\bibitem{greg}
+   G.V.~Wilson.
+   {\em Assessing the Usability of Parallel Programming Systems : The
+   Cowichan Problems.}
+   ftp.cs.vu.nl:/pub/gvw/cowichan.ps.Z.
+   VU, Amsterdam, October 1993.
+
+\bibitem{terry}
+   T.~Winograd.
+   {\em Language as a Cognitive Process.}
+   Addison-Wesley, 1983.
+
+\bibitem{amoeba1}
+  S.J.~Mullender, G.~van~Rossum, A.S.~Tanenbaum, R.~van~Renesse, H.~van~Staveren.
+  {\em Amoeba -- A Distributed Operating System for the 1990s.}
+  IEEE Computer, 1990.
+
+\bibitem{orca}
+  H.E.~Bal, A.S.~Tanenbaum, M.F.~Kaashoek.
+  {\em Orca: A Language for Distributed Programming.}
+  SIGPLAN Notices 25, May 1990.
+
+\bibitem{acp}
+  H.E.~Bal, I. Athanasiu.
+  {\em The Arc Consistency Problem: a Case Study in Parallel
+  Programming with Shared Objects}
+  Unpublished paper, 1993.
+
+\end{thebibliography}
+
+\end{document}
+

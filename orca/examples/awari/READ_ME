@@ -1,0 +1,8 @@
+Awari is a retrograde analysis program that computes an end-game database
+for the Awari board game.
+
+For performance measurements we used 13 pieces.
+
+The randmerge program can be used to glue the output files together (each
+CPU writes its own output file).
+The randmerge usage can be obtained by calling it without arguments.

@@ -1,0 +1,24 @@
+OBJECT IMPLEMENTATION SharedVecProc;
+
+	a: vecproc;
+
+	OPERATION GetElt(i: integer): real;
+	BEGIN
+		RETURN a[i];
+	END;
+
+	OPERATION  PutElt(i: integer; x : real);
+	BEGIN
+		a[i] := x;
+	END;
+
+	OPERATION get(): vecproc;
+	BEGIN
+		RETURN a;
+	END;
+
+	OPERATION store(b: vecproc);
+	BEGIN
+		a := b;
+	END;
+END;

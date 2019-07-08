@@ -1,0 +1,235 @@
+MODULE IMPLEMENTATION unmove;
+
+FROM AwariTypes IMPORT Configuration, PitNr,
+			PitsPerSide, PitsPerBoard, AllPits;
+
+FROM  BoardOperations IMPORT Mirror_Configuration;
+
+
+## DEBUG ########
+FUNCTION PrintConfig(c: Configuration);
+BEGIN
+	FOR i IN 1 .. PitsPerBoard DO
+		Write(c[i].contents, " ");
+	OD;
+	WriteLine();
+END;
+
+
+# !!
+FUNCTION Swap(x: PitNr): PitNr;
+BEGIN
+	IF x < AllPits THEN
+		x +:= PitsPerSide;
+		IF x > PitsPerBoard THEN
+			x -:= PitsPerBoard;
+		FI;
+	FI;
+	RETURN x;
+END;
+
+FUNCTION NotNegative(configuration: Configuration): boolean;
+BEGIN
+	FOR i IN PitsPerSide + 1 .. PitsPerBoard DO
+		IF configuration[i].contents < 0 THEN
+			RETURN false;
+		FI;
+	OD;
+	RETURN true;
+END;
+
+
+FUNCTION FoundFirstCapture(parent: SHARED ParentType;
+			start, father: SHARED Configuration): boolean;
+	current, swapcurrent: PitNr;
+BEGIN
+
+	current := parent.endPit;
+	swapcurrent := Swap(current);
+	WHILE (current > PitsPerSide) AND
+	      (start[swapcurrent].contents = 0) AND
+	       (father[current].contents < 0) DO
+		IF father[current].contents < -3 THEN
+			RETURN false;
+		ELSIF (-father[current].contents >
+		           father[AllPits].contents) OR
+		           (father[AllPits].contents <= 1) THEN
+			RETURN false;
+		ELSIF father[current].contents = -3 THEN
+			parent.captured[swapcurrent] := 3;
+			father[AllPits].contents -:= 3;
+			father[current].contents +:= 3;
+		ELSE
+			parent.captured[swapcurrent] := 2;
+			father[AllPits].contents -:= 2;
+			father[current].contents +:= 2;
+		FI;
+		current -:= 1;
+		swapcurrent := Swap(current);
+	OD;
+	IF (current > PitsPerSide) AND
+	    ((start[swapcurrent].contents = 2) OR
+	     (start[swapcurrent].contents = 3)) THEN
+	     	RETURN false;
+	FI;
+
+	RETURN NotNegative(father);
+END;
+
+FUNCTION FoundNextCapture(parent: SHARED ParentType;
+			start, father: SHARED Configuration): boolean;
+	carry: integer;
+	current, swapcurrent: PitNr;
+BEGIN
+
+	REPEAT
+		carry := 1;
+		current := parent.endPit;
+		swapcurrent := Swap(current);
+		WHILE (carry > 0) AND (current > PitsPerSide) AND
+		       (parent.captured[swapcurrent] > 0) DO
+			IF parent.captured[swapcurrent] = 2 THEN
+				parent.captured[swapcurrent] +:= 1;
+				father[current].contents +:= 1;
+				father[AllPits].contents -:= 1;
+				carry := 0;
+			ELSIF parent.captured[swapcurrent] = 3 THEN
+				parent.captured[swapcurrent] -:= 1;
+				father[current].contents -:= 1;
+				father[AllPits].contents +:= 1;
+				carry := 1;
+			ELSE
+				WriteLine("Captured must be 2 or 3\n");
+				ASSERT(false);
+			FI;
+			current -:= 1;
+			swapcurrent := Swap(current);
+		OD;
+		IF (carry = 0) AND (father[AllPits].contents >= 0) THEN
+			RETURN true;
+		FI;
+	UNTIL carry /= 0;
+	RETURN false;
+END;
+
+
+FUNCTION FoundCaptureMove(parent: SHARED ParentType;
+			start, father: SHARED Configuration): boolean;
+BEGIN
+	IF parent.captured[Swap(parent.endPit)] = -1 THEN
+		RETURN FoundFirstCapture(parent, start, father);
+	ELSIF FoundNextCapture(parent, start, father) THEN
+		RETURN true;
+	ELSE
+		RETURN false;
+	FI;
+END;
+
+FUNCTION PutBackStones (parent: SHARED ParentType;
+			start, father: SHARED Configuration);
+	current, swapcurrent: PitNr;
+BEGIN
+	current := parent.endPit;
+	swapcurrent := Swap(current);
+	WHILE (current > PitsPerSide) AND
+	      (parent.captured[swapcurrent] > 0) DO
+		father[current].contents -:=
+			parent.captured[swapcurrent];
+		father[AllPits].contents +:=
+			parent.captured[swapcurrent];
+		parent.captured[swapcurrent] := -1;
+		current -:= 1;
+		swapcurrent := Swap(current);
+	OD;
+END;
+
+
+FUNCTION TakeBackOneStone(parent: SHARED ParentType;
+			start, father: SHARED Configuration);
+BEGIN
+	parent.endPit +:= 1;
+	IF parent.endPit = AllPits THEN parent.endPit := 1; FI;  # !!
+	IF parent.endPit = parent.startPit THEN
+		parent.endPit +:= 1;
+		IF parent.endPit = AllPits THEN parent.endPit := 1; FI;  # !!
+	FI;
+	father[parent.endPit].contents -:= 1;
+	father[parent.startPit].contents +:= 1;
+	parent.nstones +:= 1;
+END;
+
+FUNCTION ChooseNextStartPit(parent: SHARED ParentType;
+			start, father: SHARED Configuration);
+BEGIN
+	REPEAT
+		parent.startPit +:= 1;
+	UNTIL NOT ((parent.startPit <= PitsPerSide) AND
+	         (start[Swap(parent.startPit)].contents /= 0));
+	parent.endPit := parent.startPit;
+	parent.nstones := 0;
+	FOR i IN 1 .. PitsPerSide DO
+		parent.captured[i] := -1;
+	OD;
+	Mirror_Configuration(start, father);	
+		# NOTE ..... Mirror_Configuration doesn't set AllPits entry !
+END;
+
+FUNCTION NextParent(parent: SHARED ParentType; start, father: SHARED Configuration):
+	boolean;
+BEGIN
+	WHILE parent.startPit <= PitsPerSide DO
+		IF (parent.endPit > PitsPerSide) AND
+		   (start[Swap(parent.endPit)].contents = 0) AND
+		   FoundCaptureMove(parent, start, father) THEN
+			RETURN true;
+		FI;
+
+
+		#WriteLine("Before PutBackStones");
+		#PrintConfig(father);
+		PutBackStones(parent, start, father);
+
+		#WriteLine("After PutBackStones");
+		#PrintConfig(father);
+
+		#WriteLine("start = ", parent.startPit,
+		#"end = ", parent.endPit,
+		#"nstones = ", parent.nstones);
+
+		TakeBackOneStone(parent, start, father);
+
+		#WriteLine("After TakeBackOneStone");
+
+		#PrintConfig(father);
+		#WriteLine("start = ", parent.startPit,
+		#"end = ", parent.endPit,
+		#"nstones = ", parent.nstones);
+
+		IF (father[parent.endPit].contents < 0) AND
+		   (NOT ((start[Swap(parent.endPit)].contents = 0) AND
+		         (parent.endPit > PitsPerSide))) THEN
+			ChooseNextStartPit(parent, start, father);
+
+			#WriteLine("After ChooseNextStartPit");
+			#PrintConfig(father);
+		FI;
+
+		IF (parent.nstones > 0) AND
+		    (parent.endPit <= PitsPerSide) AND
+		    NotNegative(father) THEN
+			RETURN true;
+		FI;
+
+		IF (parent.nstones > 0) AND
+		   (parent.endPit > PitsPerSide) AND
+		   (start[Swap(parent.endPit)].contents /= 2) AND
+		   (start[Swap(parent.endPit)].contents /= 3) AND
+		    NotNegative(father) THEN
+			RETURN true;
+		FI;
+	OD;
+	RETURN false;
+END;
+
+
+END;

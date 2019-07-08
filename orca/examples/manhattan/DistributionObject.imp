@@ -1,0 +1,331 @@
+OBJECT IMPLEMENTATION DistributionObject;
+
+FROM TspTypes IMPORT 
+		NodeDistribution,
+		DistributionChange,
+		MoveNodeType,
+		NodeSelection,
+		NodeIndex,
+		NodeArray,
+		ValueArray;
+FROM CollectionTypes IMPORT
+		TourCollection;
+FROM PresentationModule IMPORT 
+		Warning,
+		Error;
+FROM Time IMPORT
+		SysMilli;
+IMPORT Random;
+IMPORT SpecificationObject;
+IMPORT TourCollectionObject;
+
+
+
+randomizer : Random;
+spec : SpecificationObject;
+initial : NodeDistribution[1..4];
+moreDistributions : boolean;
+insertGroup : integer;
+moveNode : integer;
+tempNodeArray : ValueArray;
+worstIndex : integer;
+baseDistribution : NodeDistribution [1..4];
+nodeSelectionMode : NodeSelection;
+nodesAtATime : integer;	# Number of nodes to move for each new distribution.
+
+
+
+
+#####################################################
+#####################################################
+##    Internal Modifiers                           ##
+#####################################################
+#####################################################
+
+OPERATION IncreaseMoveNode ();
+BEGIN
+	moveNode +:= 1;
+END;
+
+
+OPERATION IncreaseInsertGroup ();
+BEGIN
+	insertGroup +:= 1;
+END;
+
+
+OPERATION ResetInsertGroup ();
+BEGIN
+	insertGroup := 1;
+END;
+
+
+
+#####################################################
+#####################################################
+##    NextDistribution function                    ##
+#####################################################
+#####################################################
+
+
+# AreThereMoreDistributions
+#
+# AreThereMoreDistributions returns true if there are 
+# more distributions to be retrieved with the NextDistribution
+# operation, otherwise false. New distributions can be
+# created by using the SetBaseProblem message.
+#
+OPERATION AreThereMoreDistributions () : boolean;
+BEGIN
+	RETURN moreDistributions;
+END;
+
+
+
+# SetStepSize
+#
+# SetStepSize sets the number of nodes that shall be moved
+# each time NextDistribution is called.
+#
+OPERATION SetStepSize (s : integer);
+BEGIN
+	nodesAtATime := s;
+END;
+
+
+
+
+
+
+
+# SetBaseProblem
+#
+# SetBaseProblem sets the internal state so that all future
+# distributions are based upon the passed TCO. When this 
+# function has been called a finite number of new distributions
+# can be generated.
+#
+OPERATION SetBaseProblem (tco : TourCollectionObject);
+	max : integer;
+	tc : TourCollection;
+BEGIN
+	tc := tco$Tours ();
+	moreDistributions := true;
+	insertGroup := 1;
+	moveNode := 1;
+
+	max := MIN(integer);
+
+	FOR i IN LB(tc)..UB(tc) DO
+		IF tc[i]$Value () > max THEN
+			worstIndex := i;
+			max := tc[i]$Value ();
+		FI;
+		baseDistribution[i] := tc[i]$Nodes_Set ();		
+	OD;
+
+#	IF nodeSelectionMode = worst_nodes THEN
+#		tempNodeArray := tc[worstIndex]$WorstNodes_Array ();
+#	ELSE
+		tempNodeArray := tc[worstIndex]$Nodes_Array ();
+#	FI;		
+
+END;
+
+
+
+
+
+OPERATION SelectNodeToMove (from : OUT integer; to : OUT integer) : NodeIndex;
+	d : NodeDistribution;
+	result : NodeIndex;
+	incGroup : boolean;
+BEGIN
+	IF NOT moreDistributions THEN
+		# Ignore the result
+#		Warning ("No more distributions. Dismissing");
+		from := 0;
+		to := 0;
+		RETURN 0;
+	FI;
+	d := baseDistribution;
+
+	incGroup := false;
+	moveNode +:= 1;
+	IF moveNode = UB(tempNodeArray) THEN
+		moveNode := LB(tempNodeArray);
+		incGroup := true;
+	FI;
+	WHILE tempNodeArray[moveNode] = 0 DO;
+		moveNode +:= 1;
+		IF moveNode = UB(tempNodeArray) THEN
+			moveNode := LB(tempNodeArray);
+			incGroup := true;
+		FI;
+	OD;
+
+	IF insertGroup = worstIndex THEN
+		incGroup := true;
+	FI;
+
+	IF incGroup THEN
+		insertGroup +:= 1;
+		IF insertGroup = worstIndex THEN
+			insertGroup +:= 1;
+		FI;
+		IF insertGroup > UB(d) THEN
+			moreDistributions := false;
+			from := worstIndex;
+			to := worstIndex;
+			RETURN 0;
+		FI;
+	FI;	
+
+	IF ((moveNode = UB(tempNodeArray)) AND 
+	    ((insertGroup = UB(d)) OR ((insertGroup = (UB(d) - 1)) AND (worstIndex = UB(d)))))  THEN
+		moreDistributions := false;
+	FI;
+
+	IF ((moveNode > UB(tempNodeArray)) OR
+	    (moveNode < LB(tempNodeArray)) OR
+	    (worstIndex > UB(d)) OR
+	    (worstIndex < LB(d)) OR
+	    (insertGroup > UB(d)) OR
+	    (insertGroup < LB(d))) THEN
+		Warning ("Distributor: Bounds of the problem are incorrect.");
+		moreDistributions := false;
+		from := LB(d);
+		to := LB(d);
+		result := 0;
+	ELSE
+		from := worstIndex;
+		to := insertGroup;
+		result := tempNodeArray[moveNode];
+	FI;
+
+	RETURN result;
+END;
+
+
+
+
+OPERATION DDHelpFun (nr : integer) : DistributionChange;
+	n : NodeIndex;
+	from, to : integer;
+	dc : DistributionChange;
+	mtab : ARRAY [integer 1..nr] OF MoveNodeType;
+BEGIN
+	FOR i IN 1..nodesAtATime DO
+		n := SELF$SelectNodeToMove (from, to);
+		IF ((n /= 0) AND (from /= to)) THEN 
+			mtab[i].nr := n;
+			mtab[i].from := from;
+			mtab[i].to := to;
+			INSERT (mtab[i], dc);
+		FI;
+	OD;
+
+
+	RETURN dc;
+END;
+	
+
+
+
+OPERATION DeltaDistribution () : DistributionChange;
+	dc : DistributionChange;
+BEGIN
+	# Check up
+	IF NOT moreDistributions THEN
+		Warning ("Creating distributions when all possible solutions already have been created!");
+	FI;
+
+	dc := SELF$DDHelpFun (nodesAtATime);
+
+	RETURN dc;
+
+END;
+
+
+
+
+OPERATION NextDistribution () : NodeDistribution;
+	n : NodeIndex;
+	from, to : integer;
+BEGIN
+	# Check up
+	IF NOT moreDistributions THEN
+		Warning ("Creating distributions when all possible solutions already have been created!");
+	FI;
+
+	FOR i IN 1..nodesAtATime DO
+		n := SELF$SelectNodeToMove (from, to);
+		IF ((n /= 0) AND (from /= 0) AND (to /= 0)) THEN 
+			DELETE (n, baseDistribution[from]);
+			INSERT (n, baseDistribution[to]);
+		FI;
+	OD;
+
+	RETURN baseDistribution;
+END;
+
+
+
+
+
+
+OPERATION InitialDistribution () : NodeDistribution;
+BEGIN
+	RETURN initial;
+END;
+
+
+
+
+#####################################################
+#####################################################
+##    Initialization                               ##
+#####################################################
+#####################################################
+
+
+OPERATION Initialize (specification : SpecificationObject;
+		boys : integer;
+		mode : NodeSelection);
+	nodes : NodeDistribution[1..boys];
+	na : NodeArray;
+	temp_tc : TourCollectionObject;
+BEGIN
+	randomizer$init (SysMilli());
+	nodesAtATime := 3;
+	IF mode = unspecified THEN
+		nodeSelectionMode := random;
+	ELSE
+		nodeSelectionMode := mode;
+	FI;
+	spec := specification;
+
+
+
+	IF specification$DeliveryBoys () = 4 THEN
+		temp_tc$Load ("InitialDistribution", specification);
+		IF ((specification$DebugMode ()) AND (NOT temp_tc$Consistent ())) THEN
+			Warning ("Distributor: Initialize: InitialDistribution not consistent!!!");
+		FI;
+		initial := temp_tc$Distribution ();
+	ELSE IF specification$DeliveryBoys () = 1 THEN
+		na := specification$Nodes ();
+		FOR i IN LB(na)..UB(na) DO
+			INSERT (na[i].nr, nodes[1]);
+		OD;
+		initial[1] := specification$NodesSet ();
+	     ELSE
+		Error ("Only 1 or 4 deliveryboys are allowed");
+	     FI;	
+	FI;
+
+
+END;
+
+
+END;

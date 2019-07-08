@@ -1,0 +1,25 @@
+# from Winograd's "Language as a cognitive process", p 93.
+#
+sentence -> NP VP
+NP -> Determiner NP2
+NP -> NP2
+NP2 -> Noun
+NP2 -> Adjective NP2
+NP2 -> NP2 PP
+PP -> Preposition NP
+VP -> Verb
+VP -> Verb NP
+VP -> VP PP
+
+Determiner -> a
+Determiner -> an
+Noun -> cucumber
+Adjective -> nibbled
+Verb -> nibbled
+Adjective -> orange
+Noun -> orange
+Noun -> rabbit
+Noun -> saw
+Verb -> saw
+Determiner -> the
+Preposition -> with

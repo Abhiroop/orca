@@ -1,0 +1,8 @@
+OBJECT SPECIFICATION SharedInt;
+	OPERATION value(): integer;
+	OPERATION assign(v: integer);
+	OPERATION min(v: integer);
+	OPERATION inc();
+	OPERATION dec();
+	OPERATION AwaitValue(v: integer);
+END;

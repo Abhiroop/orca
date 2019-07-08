@@ -1,0 +1,22 @@
+#!/bin/sh
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: oc_sinproc,v 1.7 1995/07/31 09:09:00 ceriel Exp $
+
+OC_HOME=/usr/proj/orca; export OC_HOME
+
+# default values:
+OC_RTSNAM=sinproc; export OC_RTSNAM
+binsuf=sun4
+OC_LIBS="\$OC_HOME/\$OC_LIBNAM/\$OC_RTSNAM/\$OC_MACH/\$OC_SPECIAL/lib\$OC_RTSNAM.a -lm"
+export OC_LIBS
+
+case `uname -r` in
+5*)	binsuf=sol2
+	OC_LIBS="\$OC_HOME/\$OC_LIBNAM/\$OC_RTSNAM/\$OC_MACH/\$OC_SPECIAL/lib\$OC_RTSNAM.a -lm -lposix4"
+	;;
+esac
+
+$OC_HOME/bin.$binsuf/oc "$@"

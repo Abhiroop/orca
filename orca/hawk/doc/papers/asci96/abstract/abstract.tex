@@ -1,0 +1,222 @@
+\documentclass{article}
+
+\usepackage{a4}
+\usepackage{times}
+\usepackage{graphicx}
+\usepackage{epsfig}
+\usepackage{twocolumn}
+
+\textwidth 6.5in
+\oddsidemargin -0.2in
+
+\newcommand{\rem}[1] {}
+
+\title{Implementation of a Portable Runtime System Supporting Mixed
+Task- and Data-Parallelism}
+
+\author{Saniya Ben Hassen \\ Vrije Universiteit,
+Amsterdam \\ saniya@cs.vu.nl \and Tim R\"uhl \\ Vrije Universiteit,
+Amsterdam \\ tim@cs.vu.nl }
+
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  This paper describes the portable implementation of a programming
+  model based on shared objects that integrates task- and
+  data-parallelism. As a starting point, the implementation uses two
+  runtime systems that are already available: the Orca RTS, for
+  task-parallel programming, and Hawk, for data-parallel programming.
+  To achieve our goal, we implemented the Orca RTS and Hawk on top of
+  Panda, a virtual machine that was designed to facilitate porting
+  parallel programming systems to new architectures. With the
+  resulting system, an application program may use the task-parallel
+  model of Orca and the data-parallel model of Hawk by calling the
+  appropriate primitives in either the Orca RTS or in Hawk.
+
+  \vspace{0.5cm}
+  \textbf{keywords:} Data Parallel Programming.  Partitioned Shared
+  Objects. Portable Runtime System. Portable Virtual Machine. Shared
+  Objects. Task Parallel Programming.
+\end{abstract}
+
+
+\section{Introduction}
+\label{sec:intro}
+
+Supporting both task and data parallelism in one programming system is
+useful, since many applications need both types of parallelism. We are
+implementing a programming model based on shared objects that supports
+both task- and data-parallelism~\cite{benhassen96b}. In this model,
+there are two types of objects: \emph{shared objects}, that are either
+stored on one processor or replicated on multiple processors and
+\emph{partitioned shared objects} (partitioned objects for short), for
+which the state is distributed over multiple processors. In a parallel
+application, concurrent processes may communicate by invoking objects
+of either type.
+
+To implement this integrated model, we start with two available
+runtime systems (RTSs), one that supports shared objects and one that
+supports partitioned objects. Orca is a language based on
+shared objects for programming task-parallel applications~\cite{bal92}
+and its RTS provides an interface for managing processes and shared
+objects. On the other hand, Hawk is a language independent RTS that
+implements partitioned objects~\cite{benhassen96}. Our goal is
+to integrate the Orca RTS and Hawk into a portable RTS that allows
+both models to be used together at application level.
+
+To achieve our goal, we use Panda~\cite{bhoedjang93}, a portable
+virtual machine that was designed to facilitate porting parallel
+programming systems to new architectures. Panda provides threads,
+communication, and synchronization primitives to programming
+systems. Only a small part of Panda needs to be rewritten to be used
+on a new architecture.
+
+In this paper, we describe the portable implementation of the mixed
+task- and data-parallel object model on top of Panda. The Orca RTS
+and Hawk were written independently on top of Panda. Each required a
+different set of communication and synchronization tools for the
+implementation of its object model. With the resulting system, an
+application program may use both shared objects and partitioned
+objects by calling the appropriate primitives in the Orca RTS or in
+Hawk.
+
+\section{Programming Model}
+
+In our object-based parallel programming model, multiple threads of
+control (processes or tasks) can communicate and synchronize through
+operations on shared objects or partitioned objects.
+
+Shared objects are used by task-parallel applications. A shared object
+encapsulates a shared data structure and the operations on the data,
+so it is essentially an instance of an Abstract Data Type (ADT). Its
+state is either stored on one processor or replicated on multiple
+processors. Processes may explicitely be created on different
+processors and these processes may communicate by calling the
+operations defined on shared objects.
+
+In contrast, partitioned objects are used for data-parallel
+applications. As in the shared object model, a partitioned
+object is an instance of an ADT. The state of the ADT, however, is
+restricted to be a multidimensional array that the programmer must
+partition using directives. These partitions may then be distributed
+arbitrarily over several processors (see Figure~\ref{fig:object}).
+
+\begin{figure*}[htbp]
+  \begin{center}
+    \leavevmode
+    \input{object.pstex_t}
+    \caption{Example of a partitioned object. The state of the object 
+      is partitioned column-wise and the columns are distributed over three
+      processors.}
+    \label{fig:object}
+  \end{center}
+\end{figure*}
+
+After the state of an object has been partitioned and distributed, the
+object may be invoked. An operation on an object can be either
+sequential or parallel. A sequential operation is executed on one
+machine and may update the entire state of the object sequentially. A
+parallel operation is executed according to the ``owner-computes
+rule,'' i.e., it is applied to all partitions owned by the processors in
+parallel. The RTS guarantees that all partitions accessed and updated
+are consistent. 
+
+The integration of both types of objects leads to a flexible model
+that is suitable for general-purpose parallel programming. It supports
+a general process model with arbitrary interactions between processes
+and mappings to physical machines.
+
+\section{Implementation of the Programming Model}
+
+Two runtime systems are now available for both shared objects and
+partitioned objects. The Orca RTS provides all necessary primitives
+for the dynamic creation of processes and for the creation and
+invocation of single-copy or replicated objects. It requires from the
+underlying operating system several communication and synchronization
+primitives: Remote Procedure Call, Group
+Communication~\cite{kaashoek92}, and threads.
+
+Next to the Orca RTS, Hawk is a language-independent runtime system
+that was written to support partitioned
+objects~\cite{benhassen96}. Using the Hawk primitives, a program may
+instantiate an object by specifying the number of its dimensions, its
+size, and the operations that can be applied to it. Hawk also provides
+routines to partition an object and distribute partitions over several
+processors. Hawk requires from the underlying operating system a
+different set of communication protocols than the Orca RTS does. It
+uses collective communication on top of unreliable unicast and
+multicast protocols in addition to Group Communication.
+
+In order to integrate shared objects and partitioned objects
+into one model, we have implemented the Orca RTS and Hawk on top of
+Panda.  The portable implementation of both systems is briefly
+described in the next section.
+
+\section{Portable Implementation}
+
+Panda provides threads, communication primitives, and synchronization
+primitives. To facilitate porting Panda, a low-level \emph{system
+interface} is defined (see Figure~\ref{fig:overview}). This system
+interface includes threads, messages, and low-level communication
+primitives. On top of this interface, a number of \emph{modules} may
+be built. To support multiple communication modules, the system layer
+provides message multiplexing and demultiplexing. Only the system
+layer of Panda needs to be rewritten to be used on a new architecture;
+high-level communication modules are architecture independent.
+
+\begin{figure*}[htbp]
+  \begin{center}
+    \leavevmode
+    \input{overview.pstex_t}
+    \caption{System overview. }
+    \label{fig:overview}
+  \end{center}
+\end{figure*}
+
+We implemented the Orca RTS and Hawk on top of Panda by creating three
+independent communication modules: Group Communication, Remote
+Procedure Call, and Collective
+Communication. Figure~\ref{fig:overview} gives an overview of the
+resulting system. The Orca RTS uses Group Communication and Remote
+Procedure Call. Independently from the Orca RTS, Hawk is implemented
+on top of Group Communication and Collective Communication. Both the
+Orca RTS and Hawk use the threads provided by Panda. At the highest
+level, an application calls primitives of the Orca RTS to create and
+use shared objects and primitives of Hawk to create and use
+partitioned objects.
+
+Since the entire system is implemented on top of Panda, it will be
+available on all systems that Panda is ported to. Currently, Panda is
+available on top of the Amoeba operating system on Ethernet and
+Myrinet~\cite{Boden95-myrinet}. Furthermore, implementations exist for
+Solaris~2.4, Thinking Machines CM-5, Parsytec GCEL, and Parsytec
+PowerXplorer.
+
+\section{Status and Future Work}
+\label{sec:status}
+
+The Group Communication and Remote Procedure Call modules have been
+implemented on top of the Panda system layer and the portable Orca RTS
+has been used for the implementation of many task-parallel
+applications on various platforms. The collective communication module
+for Hawk is currently being tested on the Amoeba system (through
+Panda) with Ethernet. Once the testing phase is finished, the mixed
+task- and data-parallel programming system will be available on all
+platforms supported by Panda.
+
+In the full version of this paper, we will describe in more detail the
+shared and partitioned object models. We will also describe the
+interfaces the Orca RTS and Hawk provide and some applications that
+were implemented on top of them. Furthermore, we will fully describe
+the properties of Panda that allowed the easy integration of the two
+RTSs. Finally, we will provide performance measurements on a number of
+different architectures at application level.
+
+\bibliographystyle{unsrt}
+\bibliography{/home/saniya/bibliography/biblio,/home/saniya/bibliography/myreferences,/home/tim/bib/head,/home/tim/bib/comm,/home/tim/bib/tail}
+
+\end{document}

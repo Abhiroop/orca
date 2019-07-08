@@ -1,0 +1,20 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+OBJECT SPECIFICATION Game;
+
+	CONST Nsqrt   = 4;			# The 15-puzzle
+	CONST Npuzzle = Nsqrt*Nsqrt - 1;
+
+	OPERATION Distance(v : integer; x, y : integer) : integer;
+		# Returns the (Manhatten) distance of Piece v at position (x,y)
+		#  0 <=  v  <= Npuzzle		-- Value range (0 denotes blank)
+		#  1 <= x,y <= Nsqrt		-- Index range
+
+	OPERATION Value(x, y : integer) : integer;
+		# Returns the piece at starting position (x,y)
+
+	OPERATION Init(length : integer);
+		# Sets up a starting position based on 'length' random moves
+END;

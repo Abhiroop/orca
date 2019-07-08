@@ -1,0 +1,5 @@
+MODULE SPECIFICATION vec;
+CONST nn2=256;
+CONST nv=nn2+8;
+TYPE vector=ARRAY[integer 0..nv] OF longreal;
+END;

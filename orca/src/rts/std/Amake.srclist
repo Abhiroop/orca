@@ -1,0 +1,13 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+RTS_STD = {
+	$PWD/IntObject.imp,
+	$PWD/RowCollect.imp,
+	$PWD/PollSequen.imp,
+	$PWD/Random.imp,
+	$PWD/barrier.imp,
+	$PWD/distributions.imp,
+	$PWD/Math_C.c,
+};

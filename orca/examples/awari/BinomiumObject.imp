@@ -1,0 +1,64 @@
+#-----------------------------------------------#
+# Author[s]: H. Staalman  and  E.J.J. de Waal	#
+# Date	   : August 1994			#
+# Version  : 1.0				#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION BinomiumObject;
+
+# As a module it's just ... nothin'...
+
+
+FROM	AwariTypes	IMPORT	BinomiumType;
+
+
+
+FUNCTION Init_Binomium(binomium: SHARED BinomiumType;
+		       n: IN integer;
+		       k: IN integer);
+BEGIN
+    FOR x IN 0..n DO
+	FOR y IN 0..k DO
+	    binomium[x][y] := 0;
+	    binomium[x][0] := 1;
+	    binomium[y][y] := 1;
+	OD;
+    OD;
+    FOR x IN 1..n DO
+	FOR y IN 1..k DO
+	    binomium[x][y] := binomium[x-1][y] + binomium[x-1][y-1];
+	OD;
+    OD;
+END;
+
+
+
+#
+# Only used for debugging.
+#
+#FUNCTION Print_Binomium(binomium: IN BinomiumType);
+#BEGIN
+#    FOR x IN 0..N DO
+#	 FOR y IN 0..K DO
+#	     WriteLine("Binomium \[", x, "\]\[", y, "\] has value: ", binomium[x][y]);
+#	 OD;
+#    OD;
+#END;
+
+
+
+#
+# Used in the object version of Binomium; Not needed now.
+#
+#FUNCTION Get_Binomial_Coefficient(x: integer; y: integer):longint;
+#BEGIN
+##    WriteLine("Returning [",x,"][",y,"]");	# DEBUG info
+#    RETURN(binomium[x][y]);
+##   IF (x >= y) THEN
+##	RETURN(binomium[x][y]);
+##	ELSE WriteLine("Gigantic bug...");
+#END;
+
+
+
+END; # BinomiumObject

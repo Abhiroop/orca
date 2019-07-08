@@ -1,0 +1,9 @@
+MODULE SPECIFICATION Keys;
+
+FROM Types IMPORT DataRecord,MatrixType;
+
+	FUNCTION InitMatrix(matrix : SHARED MatrixType);
+	FUNCTION NewKey(dr : SHARED DataRecord; color : integer;
+			field : integer; piece : integer) : integer;
+
+END;

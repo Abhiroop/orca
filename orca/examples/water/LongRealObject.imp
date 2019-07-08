@@ -1,0 +1,40 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+OBJECT IMPLEMENTATION LongRealObject;
+
+Value : longreal;
+
+
+OPERATION SetVal(Val : longreal);
+
+BEGIN
+	Value := Val;
+END;
+
+
+OPERATION GetVal() : longreal;
+
+BEGIN
+	RETURN Value;
+END;
+
+
+OPERATION IncVal(Val : longreal);
+
+BEGIN
+	Value +:= Val;
+END;
+
+
+OPERATION DecVal(Val : longreal);
+
+BEGIN
+	Value -:= Val;
+END;
+
+
+BEGIN
+    Value := 0.0D;
+END;

@@ -1,0 +1,293 @@
+MODULE IMPLEMENTATION fourier;
+IMPORT NatObject;
+IMPORT SharedVecProc;
+IMPORT SharedIntVec;
+FROM SharedVecProc IMPORT vecproc;
+FROM SharedIntVec IMPORT vecint;
+FROM Math IMPORT SQR;
+FROM Math IMPORT sin_velm;
+FROM Finish IMPORT Finish;
+#FUNCTION wvec(data:vector;nn:integer);
+#BEGIN
+#  FOR i IN 1..nn DO WriteLine(i," ",data[2*i-1]," ",data[2*i]);OD;
+#END;
+
+FUNCTION Kernel(data:SHARED vector;
+		il,istart,jstart,istep,irep,mmax,nn,isignstep:integer);
+CONST pi2=1.57079632679489661923E+00;
+   n,m,j,i,jup: integer;
+   tempr,tempi,wtemp,wr,wpr,wpi,wi: real;
+BEGIN
+   n:=2*nn;
+   wtemp := 6.28318530717959/FLOAT(isignstep);
+   wpr := -2.0*SQR(sin_velm(wtemp));
+   wtemp:=2.0*wtemp;
+   wpi := sin_velm(wtemp);
+   wtemp:=FLOAT(istart-1)*wtemp;
+   wr := sin_velm(pi2-wtemp);
+   wi := sin_velm(wtemp);
+   FOR ii IN 1 .. (mmax / 2) DO
+     m:=il+2*(jstart+ii)-3;
+     jup:=2*(istart+ii)-3;
+     FOR jj IN 0..((n-jup) / istep) DO
+       i := m + jj*irep;
+       j := i+(irep / 2);
+       tempr := wr*data[j]-wi*data[j+1];
+       tempi := wr*data[j+1]+wi*data[j];
+       data[j] := data[i]-tempr;
+       data[j+1] := data[i+1]-tempi;
+       data[i] := data[i]+tempr;
+       data[i+1] := data[i+1]+tempi;
+     OD;
+     wtemp := wr;
+     wr := wr*wpr-wi*wpi+wr;
+     wi := wi*wpr+wtemp*wpi+wi;
+   OD;
+END;
+
+FUNCTION Kernpar(data:SHARED vecproc;
+		il,istart,jstart,istep,irep,mmax,nn,isignstep:integer);
+CONST pi2=1.57079632679489661923E+00;
+   n,m,j,i,jup: integer;
+   tempr,tempi,wtemp,wr,wpr,wpi,wi: real;
+BEGIN
+   n:=2*nn;
+   wtemp := 6.28318530717959/FLOAT(isignstep);
+   wpr := -2.0*SQR(sin_velm(wtemp));
+   wtemp:=2.0*wtemp;
+   wpi := sin_velm(wtemp);
+   wtemp:=FLOAT(istart-1)*wtemp;
+   wr := sin_velm(pi2-wtemp);
+   wi := sin_velm(wtemp);
+   FOR ii IN 1 .. (mmax / 2) DO
+     m:=il+2*(jstart+ii)-3;
+     jup:=2*(istart+ii)-3;
+     FOR jj IN 0..((n-jup) / istep) DO
+       i := m + jj*irep;
+       j := i+(irep / 2);
+       tempr := wr*data[j]-wi*data[j+1];
+       tempi := wr*data[j+1]+wi*data[j];
+       data[j] := data[i]-tempr;
+       data[j+1] := data[i+1]-tempi;
+       data[i] := data[i]+tempr;
+       data[i+1] := data[i+1]+tempi;
+     OD;
+     wtemp := wr;
+     wr := wr*wpr-wi*wpi+wr;
+     wi := wi*wpr+wtemp*wpi+wi;
+   OD;
+END;
+FUNCTION ReOrder(data: SHARED vector; nn: integer);
+   m,j,i: integer;
+   tempr,tempi: real;
+BEGIN
+   j := 1;
+   FOR ii IN 1..nn DO
+     i := 2*ii-1;
+     IF (j > i) THEN
+       tempr := data[j];
+       tempi := data[j+1];
+       data[j] := data[i];
+       data[j+1] := data[i+1];
+       data[i] := tempr;
+       data[i+1] := tempi;
+     FI;
+     m := nn;
+     WHILE ((m >= 2) AND (j > m))  DO
+       j := j-m;
+       m := m / 2;
+     OD;
+     j := j+m;
+   OD;
+END;
+
+
+FUNCTION frseq(data: SHARED vector; nn,isign: integer);
+n,mmax,istep: integer;
+BEGIN
+   ReOrder(data,nn);
+   n:=2*nn;
+   mmax := 2;
+   WHILE (n > mmax) DO
+     istep := 2*mmax;
+     Kernel(data,0,1,1,istep,istep,mmax,nn,isign*istep);
+     mmax := istep;
+   OD;
+END;
+
+PROCESS Slave(barrier,start,exits:SHARED NatObject;
+              mode:SHARED SharedIntVec;part:SHARED SharedVecProc);
+mmax,istep:integer;
+partloc:vecproc;
+intloc:vecint;
+BEGIN 
+  DO
+   mmax:=start$AwaitValue(1);
+   IF mmax=-1 THEN 
+	WriteLine(" Slave #", MYCPU(), " is finished");
+	exits$inc();
+	EXIT;
+   FI;
+   start$assign(0);
+   intloc:=mode$get();
+   partloc:=part$get();
+   WriteLine(" Slave ",intloc[1]," ",intloc[6]);
+   CASE intloc[1] OF
+   1=>
+       mmax:=2;
+       WHILE (intloc[2] > mmax) DO
+         istep:=2*mmax;
+         Kernpar(partloc,0,1,1,istep,istep,mmax,
+                    intloc[2],intloc[3]*istep);
+         mmax:=istep;
+       OD;
+     |#END;
+   2=>
+        Kernpar(partloc,0,intloc[4],1,intloc[5],2*intloc[6],intloc[6],
+                    intloc[2],intloc[3]*intloc[5]);
+      |#END;
+   ESAC;
+   part$store(partloc);
+   barrier$inc();
+  OD;
+END;
+
+FUNCTION PutVec(part:OUT SharedVecProc; data:vector;
+		il,istart,istep,mmax,nn:integer);
+l1,i3:integer;
+BEGIN
+   l1:=il+2*istart-1;
+   i3:=1;
+   FOR i2 IN 0..((2*nn-2*istart) / istep) DO
+     FOR i5 IN 1..2 DO
+       FOR i1 IN 0..mmax-1 DO part$PutElt(i1+i3,data[l1+i1]);OD;
+       i3:=i3+mmax;
+       l1:=l1+(istep / 2);
+     OD;
+   OD;
+END;
+
+FUNCTION GetVec(part:vecproc; data:SHARED vector;
+		il,istart,istep,mmax,nn:integer);
+l1,i3:integer;
+BEGIN
+   l1:=il+2*istart-1;
+   i3:=1;
+   FOR i2 IN 0..((2*nn-2*istart) / istep) DO
+     FOR i5 IN 1..2 DO
+       FOR i1 IN 0..mmax-1 DO data[l1+i1]:=part[i1+i3];OD;
+       i3:=i3+mmax;
+       l1:=l1+(istep / 2);
+     OD;
+   OD;
+END;
+
+FUNCTION ToSlave(part:OUT SharedVecProc;data:vector;il,n:integer);
+BEGIN
+   FOR i IN 1..n DO part$PutElt(i,data[i+il]);OD;
+END;
+
+FUNCTION FromSlave(part:SharedVecProc;data:SHARED vector;il,n:integer);
+BEGIN
+   FOR i IN 1..n DO data[i+il]:=part$GetElt(i);OD;
+END;
+
+
+PROCESS OrcaMain();
+
+data2,data:vector;
+nn:integer;
+tmp:real;
+isign,il,mloc,istart,iup,iiup,jj,n,mmax,nloc,istep: integer;
+Spart:ARRAY[integer 1..iproc] OF SharedVecProc;
+mode:ARRAY[integer 1..iproc] OF SharedIntVec;
+exits, barrier:NatObject;
+start:ARRAY[integer 1..iproc] OF NatObject;
+part:vecproc;
+intloc:vecint;
+BEGIN
+  nn:=nn2 / 2;
+  FOR i IN 1..nn DO
+       data[2*i-1]:=sin_velm(5.0*6.283185307*FLOAT(i-1)/FLOAT(nn));
+       data[2*i]:=0.0;
+  OD;
+  data2:=data;
+  frseq(data2,nn,1);
+
+   isign:=1;
+   n := 2*nn;
+   ReOrder(data,nn);
+   exits$assign(0);
+   FOR i IN 0..iproc-1 DO
+      start[i+1]$assign(0);
+      FORK Slave(barrier,start[i+1],exits,mode[i+1],Spart[i+1]) ON(i);
+   OD;
+
+   barrier$assign(0);
+   nloc:=n / iproc;
+   intloc[1]:=1;
+   intloc[2]:=nloc / 2;
+   intloc[3]:=isign;
+   mode[1]$store(intloc);
+   FOR i IN 0..iproc-1 DO
+     jj:=i*nloc;
+     mode[i+1]$store(intloc);
+     ToSlave(Spart[i+1],data,jj,nloc);
+     start[i+1]$assign(1);
+   OD;
+   nn:=barrier$AwaitValue(iproc);
+   FOR i IN 0..iproc-1 DO
+     FromSlave(Spart[i+1],data,i*nloc,nloc);
+   OD;
+   nloc:=nloc / 2;
+   mmax:=nloc;
+   iup:=(iproc / 2)-1;
+   iiup:=2;
+   FOR i IN 0..ilog DO
+     istep:=2*mmax;
+     barrier$assign(0);
+     FOR j IN 0..iproc-1 DO
+       il:=2*iiup*nloc*(j % (iup+1));
+       mloc:=mmax / iiup;
+       istart:=(j / (iup+1))*(mmax / (2*iiup))+1;
+       PutVec(Spart[j+1],data,il,istart,istep,mloc,iiup*nloc);
+       intloc[1]:=2;
+       intloc[2]:=iiup*nloc;
+       intloc[3]:=isign;
+       intloc[4]:=istart;
+       intloc[5]:=istep;
+       intloc[6]:=mloc;
+       mode[j+1]$store(intloc);
+       start[j+1]$assign(1);
+     OD;
+     il:=barrier$AwaitValue(iproc);
+     FOR j IN 0..iproc-1 DO
+       il:=2*iiup*nloc*(j % (iup+1));
+       mloc:=mmax / iiup;
+       istart:=(j / (iup+1))*(mmax / (2*iiup))+1;
+       part:=Spart[j+1]$get();
+       GetVec(part,data,il,istart,istep,mloc,iiup*nloc);
+     OD;
+     mmax:=istep;
+     iup:=iup / 2;
+     IF (iiup<iproc) THEN iiup:=2*iiup;FI;
+   OD;
+
+
+
+
+  
+  tmp:=0.0;
+  FOR i IN 1..nn2 DO
+    tmp:=tmp+SQR(data[i]-data2[i]);
+  OD;
+  FOR i IN 0 .. iproc-1 DO
+	start[i+1]$assign(-1);
+  OD;
+  WriteLine(" verschil = ",tmp," ",tmp/FLOAT(nn2));
+  mmax := exits$AwaitValue(iproc);
+  Finish();
+END;
+
+END;
+

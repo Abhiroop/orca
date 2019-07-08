@@ -1,0 +1,68 @@
+#ifndef __PAN_GRP_BB_ACPT_CI__
+#define __PAN_GRP_BB_ACPT_CI__
+
+
+#include "pan_sys.h"
+
+#include "grp_global.h"
+#include "grp_bb_acpt.h"
+
+
+static pan_fragment_p	bb_acpt_cache;
+static pan_fragment_p	bb_acpt_frag;
+static pan_msg_p	bb_acpt_msg;
+
+
+STATIC_CI pan_fragment_p
+bb_acpt_get(void)
+{
+    pan_fragment_p frag;
+
+    if (bb_acpt_cache == NULL) {
+	frag = pan_fragment_create();
+	pan_fragment_copy(bb_acpt_frag, frag, 1);
+    } else {
+	frag = bb_acpt_cache;
+	bb_acpt_cache = NULL;
+    }
+
+    return frag;
+}
+
+
+STATIC_CI void
+bb_acpt_put(pan_fragment_p frag)
+{
+    if (bb_acpt_cache == NULL) {
+	bb_acpt_cache = frag;
+    } else {
+	pan_fragment_clear(frag);
+    }
+}
+
+
+STATIC_CI void
+bb_acpt_start(void)
+{
+    bb_acpt_msg = pan_msg_create();
+    bb_acpt_frag = pan_msg_fragment(bb_acpt_msg, pan_grp_data_nsap);
+    bb_acpt_cache = pan_fragment_create();
+    pan_fragment_copy(bb_acpt_frag, bb_acpt_cache, 1);
+}
+
+
+STATIC_CI void
+bb_acpt_end(void)
+{
+    if (bb_acpt_cache == NULL) {
+	printf("%2d: bb_acpt_cache fragment is still in use at cleanup\n",
+		pan_my_pid());
+    } else {
+	pan_fragment_clear(bb_acpt_cache);
+    }
+
+    pan_msg_clear(bb_acpt_msg);
+}
+
+
+#endif

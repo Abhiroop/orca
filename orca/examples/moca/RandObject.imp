@@ -1,0 +1,101 @@
+OBJECT IMPLEMENTATION RandObject;
+
+FROM	Common	IMPORT	RealArrayType;
+FROM	Math	IMPORT	IntToLongReal;
+
+
+CONST	INTA	= 281;
+CONST	INTC	= 28411;
+CONST	INTM	= 134456;
+
+Jran, Turn, N	: integer;
+
+
+FUNCTION Random(Seed : SHARED integer) : real;
+ 
+BEGIN
+	Seed := (Seed * INTA + INTC) % INTM;
+	RETURN IntToLongReal(Seed) / IntToLongReal(INTM);
+END;
+ 
+ 
+FUNCTION GetRan(Seed    : SHARED integer;
+		Count   : integer;
+		RanVals : OUT RealArrayType[1 .. Count]);
+BEGIN
+	FOR i IN 1 .. Count DO
+	    Seed := (Seed * INTA + INTC) % INTM;
+	    RanVals[i] := IntToLongReal(Seed) / IntToLongReal(INTM);
+	OD;     
+END;
+
+
+OPERATION Init(NrWorkers, Seed : integer);
+
+BEGIN
+	Turn := 0;
+	N    := NrWorkers;
+	Jran := Seed;
+END;
+
+
+OPERATION Ran() : real;
+
+BEGIN
+	RETURN Random(Jran);
+END;
+
+
+OPERATION AwaitTurn(CPU, NrWorkers : integer);
+
+BEGIN
+	GUARD Turn = CPU DO
+	    IF CPU = 0 THEN
+		N := NrWorkers;
+	    FI;
+	OD;
+END;
+
+
+OPERATION TurnInc(Seed : OUT integer);
+
+BEGIN
+	Turn +:= 1;
+	IF Turn = N THEN
+	    Turn := 0;
+	FI;
+	Seed := Jran;
+END;
+
+
+OPERATION GetVals(Count   : integer;
+		  RanVals : OUT RealArrayType[1 .. Count]);
+BEGIN
+	GetRan(Jran, Count, RanVals);
+END;
+
+
+OPERATION GetValsSEQ(CPU,
+		     Count, NrWorkers : integer;
+		     RanVals          : OUT RealArrayType[1 .. Count]);
+BEGIN
+	### Integrated 'barrier' to let all processes run in sequence
+
+	GUARD Turn = CPU DO
+	    IF CPU = 0 THEN
+		N := NrWorkers;
+	    FI;
+
+	    GetRan(Jran, Count, RanVals);
+
+	### Give turn to next process
+
+	    Turn +:= 1;
+	    IF Turn = N THEN
+		Turn := 0;
+	    FI;
+	OD;
+END;
+
+
+END;

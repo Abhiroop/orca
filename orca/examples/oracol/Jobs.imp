@@ -1,0 +1,347 @@
+# The module Jobs contains operations for job handling and processor 
+# synchronization.
+
+OBJECT IMPLEMENTATION Jobs;
+
+FROM InOut IMPORT WriteInt,WriteChar;
+FROM Types IMPORT IntSet,JobType,JobGraph,JobNode,SignNode,SignGraph;
+# FROM Types IMPORT History;
+# FROM Misc IMPORT ShowMove;
+FROM Const IMPORT ANY;
+
+TYPE NameArray = ARRAY [integer] OF SignNode;
+
+CONST MAXSIGNS = 250;
+
+	MurderSet : IntSet;	# set of signatures to be killed
+	JobList : JobGraph;	# list of jobs to be done
+	SignTree : SignGraph;	# tree of signature hierarchies
+	SignNames : NameArray;
+	IdleSet : IntSet;	# set of idle slaves
+	SlaveKill : boolean;	# flag for slave termination
+	Start : boolean;	# may slaves start ?
+	Acks : integer;		# slave acknowledgements after slave kill
+	Counter : integer;	# last used signature
+	count : integer;
+	count2 : integer;
+	lock: integer;
+
+	# The operation NewSignature() returns a new unique signature.
+	# Each tree split has such a signature. If one of the subtrees leads
+	# to a cutoff, all searches with the same signature must be 
+	# terminated to prevent useless searching.
+	OPERATION NewSignature() : integer;
+	BEGIN
+		Counter +:= 1;
+		RETURN Counter;
+	END;
+
+	# The operation AddIdle() marks a slave cpu as idle.
+	OPERATION AddIdle(cpu : integer);
+	BEGIN
+		INSERT(cpu,IdleSet);
+	END;
+
+	# Are there any idle slaves ?
+	OPERATION AllowJobs() : boolean;
+	BEGIN
+		RETURN SIZE(IdleSet) > JobList.nr;
+	END;
+
+	OPERATION PrintJobs();
+	  job : JobNode;
+	BEGIN
+		job := JobList.first;
+		WHILE job /= NIL DO
+		  WriteInt(JobList[job].job.signature); WriteChar(' ');
+		  job := JobList[job].next;
+		OD;
+		WriteLine();
+	END;
+
+	# The operation AddJob() inserts a new job into the JobList.
+	# The list is sorted on priority number.
+	OPERATION AddJob(job : JobType);
+	  lastjob,curjob : JobNode;
+	  cell : JobNode;
+	  prior : integer;
+	BEGIN
+		count2 +:= 1;
+		prior := job.priority;
+		lastjob := NIL; curjob := JobList.first;
+		WHILE (curjob /= NIL) AND
+		      (JobList[curjob].job.priority < prior) DO
+		  lastjob := curjob; curjob := JobList[lastjob].next;
+		OD;
+		cell := ADDNODE(JobList);
+		JobList[cell].job := job;
+		IF lastjob /= NIL THEN JobList[lastjob].next := cell;
+		 ELSE JobList.first := cell;
+		FI;
+		JobList[cell].next := curjob;
+		JobList.nr +:= 1;
+	END;
+
+	# The operation GetJob() takes the first job signed 'signature' from
+	# JobList and removes the element.
+	OPERATION GetJob(cpu: integer; signature : integer; job : OUT JobType) : boolean;
+	  lastjob,curjob,nextjob : JobNode;
+	BEGIN
+		GUARD (lock = 0) AND ((JobList.nr > 0) OR SlaveKill) DO
+		  IF SlaveKill THEN RETURN false; FI;
+		  count +:= 1;
+		  lastjob := NIL;
+		  curjob := JobList.first;
+		  WHILE curjob /= NIL DO
+		    nextjob := JobList[curjob].next;
+		    IF (signature = ANY) OR
+		       (signature = JobList[curjob].job.signature) THEN
+		      job := JobList[curjob].job;
+		      DELETENODE(JobList,curjob);
+		      IF lastjob /= NIL THEN
+		        JobList[lastjob].next := nextjob;
+		       ELSE JobList.first := nextjob;
+		      FI;
+		      JobList.nr -:= 1;
+		      IF JobList.nr = 0 THEN
+		        JobList.first := NIL;
+		      FI;
+		      DELETE(cpu,IdleSet);
+
+		      RETURN true;
+		    FI;
+		    lastjob := curjob; curjob := nextjob;
+		  OD;
+		  RETURN false;
+		OD;
+	END;
+
+	OPERATION NrJobs() : integer;
+	BEGIN
+		RETURN JobList.nr;
+	END;
+
+	# The operation JobKill() is called when a cutoff has been found after
+	# tree splitting has occured.
+	# The signature is added to MurderSet to terminate all parallel searches
+	# and all jobs with the same signature are removed from the JobList. 
+	# The descendants of the signature in the SignTree are also added to
+	# the MurderSet.
+	OPERATION JobKill(signature : integer) : integer;
+	  lastjob,job,nextjob : JobNode;
+	  kills : integer;
+	BEGIN
+		lastjob := NIL;
+		job := JobList.first;
+		kills := 0;
+		WHILE job /= NIL DO
+		  nextjob := JobList[job].next;
+		  IF JobList[job].job.signature = signature THEN
+		    DELETENODE(JobList,job);
+		    kills +:= 1;
+		    job := nextjob;
+		    IF lastjob /= NIL THEN
+		      JobList[lastjob].next := nextjob;
+		     ELSE JobList.first := nextjob;
+		    FI;
+		    JobList.nr -:= 1;
+		  ELSE
+		    lastjob := job; job := nextjob;
+		  FI;
+		OD;
+		IF JobList.nr = 0 THEN JobList.first := NIL; FI;
+		RETURN kills;
+	END;
+
+	# The operation JobUpdate() adjusts the upperbounds of the jobs in the
+	# JobList if necessary.
+	OPERATION JobUpdate(signature : integer; val : integer);
+	  job : JobNode;
+	BEGIN
+		job := JobList.first;
+		WHILE job /= NIL DO
+		  IF (JobList[job].job.signature = signature) AND
+		     (JobList[job].job.beta > val) THEN
+		    JobList[job].job.beta := val;		  
+		  FI;
+		  job := JobList[job].next;
+		OD;
+	END;
+
+	# Initialize the global datastructures.
+	OPERATION InitJobs();
+	  cell : SignNode;
+	  tmp : NameArray[0 .. MAXSIGNS];
+	BEGIN
+		SignNames := tmp;
+		Counter := 0;
+		JobList.first := NIL;
+		cell := ADDNODE(SignTree);
+		SignNames[Counter] := cell;
+		SignTree[cell].sign := Counter;
+		SignTree[cell].sibling := NIL;
+		SignTree[cell].child := NIL;
+		SignTree.root := cell;
+	END;
+
+	# Initialize some variables.
+	OPERATION InitVar();
+	BEGIN
+		SlaveKill := false;
+		Start := false;
+		JobList.nr := 0;
+		count := 0;
+		count2 := 0;
+		lock := 0;
+	END;
+
+	# The operation EmptyTree() empties the signature tree.
+	OPERATION EmptyTree();
+	  child : SignNode;
+	  sign : integer;
+	  expandset : SET OF integer;
+	BEGIN
+		INSERT(0,expandset);
+		WHILE SIZE(expandset) > 0 DO
+		  sign := FROM(expandset);
+		  child := SignTree[SignNames[sign]].child;
+		  WHILE child /= NIL DO
+		    INSERT(SignTree[child].sign,expandset);
+		    child := SignTree[child].sibling;
+		  OD;
+		  DELETENODE(SignTree,SignNames[sign]);
+		OD;
+	END;
+
+	# The operation AddSign() adds a node to the SignTree.
+	OPERATION AddSign(parent,signature,level : integer);
+	  node,cell : SignNode;
+	BEGIN
+		node := SignNames[parent];
+		cell := ADDNODE(SignTree);
+		SignNames[signature] := cell;
+		SignTree[cell].sign := signature;
+		SignTree[cell].level := level;
+		SignTree[cell].sibling := NIL;
+		SignTree[cell].child := NIL;
+		IF SignTree[node].child = NIL THEN
+		  SignTree[node].child := cell;
+		  RETURN;
+		FI;
+		node := SignTree[node].child;
+		WHILE SignTree[node].sibling /= NIL DO
+		  node := SignTree[node].sibling;
+		OD;
+		SignTree[node].sibling := cell;
+	END;
+
+	# The operation MurderRecur() adds the signature and all
+	# descendants of the signature to the MurderSet.
+	OPERATION MurderRecur(signature : integer);
+	  child : SignNode;
+	  sign : integer;
+	  expandset : SET OF integer;
+	BEGIN
+		INSERT(signature,expandset);
+		WHILE SIZE(expandset) > 0 DO
+		  sign := FROM(expandset);
+		  INSERT(sign,MurderSet);
+		  child := SignTree[SignNames[sign]].child;
+		  WHILE child /= NIL DO
+		    INSERT(SignTree[child].sign,expandset);
+		    child := SignTree[child].sibling;
+		  OD;
+		OD;
+	END;
+
+	# If signature is victim, terminate search.
+	OPERATION IsVictim(signature : integer) : boolean;
+	BEGIN
+		RETURN signature IN MurderSet;
+	END;
+
+	# All victims have been murdered.
+	OPERATION Murdered(signature : integer);
+	  child : SignNode;
+	  sign : integer;
+	  expandset : SET OF integer;
+	  dummyset : IntSet;
+	BEGIN
+		INSERT(signature,expandset);
+		WHILE SIZE(expandset) > 0 DO
+		  sign := FROM(expandset);
+		  DELETE(sign,MurderSet);
+		  child := SignTree[SignNames[sign]].child;
+		  WHILE child /= NIL DO
+		    INSERT(SignTree[child].sign,expandset);
+		    child := SignTree[child].sibling;
+		  OD;
+		OD;
+		dummyset := MurderSet;
+		MurderSet := dummyset;
+	END;
+
+	# Stop the slaves, the problem has been solved.
+	OPERATION StopSlaves();
+	BEGIN
+		SlaveKill := true;
+		Acks := 0;
+		lock := 0;
+		WriteLine("SlaveKill done");
+	END;
+
+	# Wait for all acknowledgements to arrive.
+	OPERATION WaitAcks(slaves : integer);
+	BEGIN
+		GUARD Acks = slaves DO OD;
+	END;
+
+	# Acknowledge termination.
+	OPERATION SlaveAck();
+	BEGIN
+		Acks +:= 1;
+	END;
+
+	# Check if the problem has been solved.
+	OPERATION SlaveContinue() : boolean;
+	BEGIN
+		RETURN NOT(SlaveKill);
+	END;
+
+	OPERATION StartSlaves();
+	BEGIN
+		Start := true;
+	END;
+
+	OPERATION WaitStart();
+	BEGIN
+		GUARD Start DO OD;
+	END;
+
+#	FUNCTION PrintHistory(hist : History);
+#	  level : integer;
+#	BEGIN
+#		level := 0;
+#		WHILE hist[level] /= 0 DO
+#		  ShowMove(hist[level]); WriteChar(' ');
+#		  level +:= 1;
+#		OD;
+#	END;
+
+	OPERATION PrintInfo();
+	BEGIN
+		WriteLine("AddJobs = ",count2);
+		WriteLine("GetJobs = ",count);
+	END;
+
+	OPERATION GrabLock();
+	BEGIN
+		GUARD lock = 0 DO lock := 1; OD;
+	END;
+
+	OPERATION ReleaseLock();
+	BEGIN
+		lock := 0;
+	END;
+
+END;

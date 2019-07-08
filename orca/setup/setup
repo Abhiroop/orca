@@ -1,0 +1,112 @@
+#!/bin/sh
+
+case $0 in
+*/setup)
+	DIR=`expr $0 : '\(.*\)/setup'`
+	;;
+setup)	DIR=.
+	;;
+esac
+
+if echo 'a\c' | grep 'c' >/dev/null ; then
+	: We have BSD-like echo command.
+	E_FLAG='-n'
+	E_SFX=''
+else
+	: We have SystemV-like echo command.
+	E_FLAG=''
+	E_SFX='\c'
+fi
+export E_FLAG E_SFX
+
+BASE=`pwd`
+
+if [ -f macros ]
+then
+	. macros
+fi
+
+while :
+do
+	echo $E_FLAG "Please give the root of the Orca/Panda tree, probably the
+name of the current directory, as we cannot trust the 'pwd' command to give
+a logical path: [$BASE] $E_SFX"
+	if read ANS
+	then	echo
+	else	echo "Sorry, got EOF when reading your answer"
+		exit 1
+	fi
+	case $ANS in
+	'') 	ANS="$BASE" ;;
+	esac
+	BASE="$ANS"
+	case $BASE in
+	/*)	if [ -d $BASE/orca -a -d $BASE/panda ]
+		then
+			break
+		else
+			echo "$BASE/orca and/or $BASE/panda don't seem to exist.
+Please try again"
+		fi
+		;;
+	*)	echo "$BASE is not an absolute path; try again"
+		;;
+	esac
+done
+case $TARGET in
+'')	TARGET=$BASE/orca
+	;;
+esac
+while :
+do
+	echo $E_FLAG "Please give the root of a target tree, where binaries
+and libraries will reside: [$TARGET] $E_SFX"
+	if read ANS
+	then	echo
+	else	echo "Sorry, got EOF when reading your answer"
+		exit 1
+	fi
+	case $ANS in
+	'') 	ANS="$TARGET" ;;
+	esac
+	TARGET="$ANS"
+	case $TARGET in
+	/*)	mkdir -p $TARGET > /dev/null 2>&1
+		if [ -d $TARGET ]
+		then
+			break
+		else
+			echo "$TARGET doesn't seem to exist.
+Please try again"
+		fi
+		;;
+	*)	echo "$TARGET is not an absolute path; try again"
+		;;
+	esac
+done
+
+echo '#!/bin/sh' > INSTALL
+echo "BASE=\"$BASE\"" >> INSTALL
+echo "ORCA_HOME=\"$BASE/orca\"" >> INSTALL
+echo "PANDA_PROJ=\"$BASE/panda\"" >> INSTALL
+echo "TARGET=\"$TARGET\"" >> INSTALL
+echo "BASE=\"$BASE\"; export BASE" > macros
+echo "TARGET=\"$TARGET\"; export TARGET" >> macros
+
+cat $DIR/detect_sys >> INSTALL
+ 
+cat $DIR/install_tail.T800 >> INSTALL
+
+echo 'chmod -Rf g-w $TARGET' >> INSTALL
+  
+chmod +x INSTALL
+
+chmod +x INSTALL
+
+echo "
+A shell-script called 'INSTALL' has been created. Running it installs
+Panda and Orca. Note that this may take a long time, so run it
+in the background, with its output redirected, f.i.:
+	sh INSTALL > INSTALL.out 2>&1 &
+"
+exit 0

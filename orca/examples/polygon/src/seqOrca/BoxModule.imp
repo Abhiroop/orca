@@ -1,0 +1,179 @@
+################################################################################
+######  BoxModule.imp                                                     ######
+###                                                                          ###
+
+MODULE IMPLEMENTATION BoxModule;
+
+#-------------------------------------------------------------------------------
+# Imports:
+#-------------------------------------------------------------------------------
+
+ FROM InOut IMPORT
+     Ahead,
+     Eof,
+     Eoln,
+     ReadChar,
+     ReadInt,
+     WriteChar,
+     WriteInt,
+     WriteLn
+ ;
+
+#-------------------------------------------------------------------------------
+# Internal types:
+#-------------------------------------------------------------------------------
+
+ TYPE CharSet = SET OF char;
+
+#-------------------------------------------------------------------------------
+# Inline OwnMath
+#-------------------------------------------------------------------------------
+
+ FUNCTION maxInt(
+     a: IN integer;
+     b: IN integer
+ ): integer;
+ BEGIN
+     IF a > b THEN
+         RETURN a ;
+     ELSE
+         RETURN b ;
+     FI;
+ END; # maxInt
+
+
+ FUNCTION minInt(
+     a: IN integer;
+     b: IN integer
+ ): integer;
+ BEGIN
+     IF a < b THEN
+         RETURN a;
+     ELSE
+         RETURN b;
+     FI;
+ END; # minInt
+
+#-------------------------------------------------------------------------------
+# isEqualBox()
+#-------------------------------------------------------------------------------
+
+ FUNCTION isEqualBox(
+     checkBox:   IN Box;
+     againstBox: IN Box
+ ): boolean;
+ BEGIN
+     RETURN (     (checkBox.corner1.x = againstBox.corner1.x)
+	      AND (checkBox.corner1.y = againstBox.corner1.y)
+	      AND (checkBox.corner3.x = againstBox.corner3.x)
+	      AND (checkBox.corner3.y = againstBox.corner3.y)
+     );
+ END; # isEqualBox()
+
+#-------------------------------------------------------------------------------
+# noMoreBoxSurface()
+#-------------------------------------------------------------------------------
+
+ FUNCTION noMoreBoxSurface(
+     box: IN Box
+ ): boolean;
+ BEGIN
+     RETURN box.surface <= 0;
+ END; # noMoreBoxSurface()
+
+#-------------------------------------------------------------------------------
+# readBox()
+#-------------------------------------------------------------------------------
+
+ FUNCTION readBox(
+     box: OUT Box # Contains a box read from input if true is returned.
+ ): boolean;
+     ignore:  char;    # To ignore useless characters.
+     c : char;
+ BEGIN
+     DO
+	IF NOT Eoln() THEN
+	    c := Ahead();
+	    IF ('0' <= c) AND (c <= '9') THEN
+		EXIT;
+	    FI;
+	FI;
+	IF Eof() THEN
+	    RETURN false;
+	FI;
+ 	ReadChar(ignore);
+     OD;
+
+     ReadInt(box.corner1.x);
+     ReadInt(box.corner1.y);
+     ReadInt(box.corner3.x);
+     ReadInt(box.corner3.y);
+
+     box.surface :=   (box.corner3.x - box.corner1.x)
+		    * (box.corner3.y - box.corner1.y);
+
+     RETURN true;
+ END; # readBox()
+
+#-------------------------------------------------------------------------------
+# overlayBoxes()
+#-------------------------------------------------------------------------------
+
+ FUNCTION overlayBoxes(
+     underBox:  IN Box; # To be overlayed with overBox.
+     overBox:   IN Box; # Going to overlay underBox.
+     resultBox: OUT Box # Result from overlaying underBox by overBox.
+ ): boolean;
+ BEGIN
+     IF (underBox.corner1.x < overBox.corner3.x) AND
+	(underBox.corner3.x > overBox.corner1.x) AND
+	(underBox.corner1.y < overBox.corner3.y) AND
+	(underBox.corner3.y > overBox.corner1.y)
+     THEN
+     	resultBox.corner1.y := maxInt(underBox.corner1.y, overBox.corner1.y);
+     	resultBox.corner3.y := minInt(underBox.corner3.y, overBox.corner3.y);
+
+        resultBox.corner1.x := maxInt(underBox.corner1.x, overBox.corner1.x);
+        resultBox.corner3.x := minInt(underBox.corner3.x, overBox.corner3.x);
+
+     	resultBox.surface :=   (resultBox.corner3.y - resultBox.corner1.y)
+     			     * (resultBox.corner3.x - resultBox.corner1.x);
+     	RETURN true;
+     FI;
+     RETURN false;
+ END; # overlayBoxes()
+
+#-------------------------------------------------------------------------------
+# substractBoxSurface()
+#-------------------------------------------------------------------------------
+
+ FUNCTION substractBoxSurface(
+     box:      SHARED Box; # box.surface := box.surface - minusBox.surface.
+     minusBox: IN Box     
+ );
+ BEGIN
+     box.surface -:= minusBox.surface;
+ END; # substractBoxSurface()
+
+#-------------------------------------------------------------------------------
+# writeBox()
+#-------------------------------------------------------------------------------
+
+ FUNCTION writeBox(
+     box: IN Box # To be writen.
+ );
+ BEGIN
+     WriteInt(box.corner1.x); WriteChar('	');
+     WriteInt(box.corner1.y); WriteChar('	');
+     WriteChar('	');
+     WriteInt(box.corner3.x); WriteChar('	');
+     WriteInt(box.corner3.y);
+     WriteLn();
+ END; # writeBox()
+
+
+END; # Box
+ 
+###                                                                          ###
+######  BoxModule.imp                                                     ######
+################################################################################

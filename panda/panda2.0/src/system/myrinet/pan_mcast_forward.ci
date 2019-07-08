@@ -1,0 +1,73 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+
+#ifndef __PAN_MCAST_FORWARD_CI__
+#define __PAN_MCAST_FORWARD_CI__
+
+
+#ifdef PANDA_MULTICASTS
+
+#include <stdio.h>
+
+#include "fm.h"				/* Fast Messages for Myrinet */
+
+#include "pan_sys_msg.h"
+
+#include "pan_system.h"
+
+
+#ifndef STATIC_CI
+#  define STATIC_CI static
+#endif
+
+
+static void
+forward(int origsrc, FM_buf_handler *rcve, void *data, int size)
+{
+    int relid;
+
+#ifdef NEVER
+printf("%2d: mcast forward msg %p size %d orig %d\n", 
+pan_my_pid(), data, size, origsrc);
+#endif
+
+    if (pan_my_pid() >= origsrc) {
+	relid = pan_my_pid() - origsrc;
+    } else {
+	relid = pan_my_pid() + pan_nr_platforms() - origsrc;
+    }
+    /* Forward the message to at most two children */
+    {
+	int child;
+	int dest;
+ 
+	for (child = 1; child <= 2; child++) {
+ 
+	    dest = 2 * relid + child;
+	    if (dest >= pan_nr_platforms()) {
+		break;
+	    }
+ 
+	    /* Map destination back to the real tree. */
+	    dest = (dest + origsrc < pan_nr_platforms()) ?
+			dest + origsrc :
+			dest + origsrc - pan_nr_platforms();
+#ifdef NEVER
+printf("%2d: mcast forward msg %p size %d to child %d = %d\n", 
+pan_my_pid(), data, size, child, dest);
+#endif
+	    assert(aligned((long int)data, UNIVERSAL_ALIGNMENT));
+	    FM_send_buf(dest, rcve, data, size);
+	}
+    }
+}
+
+
+#endif
+
+
+#endif

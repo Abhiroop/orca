@@ -1,0 +1,71 @@
+# ========================================================================
+# == File:      Comblist.spf   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  declaration of comblist object				==
+# ========================================================================
+MODULE SPECIFICATION Comblist;
+
+FROM Types IMPORT symbol_name_t;
+FROM Symbollist IMPORT symbollist_t;
+
+# ========================================================================
+# == types								==
+# ========================================================================
+
+TYPE    comblist_node_t = NODENAME OF comblist_t;
+TYPE    comblist_t    	=
+		GRAPH
+                       	head, tail :  comblist_node_t;	# head and tail of the list
+                       	nr_elts :     integer;		# nr of elements
+                NODES
+                        comb_symbol : symbol_name_t;    # combination symbol
+			symbol_list : symbollist_t;	# list of combination symbols
+                        next :        comblist_node_t;	# pointer to next element
+                END;
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+FUNCTION create_cl(
+	comb_list   : SHARED comblist_t		# the list
+) : boolean;					# succes?
+
+
+FUNCTION delete_cl(
+        comb_list   : SHARED comblist_t
+);
+
+
+FUNCTION insert_comb_cl(
+        comb_list   : SHARED comblist_t;	# the list
+	comb_symbol : symbol_name_t; 		# combination symbol
+	new_symbol  : symbol_name_t		# resulting symbol
+) : boolean;
+
+
+FUNCTION num_elts_cl(
+        comb_list    : comblist_t		# the list
+) : integer;					# nr of elements in the list
+
+
+FUNCTION give_ith_elt_cl(
+        comb_list   : comblist_t;		# the list
+	index 	    : integer; 			# index in list
+	comb_symbol : OUT symbol_name_t; 	# combination symbol on position i
+	symbol_list : SHARED comblist_node_t	# symbol list on position i
+) : boolean;
+
+
+FUNCTION is_in_cl(
+        comb_list  :  comblist_t;		# the list
+	comb_symbol : symbol_name_t; 		# combination symbol
+	index :       OUT integer		# index in list
+) : boolean;
+
+END;
+
+
+
+

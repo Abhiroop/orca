@@ -1,0 +1,19 @@
+MODULE IMPLEMENTATION Game;
+
+	#  g a m e  - s p e c i f i c   r o u t i n e s
+
+	FUNCTION f(x: integer): integer;
+	BEGIN
+		RETURN (x*311905328) % 100000000;
+	END;
+
+	FUNCTION StaticEvaluation(b: board):integer;
+	BEGIN
+		RETURN -f(b);
+	END;
+
+	FUNCTION DoMove(b: board; mv: integer): board;
+	BEGIN
+		RETURN f(Nsons*b + mv);
+	END;
+END;

@@ -1,0 +1,155 @@
+#-----------------------------------------------#
+# Author : H. Staalman				#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION ForwardRA;
+
+FROM	AwariTypes		IMPORT	Configuration, ConfigUnit, 
+					GoedelNr, GTV, GtvKnown, GtvUnknown, Stones, PitNr, AllPits, PitsPerBoard,
+					GtvDetermined, ElementUnit,
+					PitsPerSide;
+FROM	InOut			IMPORT	Flush, WriteLn, WriteInt, WriteChar;  #,ReadInt, ReadChar, WriteString;
+FROM	Debug			IMPORT	Print_ConfigUnit,
+					Print_Board;
+FROM	DataBaseTypes		IMPORT	DataBaseObject, AdresTable;
+FROM	DataBaseModule		IMPORT	Get_DBPartObject_LB, Get_DBPartObject_UB;
+IMPORT	DBMetaDataObject;
+FROM	BoardOperations 	IMPORT	Sow_Stones, Mirror_Configuration, Init_Configuration,
+					Count_Nr_Stones_On_Board, Empty_Hit_Pits, 
+					Is_Empty;
+		IMPORT	ConverterObject;
+
+
+
+# !!  new
+
+
+FUNCTION PrintConfig(c: Configuration);
+BEGIN
+	FOR i IN 1 .. PitsPerBoard DO
+		Write(c[i].contents, " ");
+	OD;
+	WriteLine();
+END;
+
+# Can we also do this by checking if goedelnummer < maxEnd ???
+
+FUNCTION IsEndPosition(c: Configuration): boolean;
+BEGIN
+	FOR i IN 1 .. PitsPerSide DO
+		IF c[i].contents > 0 THEN
+			RETURN false;
+		FI;
+	OD;
+	RETURN true;
+END;
+
+
+FUNCTION Generate_Successor(start_config: IN Configuration;
+			    start_pit: IN integer;
+			    successor_config: SHARED Configuration;
+			    nr_hits: OUT Stones);
+  # sow stones from a certain, given pit, and remove captured stones
+  # at the North side, if any. The resulting configuration is the mirrored one.
+
+  end_pit: PitNr;
+  sowed_config,
+  mirrored_successor_config: Configuration;
+BEGIN
+  Sow_Stones(start_config, start_pit, sowed_config, end_pit);
+  Empty_Hit_Pits(sowed_config, end_pit, mirrored_successor_config, nr_hits);
+  Mirror_Configuration(mirrored_successor_config, successor_config);
+END;
+
+
+
+
+FUNCTION Forward(database: SHARED DataBaseObject;
+		 dbmetadata: SHARED DBMetaDataObject;
+		 converter: IN ConverterObject;
+		 cpu_table: IN AdresTable;
+		 nworkers:  integer);
+
+
+  DBPartObject_LB,
+  DBPartObject_UB: GoedelNr;
+
+  configunit: ConfigUnit;
+  configuration: Configuration; 
+  succ_configuration: Configuration;
+  nr_hits: integer;
+  nr_undetermined: integer;
+  current_size, minScore: GTV;
+
+  myplace: integer;
+  this_element: ElementUnit;
+  ncpus: integer;
+  goedel_number: GoedelNr;
+BEGIN
+  Get_DBPartObject_LB(cpu_table, DBPartObject_LB);
+  Get_DBPartObject_UB(cpu_table, DBPartObject_UB);
+  dbmetadata$Get_DB_Size(current_size);
+  ncpus := nworkers;
+
+  myplace := MYCPU();	# !!
+  
+  # Make ONE pass through whole database
+  goedel_number := myplace;	# 1st goedel number
+
+  FOR goedel_index IN DBPartObject_LB..DBPartObject_UB
+  DO
+    # Get the current database element
+    database[myplace]$Get_DBPart_Element(goedel_index, configunit);
+
+    # set up to related configuration
+    converter$Goedel2Config(goedel_number, configuration);
+    minScore := - current_size + configuration[AllPits].contents;
+
+#    ASSERT(current_size - Count_Nr_Stones_On_Board(configuration) =
+#	   configuration[AllPits].contents);	# !!
+
+    IF IsEndPosition(configuration) THEN
+	 configunit.nr_succ := GtvDetermined;
+	 configunit.gtv := minScore;
+    ELSE
+	 nr_undetermined := 0;
+	 FOR pit IN 1..PitsPerSide DO # generate successors
+	   IF NOT(Is_Empty(configuration, pit)) THEN
+		Generate_Successor(configuration, pit, 
+				   succ_configuration, nr_hits);
+		#WriteLine("successor: ");
+		#PrintConfig(succ_configuration);
+		IF NOT IsEndPosition(succ_configuration) THEN
+			nr_undetermined +:= 1;
+		FI;
+	   FI;
+	 OD;
+	 IF nr_undetermined = 0 THEN
+		configunit.nr_succ := GtvKnown;
+		configunit.gtv := - minScore;
+	 ELSE
+		configunit.nr_succ := nr_undetermined;
+		configunit.gtv := minScore;
+	 FI;
+    FI;
+    this_element.goedel_nr := goedel_index;
+    this_element.gtv := configunit.gtv;
+    this_element.nr_succ := configunit.nr_succ;
+    database[myplace]$Set_DBPart_Element(this_element);
+    #Set_DB_Element(database, cpu_table, goedel_index, configunit);
+    #PrintConfig(configuration);
+    #WriteLine("nr_succ = ", configunit.nr_succ,
+#		" gtv = ", configunit.gtv);
+    #WriteLine();
+
+    goedel_number +:= ncpus;	# !!
+  OD;
+# WriteLine("CPU ", MYCPU(), " finished FW pass");
+END;
+
+
+
+
+END; # ForwardRA

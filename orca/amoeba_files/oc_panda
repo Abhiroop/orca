@@ -1,0 +1,53 @@
+#!/bin/sh
+
+BASE=/profile/module/orca
+OC_HOME=$BASE; export OC_HOME
+PANDA_PROJ=$BASE/panda3.0; export PANDA_PROJ
+PROCESSOR=${PROCESSOR-sparc}
+OS=amoeba
+OC_RTSNAM=panda3.0; export OC_RTSNAM
+
+SOFTFP=0
+ARGS=
+for i
+do
+  case $i in
+	-3)
+		;;
+	-amoeba)
+		;;
+	-sparc)
+		PROCESSOR=sparc
+		;;
+	-i80386)
+		PROCESSOR=i80386
+		;;
+	-msoft*)
+		ARGS="$ARGS -msoft-float -mno-fp-ret-in-387 -lsoft"
+		SOFTFP=1
+		;;
+	*)
+		ARGS="$ARGS $i"
+		;;
+  esac
+done
+
+case $PROCESSOR$SOFTFP in
+sparc1)
+	echo "No software floating point available for SPARC" 1>&2
+	exit 1
+	;;
+i803861)
+	OC_MACH=i80386_amoeba.softfp
+	;;
+i803860)
+	OC_MACH=i80386_amoeba
+	;;
+sparc0)
+	OC_MACH=sparc_amoeba
+	;;
+esac
+export OC_MACH
+
+PATH=:/profile/module/gcc/$PROCESSOR:$PATH; export PATH
+$OC_HOME/bin/oc $ARGS

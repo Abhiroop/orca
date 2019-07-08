@@ -1,0 +1,11 @@
+if  mkdir -p $TARGET/doc
+then	:
+else	echo "Could not create directory $TARGET/doc" 1>&2
+	exit 1
+fi
+
+cd $TARGET/doc
+if [ $TARGET/doc = $ORCA_HOME/doc ]
+then	:
+else	( cd $ORCA_HOME/doc ; tar cf - . ) | tar xf -
+fi

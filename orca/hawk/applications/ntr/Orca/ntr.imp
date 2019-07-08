@@ -1,0 +1,144 @@
+MODULE IMPLEMENTATION ntr;
+
+  FROM global IMPORT NRANGE, ITERS, NCHAN, NReals, const2;
+  IMPORT InprObject;
+  FROM distributions IMPORT BLOCK, CPUListType;
+  FROM args IMPORT Argc, Argv;
+  FROM conversions IMPORT StringToInt;
+  FROM Time IMPORT SysMilli;
+  IMPORT TicketObject;
+  IMPORT IntObject;
+
+PROCESS radar(ProcList: CPUListType; ticket: SHARED TicketObject;
+              b : SHARED IntObject);
+  inpr: InprObject[1..NCHAN, 1..NRANGE];
+  MagSum: NReals;
+  t: integer;
+  ddone: boolean;
+BEGIN
+
+#  WriteLine("Partitioning");
+  inpr$$partition(NCHAN, NRANGE);
+
+#  WriteLine("Distribution");
+  ddone := false;
+  IF NCHAN % SIZE(ProcList) = 0 THEN
+      inpr$$distribute_on_list(ProcList, SIZE(ProcList), BLOCK, 1, BLOCK);
+      ddone := true;
+  ELSIF NRANGE % SIZE(ProcList) = 0 THEN
+      inpr$$distribute_on_list(ProcList, 1, BLOCK, SIZE(ProcList), BLOCK);
+      ddone := true;
+  ELSE
+      IF SIZE(ProcList) % NCHAN = 0 THEN
+      	t := SIZE(ProcList) / NCHAN;
+        IF NRANGE % t = 0 THEN
+	  inpr$$distribute_on_list(ProcList, NCHAN, BLOCK, t, BLOCK);
+	  ddone := true;
+	FI;
+      FI;
+      IF (NOT ddone) AND (SIZE(ProcList) % NRANGE = 0) THEN
+      	t := SIZE(ProcList) / NRANGE;
+        IF NCHAN % t = 0 THEN
+	  inpr$$distribute_on_list(ProcList, t, BLOCK, NRANGE, BLOCK);
+	  ddone := true;
+	FI;
+      FI;
+  FI;
+
+  b$inc();
+  b$AwaitValue(0);
+  IF NOT ddone THEN
+	WriteLine("Something wrong: no distribution done");
+	b$inc();
+	RETURN;
+  FI;
+  t := ticket$NextTicket();
+  WHILE t >= 0 DO
+      inpr$init();
+      # Doppler Processing
+      inpr$doppler();
+      # Subsection and reduction
+      MagSum := inpr$psum();
+      FOR i IN 1 .. NCHAN DO
+	MagSum[i] := const2 * MagSum[i];
+      OD;
+      # Constant False Alarm Rate detection
+      inpr$cfar(MagSum);
+      t := ticket$NextTicket();
+  OD;
+  b$inc();
+END;
+
+FUNCTION MakeProcList(sz: integer; ProcList: OUT CPUListType[0..sz-1]);
+BEGIN
+END;
+
+PROCESS OrcaMain();
+  ProcList: CPUListType;
+  ticket: TicketObject;
+  NumWorkers: integer;
+  NumProcPerWorker: integer;
+  dummy: integer;
+  start, end: integer;
+  b: IntObject;
+  iters: integer;
+BEGIN
+
+  # Get how many workers there should be
+  IF Argc() =1 
+     THEN NumWorkers := 1;
+     ELSE NumWorkers := StringToInt(Argv(1),dummy);
+  FI;
+  IF Argc() > 2
+     THEN iters := StringToInt(Argv(2), dummy);
+     ELSE iters := ITERS;
+  FI;
+#  WriteLine(NumWorkers, " Workers, " , NCPUS(), " CPUS");
+      
+  IF (NumWorkers<=0) OR (NumWorkers>NCPUS())
+     THEN WriteLine("Illegal number of workers");
+          RETURN;
+  FI;
+
+  IF (NCPUS() % NumWorkers) /= 0 
+     THEN WriteLine("Use a number of processors divisible by the number of workers");
+          RETURN;
+  FI;
+  
+  # Allocate processors to each worker
+  NumProcPerWorker := NCPUS() / NumWorkers;
+
+  IF (NCHAN*NRANGE)%NumProcPerWorker /= 0 THEN
+	WriteLine("The number of processors per worker should be divisible by ",
+			NCHAN * NRANGE);
+	RETURN;
+  FI;
+  ticket$init(iters);
+  MakeProcList(NumProcPerWorker, ProcList);
+  b$assign(0);
+
+  FOR i IN 0..NumWorkers-1 DO
+      FOR j IN 0..NumProcPerWorker-1 DO
+          ProcList[j] := i*NumProcPerWorker + j;
+      OD;
+      # WriteLine("Forking worker on ", i*NumProcPerWorker);
+      FORK radar(ProcList, ticket, b) ON i*NumProcPerWorker; 
+  OD;
+  b$AwaitValue(NumWorkers);
+  start := SysMilli();
+  b$assign(0);
+  b$AwaitValue(NumWorkers);
+  end := SysMilli();
+  WriteLine("NTR #cpus = ",
+	    NCPUS(),
+	    " #workers = ",
+	    NumWorkers,
+	    " time = ",
+	    FLOAT(end - start) / 1000.0,
+	    " sec.");
+  WriteLine("    Average response time: ",
+	    FLOAT(end-start) * FLOAT(NumWorkers) / (FLOAT(iters)*1000.0),
+	    " sec.");
+END;
+
+END;

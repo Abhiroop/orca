@@ -1,0 +1,86 @@
+# ========================================================================
+# == File:      Node.imp   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  implementation of Node object 				==
+# ========================================================================
+
+OBJECT IMPLEMENTATION Node;
+
+FROM Edgelist IMPORT edgelist_t, create_el;
+
+# ========================================================================
+# == global data 							==
+# ========================================================================
+
+node_nr : 	integer;
+incoming_edges: edgelist_t;
+outgoing_edges: edgelist_t;
+
+# ========================================================================
+# == operations 							==
+# ========================================================================
+
+#
+# put_incoming() : update incoming edge list
+#
+
+OPERATION put_incoming(el : edgelist_t);
+BEGIN
+	incoming_edges := el;
+END;
+
+
+#
+# put_outgoing() : update outgoing edge list
+#
+	
+OPERATION put_outgoing(el : edgelist_t);
+BEGIN
+	outgoing_edges := el;
+END;
+
+
+
+#
+# get_incoming() : return incoming edge list
+#
+
+OPERATION get_incoming(el : OUT edgelist_t);
+BEGIN
+	el := incoming_edges;
+END;
+
+
+#
+# put_outgoing() : return outgoing edge list
+#
+
+OPERATION get_outgoing(el : OUT edgelist_t);
+BEGIN
+	el := outgoing_edges;
+END;
+
+#
+# assign() : assign node nr
+#
+
+OPERATION assign(nr : integer);
+BEGIN
+	node_nr := nr;
+END;
+
+#
+# get() : get node_nr
+#
+
+OPERATION get() : integer;
+BEGIN
+	RETURN  node_nr;
+END;
+
+
+BEGIN
+	ASSERT(create_el(incoming_edges));
+	ASSERT(create_el(outgoing_edges));
+END;

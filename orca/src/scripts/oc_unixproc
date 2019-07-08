@@ -1,0 +1,33 @@
+#!/bin/sh
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: oc_unixproc,v 1.12 1998/12/09 18:15:05 ceriel Exp $
+
+OC_HOME=/usr/proj/orca; export OC_HOME
+
+# default values:
+OC_RTSNAM=unixproc; export OC_RTSNAM
+binsuf=sun4
+OC_LIBS="\$OC_HOME/\$OC_LIBNAM/\$OC_RTSNAM/\$OC_MACH/\$OC_SPECIAL/lib\$OC_RTSNAM.a -lm"
+export OC_LIBS
+
+case `uname` in
+Linux)	binsuf=linux
+	OC_LIBS="\$OC_HOME/\$OC_LIBNAM/\$OC_RTSNAM/\$OC_MACH/\$OC_SPECIAL/lib\$OC_RTSNAM.a -lpthread -lm"
+	export OC_LIBS
+	;;
+BSD/OS)	binsuf=bsdi
+	;;
+*)
+	case `uname -r` in
+	5*)	binsuf=sol2
+		OC_LIBS="\$OC_HOME/\$OC_LIBNAM/\$OC_RTSNAM/\$OC_MACH/\$OC_SPECIAL/lib\$OC_RTSNAM.a -lm -lthread -lposix4"
+		OC_CFLAGS="-c -D_REENTRANT $OC_CFLAGS"
+		export OC_LIBS OC_FLAGS
+		;;
+	esac
+esac
+
+$OC_HOME/bin.$binsuf/oc "$@"

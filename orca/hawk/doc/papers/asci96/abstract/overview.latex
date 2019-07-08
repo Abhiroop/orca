@@ -1,0 +1,42 @@
+\setlength{\unitlength}{0.00083300in}%
+%
+\begingroup\makeatletter\ifx\SetFigFont\undefined
+% extract first six characters in \fmtname
+\def\x#1#2#3#4#5#6#7\relax{\def\x{#1#2#3#4#5#6}}%
+\expandafter\x\fmtname xxxxxx\relax \def\y{splain}%
+\ifx\x\y   % LaTeX or SliTeX?
+\gdef\SetFigFont#1#2#3{%
+  \ifnum #1<17\tiny\else \ifnum #1<20\small\else
+  \ifnum #1<24\normalsize\else \ifnum #1<29\large\else
+  \ifnum #1<34\Large\else \ifnum #1<41\LARGE\else
+     \huge\fi\fi\fi\fi\fi\fi
+  \csname #3\endcsname}%
+\else
+\gdef\SetFigFont#1#2#3{\begingroup
+  \count@#1\relax \ifnum 25<\count@\count@25\fi
+  \def\x{\endgroup\@setsize\SetFigFont{#2pt}}%
+  \expandafter\x
+    \csname \romannumeral\the\count@ pt\expandafter\endcsname
+    \csname @\romannumeral\the\count@ pt\endcsname
+  \csname #3\endcsname}%
+\fi
+\fi\endgroup
+\begin{picture}(5724,3024)(1189,-2774)
+\thicklines
+\put(3001,-962){\line( 0,-1){600}}
+\put(4801,-962){\line( 0,-1){600}}
+\put(1201,-1562){\framebox(5700,600){}}
+\put(1201,-962){\framebox(5700,600){}}
+\put(1201,-362){\framebox(5700,600){}}
+\put(1201,-2162){\framebox(5700,600){}}
+\put(1201,-2762){\framebox(5700,600){}}
+\put(3901,-362){\line( 0,-1){600}}
+\put(1501,-1262){\makebox(0,0)[lb]{\smash{\SetFigFont{10}{12.0}{rm}group communication}}}
+\put(3301,-1262){\makebox(0,0)[lb]{\smash{\SetFigFont{10}{12.0}{rm}remote procedure call}}}
+\put(5101,-1262){\makebox(0,0)[lb]{\smash{\SetFigFont{10}{12.0}{rm}collective communication}}}
+\put(3301,-1862){\makebox(0,0)[lb]{\smash{\SetFigFont{10}{12.0}{rm}Panda system layer}}}
+\put(3376,-2462){\makebox(0,0)[lb]{\smash{\SetFigFont{10}{12.0}{rm}operating system}}}
+\put(3601,-62){\makebox(0,0)[lb]{\smash{\SetFigFont{10}{12.0}{rm}Application}}}
+\put(1501,-661){\makebox(0,0)[lb]{\smash{\SetFigFont{10}{12.0}{rm}partitioned object runtime system}}}
+\put(4801,-661){\makebox(0,0)[lb]{\smash{\SetFigFont{10}{12.0}{rm}Orca runtime system}}}
+\end{picture}

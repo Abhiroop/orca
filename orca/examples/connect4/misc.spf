@@ -1,0 +1,17 @@
+MODULE SPECIFICATION misc;
+
+CONST Min         = 0;
+CONST Max         = 1;
+CONST Columns     = 7;
+CONST Rows        = 6;
+CONST MaximumAB   = 2500;
+CONST DeltaAB     = 250;
+CONST NrOfPlayers = 2;
+CONST Infinity    = 10000;
+CONST StartAlpha  = -Infinity;
+CONST StartBeta   = Infinity;
+
+TYPE PosType = ARRAY [integer 1..5] OF integer;
+TYPE OrderType   = ARRAY [integer 1..Columns] OF integer;
+ 
+END;

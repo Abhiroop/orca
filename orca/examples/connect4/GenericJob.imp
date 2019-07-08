@@ -1,0 +1,49 @@
+GENERIC
+OBJECT IMPLEMENTATION GenericJobQueue;
+# A stack based queue using an array for simplicity
+
+	CONST size = 500;
+
+	Q: ARRAY [integer 1..size] OF T;   # the queue itself
+	top : integer;		  # top of stack
+	done : boolean;	  	  # for termination
+
+	OPERATION AddJob(job: T);
+	BEGIN
+		IF top = size THEN
+			WriteLine( "Too many jobs: ", size);
+		FI;
+
+		top +:= 1;
+		Q[top] := job;
+	END;
+
+	OPERATION GetJob(job: OUT T): boolean;
+	BEGIN  # Try to fetch a job from the queue (LIFO)
+		GUARD top > 0 DO         # A job is available
+			job := Q[top];
+			top -:= 1;
+			RETURN true;
+		OD;
+
+		GUARD (top = 0) AND done DO
+			RETURN false;    # All jobs have been done
+		OD;
+	END;
+
+	OPERATION NoMoreJobs();
+	BEGIN
+		done := true;
+	END;
+
+        OPERATION Init();
+
+	BEGIN
+	    top := 0;
+	    done := false;
+	END;
+
+BEGIN
+	top := 0;
+	done := false;
+END GENERIC;

@@ -1,0 +1,73 @@
+OBJECT IMPLEMENTATION MonitorObject;
+
+workerActive   : boolean;
+workerWaiting  : boolean;
+stopWork       : boolean;
+no_of_jobs     : integer;
+
+
+# Selectors:
+OPERATION WorkerActive () : boolean;
+BEGIN
+	RETURN workerActive;
+END;
+
+OPERATION WorkerWaiting () : boolean;
+BEGIN
+	RETURN workerWaiting;
+END;
+
+OPERATION WorkerStop () : boolean;	# True when worker should stop
+BEGIN
+	RETURN  stopWork;
+END;
+
+OPERATION JobsDone () : integer;
+BEGIN
+	RETURN no_of_jobs;
+END;
+
+
+# Modifiers:
+OPERATION WorkerStarted ();
+BEGIN
+	workerActive := true;
+END;
+
+
+OPERATION WorkerWait ();
+BEGIN
+	workerWaiting := true;
+END;
+
+
+OPERATION WorkerRecommence ();
+BEGIN
+	workerWaiting := false;
+END;
+
+OPERATION WorkerDone ();
+BEGIN
+	workerActive := false;
+END;
+
+OPERATION WorkerDoneOneJob ();
+BEGIN
+	no_of_jobs +:= 1;
+END;
+
+
+
+# Controlers:
+OPERATION stopWorker ();
+BEGIN
+	stopWork := true;
+END;
+
+BEGIN
+	no_of_jobs := 0;
+	stopWork := false;
+	workerActive := false;
+	workerWaiting := false;
+END;
+

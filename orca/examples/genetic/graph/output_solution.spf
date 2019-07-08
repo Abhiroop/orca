@@ -1,0 +1,10 @@
+MODULE SPECIFICATION output_solution;
+
+FROM GenTypes IMPORT VecPPCom, configuration;
+FROM CromoVector IMPORT individual;
+
+FUNCTION choose_solution(Com: SHARED VecPPCom; nb_nodes: integer; config: configuration; solution: SHARED individual);
+
+FUNCTION write_solution(nb_nodes: integer; solution: individual);
+
+END;

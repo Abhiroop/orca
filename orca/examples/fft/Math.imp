@@ -1,0 +1,62 @@
+MODULE IMPLEMENTATION Math;
+
+FUNCTION ABSF(a: real): real;
+BEGIN
+    IF a < 0.0E+00 THEN
+	RETURN(-a);
+    ELSE
+	RETURN(a);
+    FI;
+END;
+
+FUNCTION sin_velm(x:real):real;
+CONST pi2=1.57079632679489661923E+00;
+CONST pi=3.14159265358979323846E+00;
+    signx,tmpx,tmpsqrx,sum:real;
+    i:integer;
+BEGIN
+   IF (x>0.0E+00) THEN
+      signx:=1.0;
+      tmpx:=x+pi;
+   ELSE
+      signx:=-1.0E+00;
+      tmpx:=-x+pi;
+   FI;
+   i:=0;
+   # voor relatief kleine waarden van tmpx werkt het volgende
+   # i.p.v. TRUNC (welke niet ge-implementeerd zou zijn 
+   REPEAT
+     tmpx:=tmpx-pi;
+     i:=i+1;
+   UNTIL (tmpx<pi);
+   IF NOT ODD(i) THEN signx:=-signx; FI;
+   IF (tmpx>pi2) THEN tmpx:=pi-tmpx; FI;
+   IF (2.0E+00*tmpx<=pi2) THEN
+       # Taylorreeks sin 
+      tmpsqrx:=tmpx*tmpx;
+     sum:=(tmpsqrx/272.0E+00-1.0E+00)*tmpsqrx/210.0E+00+1.0E+00;
+     sum:=(sum*tmpsqrx/156.0E+00-1.0E+00)*tmpsqrx/110.E+000+1.0E+00;
+     sum:=(sum*tmpsqrx/72.0E+00-1.0E+00)*tmpsqrx/42.0E+00+1.0E+00;
+     sum:=(sum*tmpsqrx/20.0E+00-1.0E+00)*tmpsqrx/6.0E+00+1.0E+00;
+#     sum:=(tmpsqrx/156.0-1.0)*tmpsqrx/110.0+1.0;
+#     sum:=(sum*tmpsqrx/72.0-1.0)*tmpsqrx/42.0+1.0;
+#     sum:=(sum*tmpsqrx/20.0-1.0)*tmpsqrx/6.0+1.0;
+     RETURN(signx*tmpx*sum);
+   ELSE
+      # Taylorreeks cos 
+      tmpsqrx:=(pi2-tmpx)*(pi2-tmpx);
+      sum:=(tmpsqrx/240.0E+00-1.0E+00)*tmpsqrx/182.0E+00+1.0E+00;
+      sum:=(sum*tmpsqrx/132.0E+00-1.0E+00)*tmpsqrx/90.0E+00+1.0E+00;
+      sum:=(sum*tmpsqrx/56.0E+00-1.0E+00)*tmpsqrx/30.0E+00+1.0E+00;
+      sum:=(sum*tmpsqrx/12.0E+00-1.0E+00)*tmpsqrx/2.0E+00+1.0E+00;
+#     sum:=(tmpsqrx/132.0-1.0)*tmpsqrx/90.0+1.0;
+#     sum:=(sum*tmpsqrx/56.0-1.0)*tmpsqrx/30.0+1.0;
+#     sum:=(sum*tmpsqrx/12.0-1.0)*tmpsqrx/2.0+1.0;
+      RETURN(signx*sum);
+   FI;
+END;
+FUNCTION SQR(x:real):real;
+BEGIN
+   RETURN x*x;
+END;
+END;

@@ -1,0 +1,44 @@
+OBJECT SPECIFICATION action_list_obj;
+
+FROM ParamRes       IMPORT ParamRes, param_t, result_t;
+FROM task_graph_obj IMPORT task_graph_obj, task_t;
+
+TYPE action_specifier = (FINISHED, FORKED, CREATED);
+
+TYPE action_rec   = RECORD
+		    type      : action_specifier;
+		    task_id   : task_t;
+		    parent_id : task_t;
+		    child_num : integer;
+		    mess      : ParamRes;
+		    cpu       : integer;
+		    END;
+
+FUNCTION print_action(action : SHARED action_rec);
+
+FUNCTION send_create(task_graph  : SHARED task_graph_obj;
+		     action_list : SHARED action_list_obj;
+		     ch          : integer;
+		     parent      : task_t;
+		     param       : SHARED param_t);
+
+FUNCTION send_fork(action_list : SHARED action_list_obj;
+		   task        : task_t);
+
+FUNCTION send_finished(task_graph  : SHARED task_graph_obj;
+		       action_list : SHARED action_list_obj;
+		       task        : task_t;
+		       parent      : task_t;
+		       result      : SHARED result_t);
+
+OPERATION enQ(a : action_rec);
+
+OPERATION deQ(a : OUT action_rec) : boolean;
+
+OPERATION emptyQ() : boolean;
+
+OPERATION list(cpu : integer);
+
+OPERATION finish();
+
+END;

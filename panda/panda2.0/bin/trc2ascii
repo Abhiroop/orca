@@ -1,0 +1,9 @@
+#!/bin/sh
+
+BIN=/net/panda/panda2.0/bin
+
+arch_ext=`$BIN/arch_ext`
+
+cmd=`basename $0`
+
+$BIN.$arch_ext/$cmd "$@"

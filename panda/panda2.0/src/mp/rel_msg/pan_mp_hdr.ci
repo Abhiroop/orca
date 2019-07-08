@@ -1,0 +1,27 @@
+#ifndef __PAN_MP_REL_MSG_CI__
+#define __PAN_MP_REL_MSG_CI__
+
+
+#include "pan_sys_msg.h"
+
+#include "pan_mp_hdr.h"
+
+
+
+
+
+STATIC_CI mp_hdr_p
+mp_hdr_push(pan_msg_p msg)
+{
+    return pan_msg_push(msg, sizeof(mp_hdr_t), alignof(mp_hdr_t));
+}
+
+
+STATIC_CI mp_hdr_p
+mp_hdr_pop(pan_msg_p msg)
+{
+    return pan_msg_pop(msg, sizeof(mp_hdr_t), alignof(mp_hdr_t));
+}
+
+
+#endif

@@ -1,0 +1,18 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION AwariManager;
+
+# The Manager takes care for the proper synchronization of the workers
+# (via interaction with these workers), and the handling of the voting
+# results of the workers. 
+# Ergo: The manager isn't doing anything for real... :-)
+# <Any relation with a character, person or whatever is purely superficial>
+
+PROCESS OrcaMain();
+ # Huh? Is that all?
+
+END; # AwariManager

@@ -1,0 +1,17 @@
+MODULE SPECIFICATION MoCaWorker;
+
+IMPORT	Barrier;
+IMPORT  IntObject;
+IMPORT  VarObject;
+IMPORT  RandObject;
+FROM	Common	IMPORT	ConstType;
+
+##
+## The work done by each process.
+##
+PROCESS MoCaWorker(GLOB             : SHARED VarObject;
+		   BARRIER, CATCHER : SHARED Barrier;
+		   RAND             : SHARED RandObject;
+		   CNST             : ConstType;
+		   WorkersAlive	    : SHARED IntObject);
+END;

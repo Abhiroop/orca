@@ -1,0 +1,78 @@
+OBJECT SPECIFICATION AvlTree;
+
+   CONST AVL_RECORD_SEARCH	= 100;
+   CONST AVL_RECORD_INSERT	= 101;
+   CONST AVL_RECORD_UPDATE	= 102;
+   CONST AVL_RECORD_MODIFY	= 103;
+   CONST AVL_RECORD_DELETE	= 104;
+
+   CONST AVL_SEARCH_OK		= 105;
+   CONST AVL_SEARCH_NOT_OK	= 106;
+
+   CONST AVL_DELETE_OK		= 107;
+   CONST AVL_DELETE_NOT_OK	= 108;
+
+   CONST AVL_INSERT_OK		= 109;
+   CONST AVL_INSERT_NOT_OK	= 110;
+
+   CONST AVL_MODIFY_OK		= 111;
+   CONST AVL_MODIFY_NOT_OK	= 112;
+
+   CONST AVL_UPDATE_NEW		= 113;
+   CONST AVL_UPDATE_OLD		= 114;
+
+   TYPE UserRecord =
+   RECORD
+      key : integer;
+      data : integer;
+   END;
+
+   TYPE OperationRecord =
+   RECORD
+      return_code : integer;	# return code
+      user_record : UserRecord;	# key + data
+   END;
+
+   TYPE Node = NODENAME OF Tree;
+
+   TYPE Tree =
+      GRAPH
+        # the root of the tree :
+         root : Node;
+        # resulting from the Pascal => C conversion :
+         avl_inc : integer;
+         avl_status : integer;
+         avl_result_node : Node;
+         avl_result_key : integer;
+         avl_result_data : integer;
+         avl_decr : integer;
+         avl_subst : Node;
+        # statistics :
+         search_operations : integer;
+         up_old_operations : integer;
+         up_new_operations : integer;
+         modify_operations : integer;
+         insert_operations : integer;
+         delete_operations : integer;
+         balance_operations : integer;	# total number of balance operations
+         current_tree_nodes : integer;	# current number of tree nodes
+         maximum_tree_nodes : integer;	# maximum number of nodes in the tree
+         avlnode_compares : integer;	# total number of node compares
+      NODES
+         bal : integer;			# balance
+         key : integer;			# integer key
+         data : integer;		# user data
+         ltree, rtree : Node;		# left, right subtree
+      END;
+
+   OPERATION AvlDisplay ();
+   OPERATION AvlStatistics ();
+
+   OPERATION AvlUpdate (record : UserRecord) : integer;
+   OPERATION AvlModify (record : UserRecord) : integer;
+   OPERATION AvlInsert (record : UserRecord) : integer;
+   OPERATION AvlDelete (record : UserRecord) : integer;
+
+   OPERATION AvlSearch (record : UserRecord) : OperationRecord;
+
+END;

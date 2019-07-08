@@ -1,0 +1,9 @@
+MODULE SPECIFICATION CollectionTypes;
+
+
+	IMPORT TourObject;
+
+	TYPE TourCollection = ARRAY[integer] OF TourObject;
+
+
+END;

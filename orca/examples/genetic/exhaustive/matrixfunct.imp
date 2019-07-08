@@ -1,0 +1,70 @@
+MODULE IMPLEMENTATION matrixfunct;
+
+FROM BoolVector IMPORT BoolMatrix;
+FROM CromoVector IMPORT population, individual;
+FROM GenTypes IMPORT configuration;
+
+#
+# includes functions related to adjacency matrix manipulation
+#
+
+CONST FITMAX = 100;
+CONST FITDEC = 20;
+CONST FITMIN = 10;
+
+FUNCTION test_symmetric (G: BoolMatrix; nb_nodes: integer): boolean;
+BEGIN
+	FOR i IN 0..nb_nodes-1 DO
+		FOR j IN 0..nb_nodes-1 DO
+			IF G[i,j] /= G[j,i] THEN 
+				RETURN false;
+			FI;
+		OD;
+	OD;
+	RETURN true;
+END;
+
+FUNCTION evaluation (G: BoolMatrix; symmetric: boolean;
+		nb_nodes: integer; indiv: SHARED individual);
+	cut_size: integer; 
+	jmax: integer;
+BEGIN
+	cut_size := 0;
+	jmax := nb_nodes-1;
+	FOR i IN 0..nb_nodes-1 DO
+	   IF symmetric THEN jmax := i; FI;
+	   FOR j IN 0..jmax DO
+		IF (i /= j) AND G[i,j] AND (indiv.cromozom[i] /= indiv.cromozom[j]) THEN
+			cut_size +:= 1;
+		FI;
+	   OD;
+	OD;
+	indiv.eval := cut_size;
+END;
+
+#
+# computes the values of fitness fields for a population
+# starting with FITMAX for the first individual and decreasing the fit
+# value by FITDEC for each subsequent individual with a smaller eval value
+# 
+FUNCTION fitness (Pop: SHARED population; config: configuration);
+	fit, val: integer;
+BEGIN
+	fit := FITMAX;
+	val := Pop[Pop.p[0]].ind.eval;
+	FOR i IN 0..config.nb_individuals-1 DO
+		IF val /= Pop[Pop.p[i]].ind.eval THEN
+			val := Pop[Pop.p[i]].ind.eval;
+			fit -:= FITDEC;
+		FI;
+		IF fit< FITMIN THEN fit := FITMIN; FI;
+		Pop[Pop.p[i]].ind.fitness := fit;
+	OD;
+END;
+ 
+END;
+
+
+
+
+

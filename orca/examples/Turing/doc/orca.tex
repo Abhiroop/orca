@@ -1,0 +1,147 @@
+\section{The Orca Programming Language}
+\label{sOrca}
+Orca is a structured language, similar to Modula-2, designed to
+implement parallel applications on a distributed system. To support
+parallelism, it provides explicit dynamic process creation, i.e.\ a
+program can fork off processes on different processors.
+The different processes can communicate through shared data, even if the
+system Orca runs on does not support shared memory. The shared data is
+accessed by high-level user-specified operations, unlike most systems
+with shared memory.
+
+Orca is not an extension to an existing language. It was designed from
+scratch so that the serial and parallel constructs of the language fit
+tightly together. Typical constructs of serial languages which
+are useless or dangerous
+in parallel systems (such as pointers, which have no meaning
+between machines) were avoided completely. In Orca, pointers do not
+exist; neither does global data.
+
+The serial constructs of the language are much like those of Modula-2.
+Orca supports constructs such as functions, while loops and
+if statements, though their syntax differs slightly from Modula-2.
+Parallelism is expressed through fork statements, shared variables
+and guards.
+
+An Orca program is organised in one or more compilation units or
+{\em modules}. A  module consists of two parts: a
+specification part and an implementation part. Each module can import
+entities from other modules's specifications.
+
+An Orca program is run as a process, but it can fork off other processes
+by using the fork statement. The fork statement starts
+another process on any processor the programmer specifies; a process's
+declaration is similar to a function declaration.
+
+Arguments can be passed to functions in three mode: {\tt in}, which is
+the default, {\tt out} and {\tt shared}. {\tt in}-parameters can only be
+read by the function;  {\tt out}-parameters can only be written, thus
+acting like a generalised return-mechanism. {\tt shared} parameters can
+be read or written, much like {\tt var}-parameters in Modula-2.
+
+The main concept in the parallel constructs of Orca is the {\em object}.
+This is however not an object as in object-oriented programming,
+but more like an {\em abstract data type} in Modula-2. Like a module,
+an object
+consists of a specification and an implementation part. Objects can be
+manipulated by {\em operations}.
+
+Arguments of a process should either be of type {\tt in} or 
+{\tt shared}, but shared parameters must be an object.
+Processes which run on different CPUs can communicate through
+these shared objects.
+An object can only
+be manipulated by operations, and operations on the same object are
+guaranteed to be {\em serialised}: operations take place one at a
+time, in no particular order. Operations are indivisible.
+
+The guard statement provides synchronisation for
+processes. It allows operations on a certain (shared) object to block
+until one of a set of conditions becomes true. A guarded statement
+consists of a condition (the {\em guard}) and a block of statements;
+if one or more guards in a block evaluate to {\tt true}, one of them is
+chosen non-deterministically and its statements are executed. This way
+a process can block until another process changes the object's data.
+
+Note that it is difficult to keep serialisability while using guards;
+the guarded statement may change the object, then wait until another
+process changes the object and then make some more changes to the
+object. Since operations should be indivisible the two processes's
+changes should not be mixed.
+The solution in Orca is that the guarded statement acts as if
+it copies the object before blocking; it then repeats the changes it
+made to the changed object. This way the final result is that the
+other process's changes seem to have happened before the guarded
+statement's changes. In reality, simple objects are seldom copied;
+the system avoids it whenever possible for performance reasons.
+
+\begin{figure}
+\begin{small}
+\begin{verbatim}
+OBJECT SPECIFICATION SharedInt;
+    OPERATION value(): integer;
+    OPERATION assign(v: integer);
+    OPERATION inc();
+    OPERATION dec();
+    OPERATION AwaitValue(v: integer);
+END;
+
+
+
+OBJECT IMPLEMENTATION SharedInt;
+
+    x: integer;
+
+    OPERATION value(): integer;
+    BEGIN
+        RETURN x;
+    END;
+
+    OPERATION assign(v: integer);
+    BEGIN
+        x := v;
+    END;
+
+    OPERATION inc();
+    BEGIN
+        x +:= 1;
+    END;
+
+    OPERATION dec();
+    BEGIN
+        x -:= 1;
+    END;
+
+    OPERATION AwaitValue(v: integer);
+    BEGIN
+        GUARD x = v DO OD;
+    END;
+
+BEGIN
+    x := 0;
+END;
+\end{verbatim}
+\end{small}
+\caption{A sample object: SharedInt}
+\label{fSharedInt}
+\end{figure}
+
+We will study a simple object as an example. The SharedInt object
+is shown in Figure \ref{fSharedInt}. First the specification part is
+shown: this is the part which can be imported by other modules. 
+
+The implementation part contains the actual operations. The variable
+{\tt x}, which contains the object's data, is declared here, and is only
+visible within this implementation part. Most operations are
+straightforward. 
+
+The operation {\tt AwaitValue} contains a guard. If this
+operation is called, the calling process blocks until the value of 
+{\tt x} is set to {\tt v} by another process.
+Then the caller is unblocked and may proceed.
+
+The body of the implementation part contains the initialisation. It is
+executed once for every SharedInt object that is declared, before any
+operation takes place.
+
+

@@ -1,0 +1,8 @@
+MODULE SPECIFICATION Game;
+
+	CONST Nsons = 38;  # Width of the search tree
+	TYPE board = integer;  # Board position
+
+	FUNCTION StaticEvaluation(b: board):integer;
+	FUNCTION DoMove(b: board; mv: integer): board;
+END;

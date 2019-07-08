@@ -1,0 +1,53 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: PollSequen.imp,v 1.4 1995/07/31 09:03:16 ceriel Exp $
+
+OBJECT IMPLEMENTATION PollSequence;
+
+	cleared: integer; # all polls up till "cleared" return "no"
+	FinalIter: integer; # poll "FinalIter" (if > 0) returns "yes"
+	votes: integer;  # number of "yes" votes for this iteration
+	nvoters: integer; # total number of voters
+
+        OPERATION init(n: integer);
+	BEGIN
+		nvoters := n;
+		cleared := 0;
+		votes := 0;
+		FinalIter:= 0;
+	END;
+		
+        OPERATION vote(iter: integer; YesOrNo: boolean);
+	BEGIN
+		GUARD iter = cleared+1 DO
+			IF YesOrNo THEN
+				votes +:= 1;
+				IF votes = nvoters THEN
+					ASSERT(FinalIter = 0);
+					FinalIter := iter;
+				FI;
+			ELSE
+				cleared +:= 1;
+				votes := 0;
+			FI;
+		OD;
+
+		# added to avoid a broadcast when another processor has
+		# already voted "no"
+		GUARD iter <= cleared DO
+		OD;
+	END;
+
+        OPERATION AwaitDecision(iter: integer): boolean;
+	BEGIN
+		GUARD FinalIter = iter DO
+			RETURN true;
+		OD;
+
+		GUARD cleared >= iter DO
+			RETURN false;
+		OD;
+	END;
+END;

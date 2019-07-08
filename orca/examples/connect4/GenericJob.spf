@@ -1,0 +1,9 @@
+GENERIC (TYPE T)
+OBJECT SPECIFICATION GenericJobQueue;
+	OPERATION AddJob(job: T);  # add a job to the tail of the queue
+	OPERATION NoMoreJobs();  # invoked when no more jobs will be added
+	OPERATION GetJob(job: OUT T): boolean;
+		# Fetch a job from the tail of the queue. This operation
+		# fails if the queue is empty and NoMoreJobs has been invoked.
+	OPERATION Init();
+END GENERIC;

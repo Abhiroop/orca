@@ -1,0 +1,135 @@
+OBJECT IMPLEMENTATION SearchTree;
+	FROM Game IMPORT board, Nsons;
+
+	CONST Inf = 1000000000;  # Infinity
+	TYPE Node = NODENAME OF tree;
+	TYPE tree =
+	   GRAPH
+		root: Node;
+	   NODES
+		b:	board;	# the board position
+		alpha, beta,
+		nsons:	integer; # The number of children of this node
+		   		 # that still have to be analyzed.
+		parent: Node;  # The parent of this node
+		sons:	ARRAY[integer 1.. Nsons] OF Node;  # The children
+	   END;
+	t: tree;  # The internal data of objects of type SearchTree
+
+
+	FUNCTION UpdateBeta(t: SHARED tree; parent: Node; newbeta: integer);
+
+
+	FUNCTION NullNode(): Node;
+	BEGIN
+		RETURN NIL;
+	END;
+	
+	OPERATION ReadNode(n: Node; b: OUT board; alpha, beta: OUT integer);
+	BEGIN  # Return the contents of a given node
+		b := t[n].b;
+		alpha := t[n].alpha;
+		beta := t[n].beta;
+	END;
+		
+	OPERATION AddNode(parent: Node; b: board; WhichSon: integer;
+			  nsons: integer) : Node;
+		n : Node;
+	BEGIN  # Add a new node with the given contents to the tree
+		n := ADDNODE(t);
+		t[n].b := b; t[n].parent := parent;
+		t[n].alpha := -Inf; t[n].beta := Inf;
+		t[n].nsons := nsons;
+		IF parent = NIL THEN
+			t.root := n;
+		ELSE
+			t[parent].sons[WhichSon] := n;
+		FI;
+		RETURN n;
+	END;
+
+	FUNCTION ImproveAlpha(t:SHARED tree; n:Node; newalpha:integer): boolean;
+	BEGIN
+		IF (t[n].alpha < t[n].beta) AND (newalpha > t[n].alpha) THEN
+			t[n].alpha := newalpha;
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	END;
+
+	FUNCTION ImproveBeta(t:SHARED tree; n:Node; newbeta:integer): boolean;
+	BEGIN
+		IF (t[n].alpha < t[n].beta) AND (newbeta < t[n].beta) THEN
+			t[n].beta := newbeta;
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	END;
+
+	FUNCTION UpdateAlpha(t:SHARED tree; parent:Node; newalpha:integer);
+		s: Node;
+	BEGIN
+		FOR i IN 1 .. Nsons DO
+			s := t[parent].sons[i];
+			IF (s /= NIL) AND (ImproveAlpha(t,s,newalpha)) AND
+			   (t[s].nsons > 0)
+			THEN
+				UpdateBeta(t, s, -newalpha);
+			FI;
+		OD;
+	END;
+
+	FUNCTION UpdateBeta(t: SHARED tree; parent: Node; newbeta: integer);
+		s: Node;
+	BEGIN
+		FOR i IN 1 .. Nsons DO
+			s := t[parent].sons[i];
+			IF (s /= NIL) AND (ImproveBeta(t,s,newbeta)) AND
+			  (t[s].nsons > 0)
+			THEN
+				UpdateAlpha(t, s, -newbeta);
+			FI;
+		OD;
+	END;
+
+	FUNCTION propagate(t: SHARED tree; n: Node; score: integer);
+		parent: Node;
+		AlphaImproved, LastSon: boolean;
+	BEGIN
+		parent := t[n].parent;
+		IF parent /= NIL THEN
+			t[parent].nsons -:= 1;
+			LastSon := (t[parent].nsons = 0);
+			AlphaImproved := ImproveAlpha(t, parent, -score);
+			IF AlphaImproved THEN
+				UpdateBeta(t, parent, score);
+			FI;
+			# The result is sent to the grandparent of "n" if:
+			# (1) n is the last son of his parent, and his parent
+			#     still hasn't been pruned, or
+			# (2) n's parent has just been pruned by n, as a
+			#     result of improving alpha.
+			# One subtle point is that ImproveAlpha(n) always
+			# fails if  n has been pruned.
+			IF t[parent].alpha < t[parent].beta THEN
+				IF LastSon THEN
+				     propagate(t,parent,t[parent].alpha);
+				FI;
+			ELSIF AlphaImproved THEN
+				propagate(t,parent, -score);
+			FI;
+		FI;
+	END;
+
+	OPERATION PropagateResult(n: Node; score: integer);
+	BEGIN
+		propagate(t, n, score);
+	END;
+
+	OPERATION RootValue(): integer;
+	BEGIN  # Return alpha value of the root
+		RETURN t[t.root].alpha;
+	END;
+END;

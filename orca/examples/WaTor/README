@@ -1,0 +1,38 @@
+At the start of the WaTor program some questions are asked :
+
+
+elementary dimension = the dimension for the elementary element(each
+                       element is a square of this dimension). 
+                       This value must be bigger than 3
+
+number of operations = number of simulation steps
+
+first dimension      = number of elemements on the vertical dimension
+
+second dimension     = number of elements on the horizontal dimension
+
+number of fishes     = number of the fishes at the beginning
+
+number of sharks     = number of the sharks at the beginning
+
+age of breeding for fishes = 
+
+age of breeding for sharks = 
+
+time of starvation    = maximum interval between meals for a shark
+
+result file = name of a file in which results of the simulation are added
+
+As an example :
+==================
+
+elementary dimension = 11
+number of operations = 25
+first dimension = 5
+second dimension = 5
+number of fishes = 4
+number of sharks = 4
+age of breeding for fishes = 2
+age of breeding for sharks = 2
+time of starvation = 4
+result file = temp1

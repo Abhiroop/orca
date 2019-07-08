@@ -1,0 +1,144 @@
+MODULE SPECIFICATION Circuit;
+
+	FROM AtpgTypes IMPORT GateType,Logic_Value,Possible_Fault,FaultSet;
+	
+	FROM iscas     IMPORT MAX_NO_OF_INPUTS,MAX_NO_OF_OUTPUTS,
+			      MAX_NO_OF_GATES,MAX_FANIN,MAX_FANOUT;
+
+	FROM TruthTable IMPORT Truth_Table;
+
+	FROM Config IMPORT Config_Rec;
+
+	TYPE Testvector = ARRAY[integer 1..MAX_NO_OF_INPUTS] OF Logic_Value;
+
+        TYPE Nodeptr = NODENAME OF Circuit;
+
+        TYPE Circuit = GRAPH
+                        gateptr: ARRAY [integer 1..MAX_NO_OF_GATES] OF Nodeptr;
+			PI_ptr: ARRAY[integer 1..MAX_NO_OF_INPUTS] OF Nodeptr;
+			PI_value: ARRAY[integer 1..MAX_NO_OF_INPUTS] OF 
+								   Logic_Value;
+			PO_count:integer;
+			PO_ptr: ARRAY[integer 1..MAX_NO_OF_OUTPUTS] OF Nodeptr;
+                        faulty_gate: Nodeptr;
+                        fault:Possible_Fault;
+                       NODES
+                        gatetype: GateType;
+                        gatename: string;
+			address: integer;
+                        fanin: integer;
+                        backward_link: ARRAY [integer 1..MAX_FANIN] OF Nodeptr;
+                        fanout: integer;
+                        forward_link: ARRAY [integer 1..MAX_FANOUT] OF Nodeptr;
+                        output: Logic_Value;
+			faults:FaultSet;
+                       END;
+
+
+	FUNCTION Init_Circuit(circuit:OUT Circuit;
+			      config:Config_Rec):boolean;
+
+	# Read the circuit from an ISCAS-circuit description file and
+	# return the corresponding model in circuit.
+	# If this doesn't succeed false is returned else the returnvalue
+	# will be true.
+
+	FUNCTION Init_Circuit_State(circuit:SHARED Circuit);
+
+	# The state of the circuit is initialized. This means that all the
+	# input and output values of the gates (and the primary input/output
+	# values) are set to DONT_CARE.
+
+        FUNCTION Reset_Circuit_Fault(circuit: SHARED Circuit);
+
+        # Set the circuit fault unspecified
+
+
+        FUNCTION Init_Circuit_Fault(circuit: SHARED Circuit;address:integer;
+                                    fault:Possible_Fault);
+
+        # The gate under test (gut) that is the gate which is currently
+        # assumed to contain a fault will be initialized. The gut is indicated
+        # by its addres.
+
+        FUNCTION Get_Unassigned_PI(circuit:Circuit;address:OUT integer):boolean;
+
+        # This function searches for the address of a primary input of the
+        # circuit given. This primary input has been a value DONT_CARE
+        # assigned. If such a PI cannot be found the function will return
+        # false.
+
+        FUNCTION Assign_PI(circuit:SHARED Circuit;address:integer;
+                                                        value:Logic_Value);
+
+        # Assign the value to the PI named address
+	# NOTE: No calculation of the resulting circuit state is carried out !
+
+        FUNCTION Forward_Implication(circuit:SHARED Circuit;
+                                     truthtable:Truth_Table);
+
+        # The circuit state will be calculated which follows from the
+        # current PI-assignments. The variable truthtable contains the
+        # necessary table for determining the output of a certain gate.
+        # The function calculates the values of the circuit nets as far
+        # as possible. This is because not all PI's may have been assigned
+        # a value.
+        # The circuit is traversed in a breadth-first manner.
+        #
+        # NOTE: The correctness of this function should be proven in the
+        #       documentation.
+
+	FUNCTION Get_Testvector(circuit:SHARED Circuit;
+				truthtable:Truth_Table):boolean;
+
+        # This function generates a testvector for the given circuit
+        # The variable circuit contains a circuit-description which
+        # includes a description of the fault and a description of the
+        # current state of the circuit.
+        # This function returns true if a test pattern is found
+        # if somehow no test pattern could be found false is returned.
+        #
+        # This implementation is based on the article: 'An Implicit
+        # Enumeration Algorithm to Generate Tests for Combinational
+        # Circuits' by Prabhakar Goel, IEEE Transactions on Computers,
+        # Vol. C-30 no. 3 march 1981.
+
+	FUNCTION Get_Gate_Faults(circuit:Circuit;address:integer;
+				 faults:OUT FaultSet):boolean;
+
+	# The value of circuit[circuit.gateptr[address]].faults is returned in
+	# faults if the address is a valid address. In that case the 
+	# returnvalue is true else the function returns false.
+
+	FUNCTION Get_PI_Assignments(circuit:Circuit;testvector:OUT Testvector);
+
+	# Return the currently assigned values to the PIs of the circuit in
+	# testvector.
+
+	FUNCTION Make_PI_Assignments(circuit:SHARED Circuit;
+				     testvector:Testvector);
+
+	# Make the input assignments to the PIs of circuit as specified in
+	# testvector.
+	
+	FUNCTION Write_PI_Assignments(circuit:Circuit);
+
+        # Print the current assignments to all PI's onto the standard output
+
+	FUNCTION Write_In_ISCAS(circuit:Circuit);
+
+        # This function writes a description of the circuit in ISCAS format
+        # on the standard output. For more information about the ISCAS-netlist
+        # format consult the following paper: "The ISCAS '85 benchmark
+	# circuits and netlist format" by David Bryan (bryan@mcnc.org).
+        # This text is also available from the ftp-site mcnc.mcnc.org.
+
+        FUNCTION Write_Gate_Description(circuit:Circuit;address:integer);
+
+        # Write the description of the gate indicated by its address
+        # onto stdout
+# DEBUG
+
+	FUNCTION Do_Test(circuit:SHARED Circuit;truthtable:Truth_Table);
+
+END; # MODULE SPECIFICATION Circuit

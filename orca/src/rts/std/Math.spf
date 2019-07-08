@@ -1,0 +1,52 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION Math;
+
+    CONST    PI = 3.1415926535;
+    CONST    E  = 2.71828183;
+
+    FUNCTION sin(x : longreal) : longreal;
+    FUNCTION cos(x : longreal) : longreal;
+    FUNCTION tan(x : longreal) : longreal;
+
+    FUNCTION asin(x : longreal) : longreal;
+    FUNCTION acos(x : longreal) : longreal;
+    FUNCTION atan(x : longreal) : longreal;
+    FUNCTION atan2(y, x : longreal) : longreal;
+
+    FUNCTION sinh(x : longreal) : longreal;
+    FUNCTION cosh(x : longreal) : longreal;
+    FUNCTION tanh(x : longreal) : longreal;
+
+    FUNCTION exp(x : longreal) : longreal;
+    FUNCTION log(x : longreal) : longreal;
+    FUNCTION log10(x : longreal) : longreal;
+    FUNCTION pow(x, y : longreal) : longreal;		# x ^ y
+
+    FUNCTION sqrt(x : longreal) : longreal;
+
+    FUNCTION ceil(x : longreal) : longreal;
+    FUNCTION floor(x : longreal) : longreal;
+
+    FUNCTION fabs(a : longreal) : longreal;
+
+    FUNCTION ldexp(a : longreal; n : integer) : longreal;
+    FUNCTION frexp(a : longreal; n : OUT integer) : longreal;
+
+    FUNCTION modf(a : longreal; n : OUT longreal) : longreal;
+    FUNCTION fmod(a,b : longreal) : longreal;
+
+    FUNCTION LeftShift(n, i : integer) : integer;	# n << i
+    FUNCTION RightShift(n, i : integer) : integer;	# n >> i
+    FUNCTION BitwiseAnd(a, b : integer) : integer;	# a & b
+    FUNCTION BitwiseOr(a, b : integer) : integer;	# a | b
+    FUNCTION BitwiseXor(a, b : integer) : integer;	# a ^ b
+
+    FUNCTION IntToLongReal(n : integer) : longreal;
+    FUNCTION LongRealToInt(r : longreal) : integer;
+    FUNCTION LongRealMin(a, b : longreal) : longreal;
+    FUNCTION LongRealMax(a, b : longreal) : longreal;
+
+END;

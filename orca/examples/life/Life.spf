@@ -1,0 +1,4 @@
+MODULE SPECIFICATION Life;
+
+        PROCESS OrcaMain();
+END;

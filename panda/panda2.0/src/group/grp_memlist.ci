@@ -1,0 +1,197 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/* A package for lists of group members.
+ * Implemented as descriptor +
+ *		array of struct { seqno; messid }.
+ * Used by the sequencer to maintain its member admin:
+ *  - which is the next message to be sent by this member, in the member's
+ *    local numbering
+ *  - which is the next-to-be-acknowledged seqno of this member.
+ */
+
+
+
+#ifndef __PAN_GRP_MEMLIST_CI__
+#define __PAN_GRP_MEMLIST_CI__
+
+
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include <limits.h>
+
+#include "pan_sys.h"
+
+#include "grp_memlist.h"
+
+
+#ifdef BEHIND_STATISTICS
+static double *av_behind;
+static int     behind_ticks = 0;
+#endif
+
+
+STATIC_CI void
+pan_mem_lst_messid_set(mem_list_p lst, int mem, unsigned short int msid)
+{
+    assert(mem < lst->n_members);
+    lst->info[mem].messid = msid;
+}
+
+
+
+STATIC_CI void
+pan_mem_lst_seqno_set(mem_list_p lst, int mem, int sqno)
+{
+    assert(mem < lst->n_members);
+    lst->info[mem].seqno = sqno;
+}
+
+
+STATIC_CI unsigned short int
+pan_mem_lst_messid_get(mem_list_p lst, int mem)
+{
+    assert(mem < lst->n_members);
+    return lst->info[mem].messid;
+}
+
+
+STATIC_CI int
+pan_mem_lst_seqno_get(mem_list_p lst, int mem)
+{
+    assert(mem < lst->n_members);
+    return lst->info[mem].seqno;
+}
+
+
+STATIC_CI int
+pan_mem_lst_seqno_min(mem_list_p lst)
+{
+    int          min_sq = INT_MAX;
+    int          i;
+    mem_info_p   info;
+
+    info = lst->info;
+    for (i = 0; i < lst->upb_member; i++) {
+	if (info[i].seqno < min_sq) {
+	    min_sq = info[i].seqno;
+	}
+    }
+
+    return min_sq;
+}
+
+
+STATIC_CI int
+pan_mem_lst_n_behind(mem_list_p lst, int min_sq)
+{
+    int          i;
+    int          n;
+    mem_info_p   info;
+
+    info = lst->info;
+    n = 0;
+    for (i = 0; i < lst->upb_member; i++) {
+	if (info[i].seqno < min_sq) {
+	    ++n;
+#ifdef BEHIND_STATISTICS
+av_behind[i] += min_sq - info[i].seqno;
+behind_ticks++;
+#endif
+	}
+    }
+    return n;
+}
+
+
+STATIC_CI void
+pan_mem_add_member(mem_list_p lst, int mem, int seqno)
+{
+    mem_info_p   new_mem;
+
+    if (mem >= lst->upb_member) {
+	lst->upb_member = mem + 1;
+    }
+
+    new_mem = &lst->info[mem];
+    assert(new_mem->seqno == INT_MAX);
+
+    new_mem->seqno     = seqno;
+    new_mem->messid = 0;
+}
+
+
+STATIC_CI int
+pan_mem_del_member(mem_list_p lst, int mem)
+{
+    mem_info_p   m;
+    int          i;
+
+    if (mem >= lst->upb_member) {
+	return 0;
+    }
+    m = &lst->info[mem];
+    assert(m->seqno != INT_MAX);
+
+    m->seqno = INT_MAX;
+    if (mem == lst->upb_member - 1) {
+	m = lst->info;
+	for (i = mem - 1; i >= 0 && m[i].seqno == INT_MAX; i--);
+	lst->upb_member = i + 1;
+    }
+
+    return 1;
+}
+
+
+STATIC_CI void
+pan_mem_lst_init(mem_list_p lst, int n_members)
+{
+    int          i;
+    mem_info_p   info;
+
+    lst->n_members = n_members;
+    lst->upb_member = 0;
+    lst->info = pan_malloc(lst->n_members * sizeof(mem_info_t));
+    for (i = 0; i < lst->n_members; i++) {
+	info = &lst->info[i];
+	info->messid = 0;
+	info->seqno     = INT_MAX;
+    }
+#ifdef BEHIND_STATISTICS
+av_behind = pan_malloc(lst->n_members * sizeof(double));
+for (i = 0; i < lst->n_members; i++) {
+av_behind[i] = 0.0;
+}
+#endif
+}
+
+
+STATIC_CI void
+pan_mem_lst_clear(mem_list_p lst)
+{
+#ifdef BEHIND_STATISTICS
+{
+int i;
+printf("S%d: %d ticks; ", pan_my_pid(), behind_ticks);
+for (i = 0; i < lst->n_members; i++) {
+printf("%2d %3.1f ", i, av_behind[i] / behind_ticks);
+}
+printf("\n");
+pan_free(av_behind);
+}
+#endif
+    pan_free(lst->info);
+    lst->info = NULL;
+    lst->n_members = 0;
+    lst->upb_member = 0;
+}
+
+
+
+#endif

@@ -1,0 +1,98 @@
+# The module Stack contains operations for handling the ResultStack.
+
+OBJECT IMPLEMENTATION Stack;
+
+FROM InOut IMPORT WriteInt,WriteChar;
+FROM Types IMPORT ResultRecord;
+
+CONST MAXRESULTS = 100; 		# maximum size of stack.
+
+	TYPE StackType = ARRAY[integer] OF ResultRecord;
+	# The ResultStack is used to store parallel search results.
+	ResultStack : StackType;	# the stack
+	StackPointer : integer;		# the stackpointer
+	count : integer;
+
+	# Initialize ResultStack.
+	FUNCTION setsize(a: OUT StackType[1..MAXRESULTS]);
+	BEGIN
+	END;
+
+	OPERATION InitStack();
+	BEGIN
+		setsize(ResultStack);
+	END;
+
+	# Initialize some global variables.
+	OPERATION InitVar();
+	BEGIN
+		StackPointer := 1;
+		count := 0;
+	END;
+
+	OPERATION PrintStack();
+	  index : integer;
+	BEGIN
+		WriteLine("Stack:");
+		index := 1;
+		WHILE index < StackPointer DO
+		  WriteInt(ResultStack[index].signature); WriteChar(' ');
+		  index +:= 1;
+		OD;
+		WriteLine();
+	END;
+
+
+	# Are there are any results with a given signature on the stack ?
+	FUNCTION CheckFull( ResultStack : StackType; StackPointer : integer;
+			    signature : integer) : boolean;
+	BEGIN
+		FOR i IN 1 .. StackPointer - 1 DO
+		  IF ResultStack[i].signature = signature THEN
+		    RETURN true;
+		  FI;
+		OD;
+		RETURN false;
+	END;
+
+	OPERATION FullStack(signature : integer);
+	BEGIN
+		GUARD CheckFull( ResultStack, StackPointer, signature) DO OD;
+	END;
+
+	# Push a result on the stack.
+	OPERATION PushResult(resultrecord : ResultRecord);
+	BEGIN
+		GUARD StackPointer <= MAXRESULTS DO
+			ResultStack[StackPointer] := resultrecord;
+			StackPointer +:= 1;
+		OD;
+	END;
+
+	# Take a result from the stack.
+	OPERATION PopResult(signature : integer;
+			    resrec : OUT ResultRecord) : boolean;
+	  i : integer;
+	BEGIN
+		count +:= 1;
+		FOR index IN 1 .. StackPointer - 1 DO
+		  IF ResultStack[index].signature = signature THEN
+		    resrec := ResultStack[index];
+		    i := index + 1;
+		    WHILE i < StackPointer DO
+		      ResultStack[i - 1] := ResultStack[i];
+		      i +:= 1;
+		    OD;
+		    StackPointer -:= 1;
+		    RETURN true;
+		  FI;
+		OD;
+		RETURN false;
+	END;
+
+	OPERATION PrintInfo();
+	BEGIN
+		WriteLine("PopResults = ",count);
+	END;
+
+END;

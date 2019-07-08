@@ -1,0 +1,152 @@
+OBJECT IMPLEMENTATION action_list_obj;
+
+FROM task_graph_obj  IMPORT task_graph_obj, task_t;
+FROM ParamRes        IMPORT ParamRes, param_t, result_t, params_tag, result_tag,
+			    WriteParam, WriteResult;
+
+TYPE QueueItem    = NODENAME OF queue;
+TYPE queue        = GRAPH   first, last : QueueItem;
+		    NODES   next        : QueueItem;
+			    data        : action_rec;
+		    END;
+
+Q    : queue;			# the queue itself
+n    : integer;
+done : boolean;
+
+
+FUNCTION send_create(task_graph  : SHARED task_graph_obj;
+		     action_list : SHARED action_list_obj;
+		     ch          : integer;
+		     parent      : task_t;
+		     param       : SHARED param_t);
+
+action : action_rec;
+child  : task_t;
+
+BEGIN
+    task_graph$new(child, parent, ch);
+    action.type      := CREATED;
+    action.cpu       := MYCPU();
+    action.child_num := ch;
+    action.parent_id := parent;
+    action.task_id   := child;
+    action.mess      := ParamRes:{params_tag, param};
+    action_list$enQ(action);
+END;
+
+
+FUNCTION send_fork(action_list : SHARED action_list_obj;
+		   task        : task_t);
+
+action : action_rec;
+
+BEGIN
+    action.type    := FORKED;
+    action.cpu     := MYCPU();
+    action.task_id := task;
+    action_list$enQ(action);
+END;
+
+
+FUNCTION send_finished(task_graph  : SHARED task_graph_obj;
+		       action_list : SHARED action_list_obj;
+		       task        : task_t;
+		       parent      : task_t;
+		       result      : SHARED result_t);
+
+action : action_rec;
+
+BEGIN
+    task_graph$set_result(task, result);
+    action.type      := FINISHED;
+    action.cpu       := MYCPU();
+    action.task_id   := task;
+    action.parent_id := parent;
+    action.mess      := ParamRes:{result_tag,result};
+    action_list$enQ(action);
+END;
+
+
+FUNCTION print_action(action : SHARED action_rec);
+BEGIN
+    CASE action.type OF
+      FINISHED =>
+	Write("FINISH from pe ", action.cpu);
+	Write(" result = "); WriteResult(action.mess.result);
+	WriteLine();
+    | FORKED =>
+	WriteLine("SUSPEND from pe ", action.cpu);
+    | CREATED  =>
+	Write("CREATE from pe ", action.cpu);
+	Write(" child #", action.child_num);
+	Write(" param  = "); WriteParam(action.mess.params);
+	WriteLine();
+    ESAC;
+END;
+
+OPERATION enQ(item: action_rec);
+    p: QueueItem;
+BEGIN  					# add a item to the tail of the queue
+    # Write("enQ of action ");
+    # print_action(item);
+    p := ADDNODE(Q);			# add a node to Q, return its name in p
+    Q[p].data := item;			# fill in data field of the new node
+    IF Q.first = NIL THEN		# Is it the first node?
+	Q.first := p;			# yes; assign it to global data field
+    ELSE
+	Q[Q.last].next := p;		# no; set its next field
+    FI;
+    Q.last := p;			# Assign to "last" global data field
+END;
+
+OPERATION deQ(item: OUT action_rec) : boolean;
+    p: QueueItem;
+BEGIN					# Try to fetch an item from the queue
+    GUARD Q.first /= NIL DO		# An item is available
+	# WriteLine(MYCPU(), ": Falling through deQ: ", n); n +:= 1;
+	p := Q.first;			# Remove it from the queue
+	Q.first := Q[p].next;
+	IF Q.first = NIL THEN
+	    Q.last := NIL;
+	FI;
+	item := Q[p].data;
+	DELETENODE(Q,p);		# delete the node
+	RETURN true;
+    OD;
+    GUARD done DO
+	RETURN false;
+    OD;
+    # Write("deQ of action ");
+    # print_action(item);
+END;
+
+OPERATION emptyQ() : boolean;
+BEGIN
+    RETURN (Q.first = NIL);
+END;
+
+OPERATION list(cpu : integer);
+    p : QueueItem;
+BEGIN
+    IF cpu = MYCPU() THEN
+	p := Q.first;
+	WHILE p /= NIL DO
+	    Write(" ++ ");
+	    print_action(Q[p].data);
+	    p := Q[p].next;
+	OD;
+    FI;
+END;
+
+OPERATION finish();
+BEGIN
+    done := true;
+END;
+
+BEGIN
+    Q.first := NIL;
+    Q.last  := NIL;
+    n       := 0;
+    done    := false;
+END;

@@ -1,0 +1,1023 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/******************************************************************************
+ *
+ *    Implementation of the orderer thread.
+ *    Messages for this group are received here; the network layer performs
+ *    an upcall to deliver group msgs in the ordered buffer. The ordering is
+ *    enforced with help of the sequence numbers. Out-of-order messages are
+ *    buffered, retransmit of missing messages from the sequencer is requested.
+ *
+ *    At the site of the sequencer's, things go differently; the sequencer
+ *    puts ordered messages directly in their slot in the ordered buffer.
+ *    Reliability is also done by the sequencer: if the member has missed
+ *    messages (because its ordered buffer was full), then the sequencer
+ *    delivers copies of late msgs before a new msg is delivered.
+ *
+ ******************************************************************************/
+
+
+#ifndef __PAN_GRP_MEM_CI__
+#define __PAN_GRP_MEM_CI__
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <assert.h>
+
+#include "pan_sys.h"
+
+#include "pan_trace.h"
+
+#include "grp_tab.h"
+#include "grp_global.h"
+#include "grp_sweep.h"
+#include "grp_stats.h"
+#include "grp_hist.h"
+
+#include "grp_num_buf.ci"
+#include "grp_assemble.ci"
+#include "grp_bb_acpt.ci"
+#include "grp_bbb.ci"
+
+#include "grp_seq.h"
+#include "grp_send.h"
+#include "grp_mem.h"
+
+
+
+/*
+ *	Global variables.
+ */
+
+static int	pan_grp_ordrstack;
+static int	pan_grp_ordrprio;
+
+static trc_event_t rexmit_req_ev;
+
+
+
+/*
+ * Local types
+ */
+
+typedef enum ORD_MSG_STATUS_T {
+    ORD_ACCEPT,
+    ORD_OVERFLOW,
+    ORD_DOUBLE
+} ord_msg_status_t, *ord_msg_status_p;
+
+
+
+/******************************************************************************
+ *
+ *    Actions to communicate between sender and receiver threads.
+ *
+ ******************************************************************************/
+
+
+
+/* Home frag:   notify sender that it should retransmit it.
+ */
+static void
+discard_fragment_mem(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr)
+{
+    assert(pan_grp_me != g->seq);
+
+    if (hdr->sender == pan_grp_me) {
+	pan_grp_flag_discard(g, hdr->sender_id);
+    }			/* else, just return from this upcall */
+}
+
+
+
+/* Home frag:   notify sender that it should retransmit it.
+ */
+static void
+discard_cntrl_mem(pan_group_p g, grp_hdr_p hdr)
+{
+    if (hdr->sender == pan_grp_me) {
+	assert(hdr->type == GRP_BB_ACPT);
+	pan_grp_flag_discard(g, hdr->sender_id);
+    }				/* else, just return from this upcall */
+}
+
+
+
+/******************************************************************************
+ *
+ *    Implementation of the group orderer.
+ *
+ ******************************************************************************/
+
+
+static void
+pan_grp_send_cntrl_to_seq(pan_group_p g, grp_hdr_p msg)
+{
+    int old_prio;
+
+    if (g->seq == pan_grp_me) {
+	old_prio = pan_thread_setprio(pan_thread_maxprio());
+	pan_grp_sequence_cntrl_upcall(g, msg);
+	pan_thread_setprio(old_prio);
+    } else {
+	pan_mutex_unlock(pan_grp_upcall_lock);
+	pan_comm_unicast_small(g->seq, pan_grp_cntrl_nsap, msg);
+	pan_mutex_lock(pan_grp_upcall_lock);
+    }
+}
+
+
+static void
+fill_retrans_hdr(grp_hdr_p hdr, pan_group_p g, int missed_seqno)
+{
+    hdr->gid    = g->gid;
+    hdr->sender = pan_grp_me;
+    hdr->type   = GRP_RETRANS;
+    hdr->seqno  = missed_seqno;
+}
+
+ 
+static void
+fill_status_hdr(grp_hdr_p hdr, pan_group_p g, int seqno)
+{
+    hdr->gid    = g->gid;
+    hdr->sender = pan_grp_me;
+    hdr->type   = GRP_STATUS;
+    hdr->seqno  = seqno;
+}
+
+
+/* New member's GRP_JOIN message is processed:
+ * If this is our join message, init member info and BB buffer.
+ * Otherwise update member info, and when necessary buffer sizes for BB buffer.
+ * The condition variable group_size_changed is signalled.
+ *
+ * Requirement: the caller should hold pan_grp_upcall_lock.
+ */
+static void
+accept_join_mem(pan_group_p g, grp_hdr_p hdr)
+{
+    assert(hdr->messid == 0);
+
+    if (hdr->sender != pan_grp_me) {
+	++g->n_members;
+    }
+
+    pan_cond_broadcast(g->group_size_changed);
+}
+
+
+/* My GRP_JOIN message is processed: init member info and BB buffer.
+ *
+ * Requirement: the caller should hold pan_grp_upcall_lock.
+ */
+static void
+my_join_arrived(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr)
+{
+    pan_msg_p      join_msg;
+    pan_fragment_p join_frag;
+    short int     *bb_start;
+
+    assert(pan_fragment_flags(frag) & PAN_FRAGMENT_FIRST);
+    assert(pan_fragment_flags(frag) & PAN_FRAGMENT_LAST);
+
+    assert(hdr->sender == pan_grp_me);
+
+				/* Assemble fragment so we can read it. We
+				 * still need the original fragment because
+				 * it's a sequenced group frag, so we must make
+				 * a copy for assembly. */
+    join_frag = pan_fragment_create();
+    pan_fragment_copy(frag, join_frag, 1);
+    join_msg = pan_msg_create();
+    pan_msg_assemble(join_msg, join_frag, 0);
+
+    bb_start = pan_msg_pop(join_msg, pan_grp_nr * sizeof(short int),
+			   alignof(short int));
+    if (g->seq != pan_grp_me) {
+	bb_buf_start(g, bb_start);
+    }
+
+    g->n_members = *(int*)pan_msg_pop(join_msg, sizeof(int), alignof(int));
+
+    g->my_join = hdr->seqno;
+
+    if (pan_grp_me != g->seq) {
+	pan_num_buf_start(&g->ord_buf, hdr->seqno);
+	g->next_accept = hdr->seqno;
+    }			/* Otherwise, started by the sequencer */
+
+    assert(g->is_joining);
+    g->is_joining = FALSE;
+
+    pan_fragment_clear(join_frag);
+    pan_msg_clear(join_msg);
+}
+
+
+/* Leave message accepted by member. The leaving member is
+ * deleted from the group's data structures.
+ * The condition variable group_size_changed is signalled.
+ *
+ * Requirement: the caller should hold pan_grp_upcall_lock.
+ */
+static void
+accept_leave_mem(pan_group_p g, grp_hdr_p hdr)
+{
+    if (hdr->sender == pan_grp_me) {
+	assert(pan_grp_frag_acked(hdr));
+	assert(! (g->is_ordr_done));
+	g->is_ordr_done = TRUE;
+#ifndef NO_ORDERER_THREAD
+	if (g->seq == pan_grp_me) {		/* Clean up the ordr thread */
+	    pan_cond_signal(g->ordr_work);
+	}
+#endif
+    }
+
+    --g->n_members;
+    pan_cond_broadcast(g->group_size_changed);
+}
+
+
+
+/* Check whether a slot for this sequenced frag is free in the ordered buffer
+ *
+ * Requirement: the caller must hold pan_grp_upcall_lock.
+ */
+static ord_msg_status_t
+ord_buf_acceptable(pan_group_p g, grp_hdr_p hdr)
+{
+    if (hdr->seqno >= pan_num_buf_upb(&g->ord_buf)) {
+			    /* Buffer overflow */
+				    STATDISCARD(g, DX_ORD_B, 1);
+	return ORD_OVERFLOW;
+    }
+
+    if (hdr->seqno < g->next_accept ||
+	pan_num_buf_in_use(&g->ord_buf, hdr->seqno)) {
+			    /* repeated accept (before/past next_accept) */
+	return ORD_DOUBLE;
+    }
+
+    return ORD_ACCEPT;
+}
+
+
+
+/* Send a status message to the sequencer.
+ * Two causes:
+ * 1. Respond to a SYNC request by the sequencer
+ * 2. We ourselves have seen that our latest acknowledge has been too long
+ *    ago (in terms of buffer size vs. sequence numbers).
+ *
+ * Requirement: the caller must hold pan_grp_upcall_lock.
+ */
+static void
+send_status(pan_group_p g)
+{
+    grp_hdr_t     msg;
+    int           last_status;
+
+    assert(pan_grp_me != g->seq);
+
+    last_status = g->next_accept;
+    fill_status_hdr(&msg, g, last_status);
+    g->last_status = last_status;
+    pan_grp_send_cntrl_to_seq(g, &msg);
+					STATINC(g, ST_STATUS);
+}
+
+
+static void
+assemble_upcall(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr,
+		boolean must_clear)
+{
+    if (hdr->type == GRP_JOIN) {
+	if (hdr->sender == pan_grp_me) {
+	    pan_grp_frag_arrived(g, hdr,
+				 pan_fragment_flags(frag) & PAN_FRAGMENT_LAST);
+	}
+    } else if (hdr->type == GRP_LEAVE) {
+	accept_leave_mem(g, hdr);
+	if (hdr->sender == pan_grp_me) {
+	    pan_grp_frag_arrived(g, hdr,
+				 pan_fragment_flags(frag) & PAN_FRAGMENT_LAST);
+	}
+    } else {
+	pan_grp_assemble_and_deliver(g, frag, hdr);
+    }
+
+				/* Delete the buffered fragment copy */
+    if (must_clear) {
+	pan_fragment_clear(frag);
+    }
+}
+
+
+/* Deliver buffered messages from the ordered buffer, as far as they are
+ * in sequence.
+ * Requirement: caller must hold pan_grp_upcall_lock.
+ */
+INLINE void
+pan_grp_handle_ordr_cont(pan_group_p g)
+{
+    pan_fragment_p   frag;
+    grp_hdr_p        hdr;
+    pan_fragment_p   bb_frag;
+    grp_hdr_p        bb_hdr;
+    boolean          is_copy;
+    boolean          from_me;
+
+    if (g->is_ordr_busy) {
+				/* Some other thread is already receiving */
+	return;
+    }
+
+    while (TRUE) {
+	frag = pan_num_buf_last(&g->ord_buf);
+	if (frag == NULL) {
+	    break;
+	}
+
+	hdr = pan_fragment_header(frag);
+	from_me = (hdr->sender == pan_grp_me);
+	if (from_me && ! pan_grp_trylock_frag(hdr)) {
+	    break;
+	}
+
+	frag = pan_num_buf_get(&g->ord_buf);
+					STATINC(g, ST_MEM_ACCEPT_LATE);
+	assert(hdr == pan_fragment_header(frag));
+
+				/* BB style messages:
+				 * from ourselves: a special continuation
+				 *	fragment has been created. The original
+				 *	data fragment has not yet been touched.
+				 *	We collect the data fragment and
+				 *	return the continuation fragment.
+				 * from others: this is already the complete BB
+				 *	data fragment: otherwise, it could not
+				 *	have been delivered. Do nothing special.
+				 */
+	if (from_me && hdr->type == GRP_BB_ACPT) {
+	    assert(! (hdr->flags & HDR_is_rexmit));
+	    if (hdr->flags & HDR_is_continuation) {
+
+		bb_frag = bb_collect_data(g, hdr);
+		assert(bb_frag != NULL);
+
+		bb_hdr = pan_fragment_header(bb_frag);
+		*bb_hdr = *hdr;
+
+		bb_acpt_put(frag);
+
+		frag = bb_frag;
+		hdr = bb_hdr;
+	    }
+	    is_copy = FALSE;
+	} else {
+	    is_copy = (g->seq != pan_grp_me || ! from_me ||
+		       hdr->type == GRP_JOIN);
+	}
+
+	assemble_upcall(g, frag, hdr, is_copy);
+    }
+}
+
+
+/* Put frag into its slot in the ordered buffer. If it is allowed, deliver it
+ * immediately, without going through the trouble of copy(...,0),store,retrieve,
+ * clear.
+ *
+ * Requirement: the caller should hold pan_grp_upcall_lock.
+ */
+static void
+deliver_accept(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr)
+{
+    grp_hdr_p      bb_hdr;
+    boolean        is_locked;
+    boolean        seq_is_me = (g->seq == pan_grp_me);
+    boolean        sender_is_me = (hdr->sender == pan_grp_me);
+    boolean        is_copy = (seq_is_me &&
+			      (sender_is_me || hdr->type == GRP_JOIN));
+    boolean        must_clear = is_copy;
+    pan_fragment_p cp_frag;
+    int            seqno;
+
+    is_locked = (sender_is_me && ! pan_grp_trylock_frag(hdr));
+
+    assert(! sender_is_me || pan_grp_frag_acked(hdr));
+
+    if (hdr->type == GRP_BB_ACPT && ! (hdr->flags & HDR_is_rexmit)) {
+	assert(! seq_is_me);
+	assert(frag == NULL);
+
+	if (! is_locked) {
+				/* Silently discard the original frag */
+	    frag = bb_collect_data(g, hdr);
+	    if (frag == NULL) {
+				/* Data msg has not yet arrived. We will
+				 * request retransmit later */
+		assert(hdr->sender != pan_grp_me);
+				/* No fear that we need release the fragment
+				 * lock again: the BB data msg from home is
+				 * always there. */
+		return;
+	    }
+
+	    bb_hdr = pan_fragment_header(frag);
+	    *bb_hdr = *hdr;
+	    hdr = bb_hdr;
+	    if (! sender_is_me) {
+		must_clear = TRUE;
+	    }
+	    is_copy = TRUE;
+	}
+    }
+
+    seqno = hdr->seqno;
+
+    if (! (g->is_ordr_busy) && ! is_locked &&
+	pan_num_buf_advance(&g->ord_buf, seqno)) {
+				/* Can we take shortcut for delivery so we need
+				 * not buffer or copy?
+				 */
+
+	g->next_accept = pan_num_buf_next_accept(&g->ord_buf);
+
+					STATINC(g, ST_MEM_ACCEPT_DIRECT);
+	assemble_upcall(g, frag, hdr, must_clear);
+	pan_grp_handle_ordr_cont(g);
+
+    } else {
+				/* The fragment is buffered as a continuation
+				 * for later delivery.
+				 */
+
+	if (is_locked && hdr->type == GRP_BB_ACPT) {
+				/* This is a pain. The BB accept arrives during
+				 * a (re)send of our BB data fragment; we
+				 * cannot touch the data fragment now, so a
+				 * continuation must be made to deliver it
+				 * later. This continuation is of type
+				 * *pan_fragment_p.
+				 */
+	    assert(! (hdr->flags & HDR_is_rexmit));
+	    assert(frag == NULL);
+	    assert(! seq_is_me);
+	    frag = bb_acpt_get();
+	    bb_hdr = pan_fragment_header(frag);
+	    *bb_hdr = *hdr;
+	    bb_hdr->flags |= HDR_is_continuation;
+	    is_copy = TRUE;
+	}
+
+	if (! is_copy) {
+				/* We must make a copy since upcall fragments
+				 * must be returned for further usage.
+				 */
+	    cp_frag = pan_fragment_create();
+	    pan_fragment_copy(frag, cp_frag, 0);
+	    frag = cp_frag;
+	}
+
+	pan_num_buf_accept(&g->ord_buf, frag, seqno);
+
+	g->next_accept = pan_num_buf_next_accept(&g->ord_buf);
+    }
+
+#ifdef NO_ORDERER_THREAD
+    if (! seq_is_me &&
+	100 * (g->next_accept - g->last_status) >
+	    pan_grp_hist_size * pan_hist_send_status_perc) {
+	send_status(g);
+    }
+#else
+    if (100 * (g->next_accept - g->last_status) >
+	    pan_grp_hist_size * pan_hist_send_status_perc) {
+	send_status(g);
+    }
+#endif
+}
+
+
+
+/* Use msg from the sequencer to update our knowledge of the group status.
+ *
+ * Requirement: caller must hold pan_grp_upcall_lock.
+ */
+static void
+mem_update_status(pan_group_p g, grp_hdr_p hdr)
+{
+    if (hdr->seqno > g->global_seqno) {
+	g->global_seqno = hdr->seqno;
+    }
+
+    if (! g->is_seq_alive) {
+	g->is_seq_alive = TRUE;
+    }
+}
+
+
+/* Handle a data message that arrives at a group.
+ * Dispatch according to functionality.
+ *
+ * Requirement: the caller must hold pan_grp_upcall_lock.
+ */
+static void
+mem_data_switch(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr)
+{
+    ord_msg_status_t st;
+
+    assert(pan_grp_me != g->seq);
+    assert(! (g->is_ordr_done));
+
+				/* Before join, discard everything except our
+				 * join accept */
+    if (g->is_joining) {
+	if (hdr->type != GRP_JOIN || hdr->sender != pan_grp_me) {
+					STATDISCARD(g, DX_PREMATURE, 1);
+	    return;
+	}
+
+	my_join_arrived(g, frag, hdr);
+    }
+
+    assert(! g->is_joining);
+
+
+    if (hdr->type == GRP_BB_REQ) {
+				/* Msg from some other member */
+	bb_store_data(g, frag, hdr);
+	return;
+    }
+
+				/* Msg from the sequencer, record the state */
+    mem_update_status(g, hdr);
+
+				/* Msg from the sequencer */
+    st = ord_buf_acceptable(g, hdr);
+
+    if (st == ORD_ACCEPT) {	/* Most probable case tested first */
+
+	if (hdr->type == GRP_JOIN) {
+	    accept_join_mem(g, hdr);
+	}
+
+	if (hdr->type == GRP_BB_ACPT) {
+	    assert(hdr->flags & HDR_is_rexmit);
+	    assert(g->seq != pan_grp_me);
+	    bb_handle_rexmit(g, hdr);
+	} else {
+	    bb_handle_pb_messid(g, hdr);
+	}
+
+	deliver_accept(g, frag, hdr);
+
+    } else if (st == ORD_OVERFLOW) {
+	discard_fragment_mem(g, frag, hdr);
+				    STATDISCARD(g, DX_ORD_B, 1);
+
+    } else {
+	assert(st == ORD_DOUBLE);
+#ifdef STATISTICS
+				    if (hdr->seqno >= g->my_join) {
+					STATDISCARD(g, DX_REXMIT, 1);
+				    } else {
+					STATDISCARD(g, DX_PREMATURE, 1);
+				    }
+#endif
+    }
+}
+
+
+
+
+
+/* Handle a message that arrives at a group.
+ * Dispatch according to functionality.
+ *
+ * Requirement: the caller must hold pan_grp_upcall_lock.
+ */
+static void
+mem_cntrl_switch(pan_group_p g, grp_hdr_p cntrl_msg)
+{
+    ord_msg_status_t st;
+
+    assert(pan_grp_me != g->seq);
+
+    mem_update_status(g, cntrl_msg);
+
+				/* Before join, discard everything */
+				/* After leave, discard everything */
+    if (g->is_joining || g->is_ordr_done) {
+					STATDISCARD(g, DX_PREMATURE, 1);
+	return;
+    }
+
+    if (cntrl_msg->type == GRP_SYNC) {
+	send_status(g);
+
+    } else {
+	assert(cntrl_msg->type == GRP_BB_ACPT);
+
+	st = ord_buf_acceptable(g, cntrl_msg);
+
+	if (st == ORD_ACCEPT) {		/* Most probable case tested first */
+	    if (cntrl_msg->sender == pan_grp_me) {
+		bb_handle_own_bb_messid(g, cntrl_msg);
+	    }
+	    deliver_accept(g, NULL, cntrl_msg);
+
+	} else if (st == ORD_OVERFLOW) {
+	    discard_cntrl_mem(g, cntrl_msg);	/* Signal the sender if needs */
+
+	} else {
+	    assert(st == ORD_DOUBLE);
+	}
+
+    }
+}
+
+
+
+
+/* Send retransmit request.
+ *
+ * Requirement: the caller should hold pan_grp_upcall_lock.
+ */
+static void
+send_rexmit_request(pan_group_p g, int my_accept)
+{
+    grp_hdr_t retrans_hdr;
+
+    assert(my_accept >= 0);
+
+    fill_retrans_hdr(&retrans_hdr, g, my_accept);
+    trc_event(rexmit_req_ev, &my_accept);
+    g->last_rexmit_request = my_accept;
+    pan_grp_send_cntrl_to_seq(g, &retrans_hdr);
+#ifdef STATISTICS
+				    if (g->is_want_to_leave)
+					STATINC(g, ST_REXMIT_REQ_AT_LEAVE);
+				    else
+					STATINC(g, ST_REXMIT_REQ);
+#endif
+}
+
+
+/* Check whether we are (still) in rexmit state, and whether we should
+ * enter rexmit state.
+ * These rexmit requests are sent by the orderer timer daemon or from the
+ * orderer upcall.
+ * The orderer daemon at the sequencer's follows a different path.
+ *
+ * Requirement: the caller should hold pan_grp_upcall_lock.
+ */
+static void
+check_rexmits(pan_group_p g)
+{
+    int       my_accept;
+
+    my_accept = g->next_accept;
+				/* Check if we (still) must rexmit */
+    if (my_accept <= g->global_seqno &&
+	  ! g->is_joining && ! g->is_ordr_done) {
+	g->is_rexmitting = TRUE;
+				/* If we are still behind after arrived rexmit
+				 * msg, don't await timeout. */
+	if (g->last_rexmit_request != my_accept) {
+	    send_rexmit_request(g, my_accept);
+	}
+    } else if (g->is_rexmitting) {
+	g->is_rexmitting = FALSE;
+    }
+}
+
+
+/* The orderer data upcall.
+ *  - a message to the group is received in this upcall; it acts according to
+ *    the semantics of the message;
+ *  - delivers all ordered messages to the assembly layer;
+ *  - checks whether an ordered message has been missed; if so, enter retransmit
+ *    state.
+ */
+void
+pan_grp_orderer_data_upcall(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr)
+{
+    assert(g == pan_gtab_locate(g->gid));
+    assert(pan_grp_me != g->seq);
+
+					STATINC(g, ST_ORDR_DATA_UPCALL);
+    mem_data_switch(g, frag, hdr);	/* Handle the message */
+    check_rexmits(g);
+}
+
+
+
+/* The orderer control upcall.
+ *  - a message to the group is received in this upcall; it acts according to
+ *    the semantics of the message;
+ *  - delivers all ordered messages to the assembly layer;
+ *  - checks whether an ordered message has been missed; if so, enter retransmit
+ *    state.
+ */
+STATIC_CI void
+pan_grp_orderer_cntrl_upcall(pan_group_p g, grp_hdr_p cntrl_msg)
+{
+    assert(g == pan_gtab_locate(g->gid));
+    assert(pan_grp_me != g->seq);
+
+					STATINC(g, ST_ORDR_CNTRL_UPCALL);
+    mem_cntrl_switch(g, cntrl_msg);	/* Handle the message */
+    check_rexmits(g);
+}
+
+
+
+/* The orderer sweeper function.
+ * Repeatedly:
+ *  - if in retransmit state, and the appropriate retransmit has taken too
+ *    long in answering, sends a retransmit request for the first
+ *    missed message to the sequencer.
+ * Requirement: caller should hold pan_grp_upcall_lock.
+ */
+static void
+pan_grp_orderer_sweep(void *args)
+{
+    pan_group_p      g = (pan_group_p)args;
+
+			    /* Check if we (still) must rexmit */
+    if (g->next_accept > 0 && g->next_accept <= g->global_seqno) {
+	if (! g->is_joining && ! g->is_ordr_done) {
+			    /* send rexmit request msg */
+	    send_rexmit_request(g, g->next_accept);
+	}
+    }
+}
+
+
+
+
+/*------------------------------------------------------------------------------
+ *
+ * Routines that are special for the orderer thread at the sequencer's site.
+ *
+ */
+
+
+
+
+
+/* Control upcall for the sequencer to do a sync/status operation
+ * at the sequencer's member.
+ */
+STATIC_CI void
+pan_grp_do_sync_at_home(pan_group_p g, grp_hdr_p sync_msg)
+{
+    if (pan_grp_me != g->seq) {
+	pan_panic("sync at home shortcut taken at member platform\n");
+    }
+    g->last_status = g->next_accept;
+    mem_update_status(g, sync_msg);
+    fill_status_hdr(sync_msg, g, g->last_status);
+}
+
+
+
+/* Requirement: the caller should hold pan_grp_upcall_lock.
+ */
+STATIC_CI boolean
+pan_grp_deliver_home_frag(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr)
+{
+#ifndef NO_ORDERER_THREAD
+    int next;
+#endif
+
+    if (g->global_seqno < hdr->seqno) {
+	g->global_seqno = hdr->seqno;
+    }
+
+    if (g->is_joining) {
+	if (hdr->type == GRP_JOIN && hdr->sender == pan_grp_me) {
+	    pan_num_buf_start(&g->ord_buf, hdr->seqno);
+	}
+    }
+    
+    if (hdr->seqno >= pan_num_buf_upb(&g->ord_buf)) {
+				/* Ordered buffer overflow. Reject the msg */
+	return FALSE;
+    }
+
+    if (hdr->type == GRP_BB_ACPT) {
+	hdr->type = GRP_PB_ACPT;
+    }
+
+#ifndef NO_ORDERER_THREAD
+
+    assert(hdr == pan_fragment_header(frag));
+
+    pan_num_buf_accept(&g->ord_buf, frag, hdr->seqno);
+
+    if (hdr->sender == pan_grp_me) {
+	if (hdr->type == GRP_JOIN) {
+	    my_join_arrived(g, frag, hdr);
+	    accept_join_mem(g, hdr);
+	}
+	pan_grp_trylock_frag(hdr);		/* Signal the arrival */
+    } else {
+	pan_cond_signal(g->ordr_work);
+    }
+
+    next = pan_num_buf_next_accept(&g->ord_buf);
+    if (next > g->next_accept) {
+	g->next_accept = next;
+	g->last_status = next;
+    }
+
+#else
+
+    if (hdr->type == GRP_JOIN) {
+	if (hdr->sender == pan_grp_me) {
+	    my_join_arrived(g, frag, hdr);
+	}
+	accept_join_mem(g, hdr);
+    }
+
+    deliver_accept(g, frag, hdr);
+
+#endif
+
+    return TRUE;
+}
+
+
+
+#ifndef NO_ORDERER_THREAD
+
+
+static boolean
+deliverable_frag(num_buf_p buf)
+{
+    pan_fragment_p   frag;
+    grp_hdr_p        hdr;
+
+    frag = pan_num_buf_last(buf);
+    if (frag == NULL) {
+	return FALSE;
+    }
+
+    hdr = pan_fragment_header(frag);
+    return (hdr->sender != pan_grp_me || pan_grp_trylock_frag(hdr));
+}
+
+
+/* The orderer thread.
+ *
+ * Implementation with a daemon to handle data msgs.
+ * Use this for the member at the node of the sequencer's, since we
+ * don't want to disturb sequencing for the whole group just because a msg must
+ * be delivered to the home member. This daemon runs at a lower priority than
+ * the sequencer upcall.
+ *
+ * Repeatedly:
+ *  - reads a message from the group's ord_buf and delivers it via the group
+ *    receive upcall.
+ *  - checks whether an ordered message has been missed; if so, sends a
+ *    retransmit request for the missed message to the sequencer.
+ */
+STATIC_CI void
+pan_grp_orderer_at_seq(void *args)
+{
+    pan_group_p      g = (pan_group_p)args;
+    pan_fragment_p   frag;
+    grp_hdr_p        hdr;
+    boolean          is_copy;
+
+    trc_new_thread(0, "orderer");
+
+    pan_mutex_lock(pan_grp_upcall_lock);
+
+    do {
+	while (g->is_ordr_busy ||
+		(!deliverable_frag(&g->ord_buf) && ! g->is_ordr_done)) {
+	    pan_cond_wait(g->ordr_work);
+	}
+
+	if (g->is_ordr_done) {
+	    break;
+	}
+
+	frag = pan_num_buf_get(&g->ord_buf);
+	assert(frag != NULL);
+	hdr  = pan_fragment_header(frag);
+	is_copy = (hdr->sender != pan_grp_me || hdr->type == GRP_JOIN);
+
+	if (hdr->type == GRP_JOIN) {
+	    if (hdr->sender == pan_grp_me) {
+		my_join_arrived(g, frag, hdr);
+	    }
+	    accept_join_mem(g, hdr);
+	}
+
+					STATINC(g, ST_MEM_ACCEPT_DIRECT);
+
+	assemble_upcall(g, frag, hdr, is_copy);
+
+    } while (TRUE);
+
+    pan_mutex_unlock(pan_grp_upcall_lock);
+
+    pan_thread_exit();
+}
+
+
+#endif
+
+
+
+
+STATIC_CI void
+pan_grp_init_orderer(pan_group_p g, void (*rcve)(pan_msg_p msg))
+{
+    g->my_join            = -1;
+    g->next_accept        = -1;
+    g->last_status        = 0;
+    g->global_seqno       = 0;
+    g->receive            = rcve;
+
+    if (pan_grp_me != g->seq) {
+	bb_buf_create(g);
+	pan_num_buf_init(&g->ord_buf, pan_grp_ord_buf_size);
+    } else {
+	pan_num_buf_init(&g->ord_buf, pan_grp_home_ord_buf_size);
+    }
+
+    pan_grp_sweep_register(pan_grp_orderer_sweep, g, pan_grp_retrans_ticks);
+#ifndef NO_ORDERER_THREAD
+    if (pan_grp_me == g->seq) {
+	g->ordr_work = pan_cond_create(pan_grp_upcall_lock);
+	g->orderer = pan_thread_create(pan_grp_orderer_at_seq, g,
+				       pan_grp_ordrstack, pan_grp_ordrprio, 0);
+    }
+#endif
+
+    pan_grp_assemble_init(g);
+}
+
+
+
+STATIC_CI void
+pan_grp_clear_orderer(pan_group_p g)
+{
+    int n;
+
+    pan_grp_assemble_clear(g);
+
+    if (pan_grp_me != g->seq) {
+	bb_buf_clear(g);
+#ifndef NO_ORDERER_THREAD
+    } else {
+	pan_thread_join(g->orderer);
+	pan_cond_clear(g->ordr_work);
+#endif
+    }
+
+    n = pan_num_buf_clear(&g->ord_buf);
+				STATDISCARD_CLEANUP(g, DX_ORD_B, n);
+}
+
+
+STATIC_CI void
+pan_grp_ordr_start(void)
+{
+    pan_grp_ordrstack = 0;
+    if (pan_thread_maxprio() <= pan_thread_minprio() + 2) {
+	pan_grp_ordrprio  = pan_thread_maxprio();
+    } else {
+	pan_grp_ordrprio  = pan_thread_maxprio() - 2;
+    }
+
+    rexmit_req_ev = trc_new_event(3475, sizeof(int), "rexmit request",
+				  "missed %d");
+    bb_acpt_start();
+    pan_grp_assemble_start();
+}
+
+
+STATIC_CI void
+pan_grp_ordr_end(void)
+{
+    pan_grp_assemble_end();
+    bb_acpt_end();
+}
+
+
+#endif

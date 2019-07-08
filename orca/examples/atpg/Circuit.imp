@@ -1,0 +1,1113 @@
+MODULE IMPLEMENTATION Circuit;
+
+	FROM AtpgTypes IMPORT GateType, Logic_Value,Possible_Fault,FaultSet,
+			      FO_BR,INPT;
+
+	FROM iscas IMPORT     Return_Value,Iopen,Read_Nodeline,Read_Faninline,
+			      Read_Fanoutline,Write_Nodeline,Write_Faninline,
+			      Write_Fanoutline,Write_EOF,Iclose,MAX_NO_OF_GATES,
+			      MAX_NO_OF_INPUTS,MAX_NO_OF_OUTPUTS,Int_Array,
+			      Type_To_String;
+
+	FROM TruthTable IMPORT Truth_Table,Input_Values,Get_PDC_Value,
+			       Init_Input_Values;
+
+	FROM Config IMPORT Config_Rec,Circuit_File;
+
+	OBJECT Address_Queue = NEW GenericQueue(integer);
+
+	OBJECT Address_Stack = NEW GenericStack(integer);
+
+	CONST BACKTRACK_LIMIT = 10;
+
+	TYPE Change_Record = RECORD
+				address:integer;
+				old_output: Logic_Value;
+			     END;
+
+	TYPE Change_Set = SET OF Change_Record;
+
+	TYPE PI_record = RECORD
+				address: integer;
+				alt_tried: boolean;
+				changeset:Change_Set;
+			 END;
+
+	OBJECT PI_Stack = NEW GenericStack(PI_record);
+
+	FUNCTION LOG(message: string);
+	BEGIN
+		WriteLine();
+		Write("MODULE Circuit...");
+		Write(message);
+	END; # FUNCTION LOG
+
+
+	FUNCTION Init_Iscas_Circuit(circuit:OUT Circuit;
+				    config:Config_Rec):boolean;
+
+	# The file named "circuit.isc" is read, this file contains a
+	# description of the circuit. If the return value is true the 
+	# variable circuit contains a model in accordance to this
+	# specification.
+	#
+	# If false is returned one of the following errors occurred:
+	#    - The file contains a syntax error
+	#    - The number of gates in the circuit description exceeds
+	#      the maximum defined by NO_OF_GATES
+	#    - The circuit contains a gate that has a fanout/fanin 
+	#      greater than MAX_FANOUT/MAX_FANIN.
+	#    - The number of PI's / PO's exceeds the limit given by
+	#	NO_OF_INPUTS/NO_OF_OUTPUTS
+
+	onumber,fanout,fanin,number,PO_count: integer;
+	fanin_links: Int_Array;
+	ptr,ptr2: Nodeptr;
+	fromname,oname,name: string;
+	type: GateType;
+	ofaults,faults: FaultSet;
+	stop: Return_Value;
+
+	BEGIN
+	     PO_count := 0;
+	# DEBUG, empty the circuit ? if it contains nodes 
+	     # Initializations
+	     FOR i IN 1..MAX_NO_OF_GATES DO
+	          circuit.gateptr[i]:=NIL;
+	     OD;
+	     FOR i IN 1..MAX_NO_OF_INPUTS DO
+		  circuit.PI_ptr[i]:=NIL;
+	     OD;
+	     FOR i IN 1..MAX_NO_OF_OUTPUTS DO
+		  circuit.PO_ptr[i]:=NIL;
+	     OD;
+	     IF NOT Iopen(Circuit_File(config), 0) THEN
+		  LOG("ERROR....opening iscas-description file");
+	          RETURN false;
+	     FI;
+	     # Start reading until END_OF_FILE
+	     stop:=Read_Nodeline(number,name,type,
+	                                        fanout,fanin,faults);
+	     WHILE stop=OK DO
+	          IF number>MAX_NO_OF_GATES THEN
+		       LOG("ERROR....maximum number of gates exceeded");
+		       Iclose(0);
+	               RETURN false;
+	          FI;
+	          # Fill in node
+	          ptr:=ADDNODE(circuit);
+		  circuit.gateptr[number]:=ptr;
+		  circuit[ptr].gatetype:=type;
+	          circuit[ptr].gatename:=name;
+		  circuit[ptr].address:=number;
+	          circuit[ptr].fanout:=fanout;
+	          circuit[ptr].fanin:=fanin;
+	          circuit[ptr].faults:=faults;
+	          # fill in backward links (fanin)
+	          IF (fanin/=0) AND
+	             (Read_Faninline(fanin,fanin_links)=OK) THEN
+	               FOR i IN 1..fanin DO
+	                     # backward link
+	                     circuit[ptr].backward_link[i]:= circuit.
+							gateptr[fanin_links[i]];
+	                     # forward link
+	                     circuit[circuit.gateptr[fanin_links[i]]].
+				     forward_link[1]:=ptr;
+		       OD;
+	          ELSE
+	               IF fanin=0 THEN    # Primary input
+				IF number<=MAX_NO_OF_INPUTS THEN
+				   circuit.PI_ptr[number]:=ptr;
+				ELSE
+				   LOG("ERROR...input address too big");
+				FI;
+		       ELSE
+		       		LOG("ERROR....Couldn't read faninline");
+				Iclose(0);
+				RETURN false;
+	               FI;
+		  FI;
+	       	  # Handle fanout
+	          IF fanout>1 THEN
+	               FOR i IN 1..fanout DO
+	                    IF Read_Fanoutline(onumber,oname,
+							fromname,ofaults)
+	                         /= OK THEN
+		       		 LOG("ERROR....Couldn't read fanoutline");
+				 Iclose(0);
+	                         RETURN false;
+	                    ELSE
+				 IF onumber>MAX_NO_OF_GATES THEN
+					LOG("ERROR...address too large");
+					Iclose(0);
+					RETURN false;
+				 FI;
+	                         ptr2:=ADDNODE(circuit);
+				 circuit.gateptr[onumber]:=ptr2;
+	                         circuit[ptr2].gatetype:=FO_BR;
+	                         circuit[ptr2].gatename:=oname;
+				 circuit[ptr2].address:=onumber;
+	                         circuit[ptr2].fanout:=1;
+	                         circuit[ptr2].fanin:=1;
+	                         circuit[ptr2].faults:=ofaults;
+	                         circuit[ptr2].backward_link[1]:=ptr;
+	                         # fill in forward link of predecessor gate
+	                         circuit[ptr].forward_link[i]:=ptr2;
+	                    FI;
+	               OD;
+	          ELSE 
+	               IF fanout=0 THEN    # Primary output
+				PO_count+:=1;
+				IF PO_count>MAX_NO_OF_OUTPUTS THEN
+					LOG("ERROR...too many outputs");
+					RETURN false;
+				ELSE
+					circuit.PO_ptr[PO_count]:=ptr;
+					circuit.PO_count:=PO_count;
+				FI;
+		       ELSE
+				# fanout = 1 , nothing has to be done 
+				# the forward link will be filled in later.
+	               FI;
+	          FI;
+		  stop:=Read_Nodeline(number,name,type,
+							fanout,fanin,faults);
+	     OD;
+	     Iclose(0);                      
+	     IF stop=END_OF_FILE THEN
+		RETURN true;
+	     ELSE
+		LOG("ERROR....not read until END_OF_FILE");
+	        RETURN false;
+	     FI;
+	END; # FUNCTION Init_Iscas_Circuit
+
+	FUNCTION Init_Circuit_State(circuit:SHARED Circuit);
+	
+	# The state of the circuit is initialized. This means that all the
+	# input and output values of the gates (and the primary input/output
+	# values) are set to DONT_CARE.
+
+	nodeptr:Nodeptr;
+	address: integer;
+	addr_queue:Address_Queue;
+
+
+	BEGIN
+		# Initialize queue
+		FOR i IN 1..MAX_NO_OF_INPUTS DO
+			IF circuit.PI_ptr[i]/=NIL THEN
+				addr_queue$EnQueue(circuit[circuit.
+							PI_ptr[i]].address);
+				circuit.PI_value[i]:=DONT_CARE;
+			FI;
+		OD;
+		# Keep traversing the circuit until all the gates have been
+		# visited
+		WHILE NOT addr_queue$IsEmpty() DO
+			IF addr_queue$DeQueue(address) THEN
+				nodeptr:=circuit.gateptr[address];
+				circuit[nodeptr].output:=DONT_CARE;
+				FOR i IN 1..circuit[nodeptr].fanout DO
+					address:=circuit[circuit[nodeptr].
+						forward_link[i]].address;
+					addr_queue$EnQueue(address);
+				OD;
+			ELSE
+				EXIT;
+			FI;
+		OD;
+	END; # FUNCTION Init_Circuit_State
+
+	FUNCTION Reset_Circuit_Fault(circuit: SHARED Circuit);
+
+	# Set the circuit fault unspecified
+
+	BEGIN
+		circuit.faulty_gate:=NIL;
+	END; # FUNCTION Reset_Circuit_Fault
+
+
+	FUNCTION Init_Circuit_Fault(circuit: SHARED Circuit;address:integer;
+				    fault:Possible_Fault);
+
+	# The gate under test (gut) that is the gate which is currently
+	# assumed to contain a fault will be initialized. The gut is indicated
+	# by its addres.
+
+	BEGIN
+		IF (address<=MAX_NO_OF_GATES) AND
+		   (circuit.gateptr[address]/=NIL) THEN
+			circuit.faulty_gate:=circuit.gateptr[address];
+			circuit.fault:=fault;
+		ELSE
+			LOG("ERROR....Init_Circuit_Fault...wrong address");
+		FI;
+	END; # FUNCTION Init_Circuit_Fault
+
+
+	FUNCTION Init_Circuit(circuit:OUT Circuit;config:Config_Rec):boolean;
+	
+	# Read the circuit from an ISCAS-circuit description file and
+	# return the corresponding model in circuit.
+        # If this doesn't succeed false is returned else the returnvalue
+        # will be true.
+
+	BEGIN
+		IF NOT Init_Iscas_Circuit(circuit,config) THEN
+		   LOG("ERROR...invalid iscas description");
+		   RETURN false;
+		FI;
+		RETURN true;
+	END; # FUNCTION Init_Circuit
+
+
+	FUNCTION Write_In_ISCAS(circuit:Circuit);
+
+	# This function writes a description of the circuit in ISCAS format
+	# on the standard output. For more information about the ISCAS-netlist
+	# format consult the following paper: "The ISCAS '85 benchmark
+	# circuits and netlist format" by David Bryan (bryan@mcnc.org).
+	# This text is also available from the ftp-site mcnc.mcnc.org.
+
+	current,ptr: Nodeptr;
+	faninnrs: Int_Array;
+
+	BEGIN
+		IF NOT Iopen("current_out.isc",1) THEN
+			LOG("ERROR...opening file current_out.isc");
+			RETURN;
+		FI;
+		# Start output of gates
+		FOR i IN 1 .. MAX_NO_OF_GATES DO
+		    current:=circuit.gateptr[i];
+		    IF (current/=NIL) 
+			 AND
+		       (circuit[current].gatetype/=FO_BR) THEN
+			Write_Nodeline(circuit[current].address,
+				circuit[current].gatename,
+				circuit[current].gatetype,
+				circuit[current].fanout,circuit[current].fanin,
+				circuit[current].faults);
+			IF circuit[current].fanin>0 THEN
+				FOR j IN 1..circuit[current].fanin DO
+					ptr:=circuit[current].backward_link[j];
+					faninnrs[j]:=circuit[ptr].address;
+				OD;	
+				Write_Faninline(
+					circuit[current].fanin,faninnrs);
+			FI;
+			IF circuit[current].fanout>1 THEN
+				FOR j IN 1..circuit[current].fanout DO
+					ptr:=circuit[current].forward_link[j];	
+					Write_Fanoutline(
+						circuit[ptr].address,
+						circuit[ptr].gatename,
+						circuit[current].gatename,
+						circuit[ptr].faults);
+				OD;
+			FI;
+		    ELSE
+			LOG("Write_In_ISCAS...(warning) NIL-value encountered");
+		    FI;
+		OD;
+		Write_EOF();
+		Iclose(1);
+	END; # FUNCTION Write_In_ISCAS 
+
+
+	FUNCTION Assign_PI(circuit:SHARED Circuit;address:integer;
+							value:Logic_Value);
+
+	# Assign the value to the PI named address
+        # NOTE: No calculation of the resulting circuit state is carried out !
+
+	BEGIN
+		IF (address<=MAX_NO_OF_INPUTS) AND
+		   (circuit.PI_ptr[address]/=NIL)
+		THEN
+			circuit.PI_value[address]:=value;
+		ELSE
+			LOG("ERROR...wrong PI-assignment !");
+		FI;
+	END; # FUNCTION Assign_PI
+
+        FUNCTION Determine_Goal_Gate(circuit:Circuit;goaladr:OUT integer):
+                                                                boolean;
+
+        # Try to find a gate that must be set propagating in order to get or
+        # to propagate a fault effect.
+        # First the goal is to provide the necessary output at the faulty gate
+        # If this gate does not have a D or NOT_D value on its output its
+        # address is returned in goaladr.
+        # In case there is already a fault effect somewhere in
+        # the circuit, a path is traced from the faulty gate that carries
+        # only D or NOT_D values on its signal lines. At the point where this
+	# path ends and this (end) gate has a DONT_CARE value on its output
+        # The address of this (end) gate is returned in goaladr.
+        # If no gate exists that has one of these properties the function
+        # returns false, if an address is found it returns true.
+
+        address: integer;
+        adrstack: Address_Stack;
+        ptr,flink: Nodeptr;
+
+        BEGIN
+                IF (circuit[circuit.faulty_gate].output/=D) AND
+                   (circuit[circuit.faulty_gate].output/=NOT_D) THEN
+                        # There is no fault effect
+                        goaladr:=circuit[circuit.faulty_gate].address;
+                        RETURN true;
+                FI;
+                # Trace a path starting at the faulty gate
+                FOR i IN 1..circuit[circuit.faulty_gate].fanout DO
+                        flink:=circuit[circuit.faulty_gate].forward_link[i];
+                        IF circuit[flink].output=DONT_CARE THEN
+                                # This is our next goal
+                                goaladr:=circuit[flink].address;
+                                RETURN true;
+                        ELSE
+                                IF (circuit[flink].output=D) OR
+                                   (circuit[flink].output=NOT_D) THEN
+                                        address:=circuit[flink].address;
+                                        adrstack$Push(address);
+                                FI;
+                        FI;
+                OD;
+                # Start tracing
+                WHILE adrstack$Pop(address) DO
+                        ptr:=circuit.gateptr[address];
+                        IF circuit[ptr].output=DONT_CARE THEN
+                                goaladr:=circuit[ptr].address;
+                                RETURN true;
+                        ELSE
+                                IF (circuit[ptr].output=D) OR
+                                   (circuit[ptr].output=NOT_D) THEN
+                                        # Push forward links
+                                        FOR i IN 1..circuit[ptr].fanout DO
+                                                flink:=circuit[ptr].
+                                                       forward_link[i];
+                                                address:=circuit[flink].address;
+                                                adrstack$Push(address);
+                                        OD;
+                                FI;
+                        FI;
+                OD;
+                RETURN false;
+        END; # FUNCTION Determine_Goal
+
+        FUNCTION Trace_To_Unassigned_PI(circuit:Circuit;goal:integer;
+                                        pi_address:OUT integer):boolean;
+
+        # Determine the address of a yet unassigned PI that affects the
+        # gate with address goal.
+        # This is done by backtracing through the circuit, starting at
+        # the gate with address goal. The address of the first PI encountered,
+        # with no value assigned, is returned. 
+        # If such a PI cannot be found an unassigned PI is chosen without
+        # preference.
+
+        adrstack: Address_Stack;
+        address:integer;
+        ptr,blink:Nodeptr;
+
+        BEGIN
+                adrstack$Push(goal);
+                WHILE adrstack$Pop(address) DO
+                        ptr:=circuit.gateptr[address];
+                        IF circuit[ptr].gatetype=INPT THEN
+                           IF circuit.PI_value[address]=DONT_CARE THEN
+                                pi_address:=address;
+                                RETURN true;
+                           FI;
+                        ELSE
+                           # The gate under consideration is not an input
+                           # Push backward links
+                           FOR i IN 1..circuit[ptr].fanin DO
+                                blink:=circuit[ptr].backward_link[i];
+                                address:=circuit[blink].address;
+                                adrstack$Push(address);
+                           OD;
+                        FI;
+                OD;
+                # Failed to find a PI, search for one without tracing back
+                RETURN Get_Unassigned_PI(circuit,pi_address);
+
+        END; # FUNCTION Trace_To_Unassigned_PI
+
+
+
+	FUNCTION Get_Unassigned_PI(circuit:Circuit;address:OUT integer):boolean;
+
+	# This function searches for the address of a primary input of the 
+	# circuit given. This primary input has been a value DONT_CARE
+	# assigned. If such a PI cannot be found the function will return
+	# false.
+
+	BEGIN
+		FOR i IN 1..MAX_NO_OF_INPUTS DO
+			IF (circuit.PI_ptr[i]/=NIL) AND
+			   (circuit.PI_value[i]=DONT_CARE) THEN
+				address:=circuit[circuit.PI_ptr[i]].address;
+				RETURN true;
+			FI;
+		OD;
+		RETURN false;
+	END; # FUNCTION Get_Unassigned_PI
+
+	FUNCTION Get_Gate_Faults(circuit:Circuit;address:integer;
+				 faults:OUT FaultSet):boolean;
+
+	# The value of circuit[circuit.gateptr[address]].faults is returned in
+	# faults if the address is a valid address. In that case the
+	# returnvalue is true else the function returns false.
+
+	BEGIN
+		IF (address<=MAX_NO_OF_GATES) AND
+		   (circuit.gateptr[address]/=NIL) THEN
+			faults:=circuit[circuit.gateptr[address]].faults;
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	END; # FUNCTION Get_Gate_Faults
+
+
+	FUNCTION Get_PI_Value(circuit:Circuit;address:integer;
+				value:OUT Logic_Value):boolean;
+
+	# The value of the primary input (indicated by name) of the circuit is
+	# returned in value. The return value of the function will be true if
+	# the named PI was valid else the return value is false.
+
+	retval:boolean;
+	ptr: Nodeptr;
+
+	BEGIN
+		IF (address<=MAX_NO_OF_INPUTS) AND
+		   (circuit.PI_ptr[address]/=NIL) THEN
+			ptr:=circuit.gateptr[address];
+			IF circuit[ptr].gatetype=INPT THEN
+				value:=circuit.PI_value[address];
+				retval:=true;
+			ELSE
+				retval:=false;
+			FI;
+		ELSE
+			value:=DONT_CARE;
+			retval:=false;
+		FI;
+		RETURN retval;
+	END; #FUNCTION Get_PI_Value
+
+	FUNCTION Gate_Is_Faulty(circuit: Circuit;
+				gateptr:Nodeptr):boolean;
+
+	# The return value indicates whether the gate named by gateptr 
+	# contains a fault (return value: true) or not (return value: false)
+
+	retval: boolean;
+
+	BEGIN
+		IF circuit.faulty_gate=gateptr THEN
+			retval:=true;
+		ELSE
+			retval:=false;
+		FI;
+		RETURN retval;
+	END; # FUNCTION Gate_Is_Faulty
+
+	FUNCTION Undo_Changes(circuit:SHARED Circuit;
+			      changeset:Change_Set);
+
+	# Undo all changes that are in changeset. Return the circuit
+	# in which all changes in changeset are undone.
+
+	gatep: Nodeptr;
+
+	BEGIN
+		FOR changerec IN changeset DO
+			gatep:=circuit.gateptr[changerec.address];
+			circuit[gatep].output:=changerec.old_output;
+		OD;
+	END; # FUNCTION Undo_Changes
+
+	FUNCTION PI_Implication(circuit:SHARED Circuit;truthtable:Truth_Table;
+				pi_address:integer;changeset:OUT Change_Set);
+
+	# Traverse the circuit starting at PI address. Calculate the changes
+	# in the circuit state during the traversal. These changes are 
+	# recorded in changeset and the returned circuit reflects the 
+	# circuit state resulting from the current PI-assignment.
+
+	address:integer;
+	gatep,link:Nodeptr;
+	output:Logic_Value;
+	input_value:Input_Values;
+	changerec: Change_Record;
+	adrqueue: Address_Queue;
+	
+	BEGIN
+# DEBUG
+#	WriteLine("PI_Implication...start");
+# END DEBUG
+		adrqueue$EnQueue(pi_address);
+# DEBUG
+#	adrqueue$PrintQueue();
+# END DEBUG
+		changeset:=Change_Set:{};
+		WHILE adrqueue$DeQueue(address) DO
+			gatep:=circuit.gateptr[address];
+			Init_Input_Values(input_value);
+			IF circuit[gatep].gatetype=INPT THEN
+				input_value[1]:=circuit.PI_value[address];
+			ELSE
+				FOR i IN 1..circuit[gatep].fanin DO
+					link:=circuit[gatep].backward_link[i];
+					input_value[i]:=circuit[link].output;
+				OD;
+			FI;
+			IF Get_PDC_Value(circuit[gatep].gatetype,truthtable,
+					 input_value,circuit[gatep].fanin,
+					 output) THEN
+				IF Gate_Is_Faulty(circuit,gatep) THEN
+					CASE circuit.fault OF
+						Stuck_At_0 => IF output=ONE 
+							      THEN
+								 output:=D;
+							      FI;
+					     |  Stuck_At_1 => IF output=ZERO 
+							      THEN
+								 output:=NOT_D;
+							      FI;
+					ESAC;
+				FI;
+				# DEBUG, If gate is faulty but there's no
+				# fault-effect we could also stop but
+				# stopping now means that we should restore
+				# what we have done until now. This will
+				# be done later when we backtrack.
+				# Output is different from DONT_CARE
+				IF circuit[gatep].output/=output THEN
+					changerec.address:=address;
+					changerec.old_output:=circuit[gatep].
+									output;
+					changeset+:=Change_Set:{changerec};
+					circuit[gatep].output:=output;
+					# Enqueue forward links
+					FOR i IN 1..circuit[gatep].fanout DO
+						link:=circuit[gatep].
+								forward_link[i];
+						adrqueue$EnQueue(circuit[link].
+								 address);
+# DEBUG
+#	adrqueue$PrintQueue();
+# END DEBUG
+					OD;
+				FI;
+			FI;
+		OD;
+# DEBUG
+#	WriteLine("PI_Implication...end");
+# END DEBUG
+	END; # FUNCTION PI_Implication
+
+	FUNCTION Forward_Implication(circuit:SHARED Circuit;
+				     truthtable:Truth_Table);
+
+	# The circuit state will be calculated which follows from the 
+	# current PI-assignments. The variable truthtable contains the
+	# necessary table for determining the output of a certain gate.
+	# The function calculates the values of the circuit nets as far
+	# as possible. This is because not all PI's may have been assigned
+	# a value.
+	# The circuit is traversed in a breadth-first manner.
+	#
+	# NOTE: The correctness of this function should be proven in the
+	#       documentation.
+
+	address: integer;
+	push_links:boolean;
+	gatep,blink: Nodeptr;
+	new_output: Logic_Value;
+	input_value:Input_Values;
+	addr_queue:Address_Queue;
+
+	BEGIN
+		FOR i IN 1..MAX_NO_OF_INPUTS DO
+			IF (circuit.PI_ptr[i]/=NIL) AND
+			   (circuit.PI_value[i]/=DONT_CARE) THEN
+				addr_queue$EnQueue(circuit[circuit.PI_ptr[i]].
+								      address);
+			FI;
+		OD;
+		WHILE addr_queue$DeQueue(address) DO
+			gatep:=circuit.gateptr[address];
+			Init_Input_Values(input_value);
+			IF circuit[gatep].gatetype=INPT THEN
+				input_value[1]:=circuit.PI_value[address];
+			ELSE
+				FOR i IN 1..circuit[gatep].fanin DO
+					blink:=circuit[gatep].backward_link[i];
+					input_value[i]:=circuit[blink].output;
+				OD;
+			FI;
+			IF Gate_Is_Faulty(circuit,gatep) THEN
+				push_links:=false;
+				IF Get_PDC_Value(circuit[gatep].gatetype,
+						  truthtable,input_value,
+						  circuit[gatep].fanin,
+						  new_output) THEN
+					CASE circuit.fault OF
+						Stuck_At_0	=> 
+							IF new_output=ONE THEN
+								circuit[gatep].
+								output:=D;
+								push_links:=
+									   true;
+							FI;
+					     |  Stuck_At_1	=> 
+							IF new_output=ZERO THEN
+								circuit[gatep].
+								output:=D;
+								push_links:=
+									   true;
+							FI;
+					ESAC;
+				FI;
+				IF push_links THEN
+					# Push forward links
+					FOR i IN 1..circuit[gatep].fanout DO
+					  addr_queue$EnQueue(
+						circuit[circuit[gatep].
+						forward_link[i]].address);
+					OD;
+				FI;
+			ELSE
+				# Determine the output value
+				IF Get_PDC_Value(circuit[gatep].gatetype,
+					         truthtable,input_value,
+						 circuit[gatep].fanin,
+				                 new_output) THEN
+# DEBUG, we assume that before Forward_Implication() is called, all
+#        outputs of gates in the circuit that will not be affected by
+#        the PI-assignments will have a value of DONT_CARE assigned.
+				  	# The calculated output is different
+					# from DONT_CARE.
+					circuit[gatep].output:=new_output;
+					# Push forward links
+					FOR i IN 1..circuit[gatep].fanout DO
+					   addr_queue$EnQueue(
+						circuit[circuit[gatep].
+						forward_link[i]].address);
+					OD;
+				FI;
+			FI;
+		OD;
+	END; # FUNCTION Forward_Implication
+
+        FUNCTION Test_Found(circuit:Circuit):boolean;
+
+        # The current PI-assignments form a testpattern iff one or more PO's
+        # are having an output value of D or NOT_D.
+
+        BEGIN
+                # Check all PO's
+                FOR i IN 1..circuit.PO_count DO
+                        IF (circuit[circuit.PO_ptr[i]].output=D) OR
+                           (circuit[circuit.PO_ptr[i]].output=NOT_D) THEN
+                                RETURN true;
+                        FI;
+                OD;
+                RETURN false;
+        END; # FUNCTION Test_Found
+	
+
+        FUNCTION Consistent_State(circuit:Circuit;
+                                  truthtable:Truth_Table):boolean;
+
+        # According to the article of Prabhkar Goel (See: An Implicit
+        # Enumeration Algorithm to Generate Tests for Combinational Logic
+        # Circuits, IEEE transactions on Computers, Vol. C-30, No. 3,
+        # March 1981) the current PI assignments can never lead to a test iff
+        #  1) The signal net (for the given stuck fault) has the same logic
+        #     level as the stuck level.
+        #  OR
+        #  2) There is no signal path from an internal signal net to a primary
+        #     output such that the internal signal net is at a D or NOT_D
+        #     value and all other nets on the path are at X.
+        #
+
+        address:integer;
+        retval:boolean;
+        input_value:Input_Values;
+        output:Logic_Value;
+# DEBUG, dummy shouldn't be needed but is due to a compiler error (?)
+#	dummy: Logic_Value;
+        gatep,flink:Nodeptr;
+        addr_queue:Address_Queue;
+
+        BEGIN
+                # Check proposition 1
+		Init_Input_Values(input_value);
+                gatep:=circuit.faulty_gate;
+		IF circuit[gatep].gatetype=INPT THEN
+			IF NOT(Get_PI_Value(circuit,circuit[gatep].address,
+							input_value[1])) THEN
+				LOG("ERROR...Consistent_State");
+			FI;
+		ELSE
+                	FOR i IN 1..circuit[gatep].fanin DO
+                  	      input_value[i]:=circuit[circuit[gatep].
+						backward_link[i]].output;
+                	OD;
+		FI;
+                IF Get_PDC_Value(circuit[gatep].gatetype,truthtable,
+                                 input_value,circuit[gatep].fanin,output)
+                THEN    # The output is different from DONT_CARE
+                	CASE circuit.fault OF
+				Stuck_At_0      => IF NOT(output=ONE) THEN
+							RETURN false;
+						   FI;
+			     |  Stuck_At_1      => IF NOT(output=ZERO) THEN
+							RETURN false;
+						   FI;
+			ESAC;
+                FI;
+                # Check proposition 2
+                # Search for a possible path which satisfies proposition 2
+                # Stop as soon as one has been found.
+                IF (circuit[gatep].output=D)
+                   OR
+                   (circuit[gatep].output=NOT_D)
+                THEN
+			retval:=false;
+                        addr_queue$EnQueue(circuit[gatep].address);
+                        WHILE NOT addr_queue$IsEmpty() DO
+                                IF addr_queue$DeQueue(address) THEN
+                                FI;
+                                gatep:=circuit.gateptr[address];
+                                # Check if gate is a PO
+                                IF circuit[gatep].fanout = 0 THEN
+                                        retval:=true;
+                                        EXIT;
+                                FI;
+                                # Push all forward links if these gates do not
+                                # have an output value of ONE or ZERO
+                                FOR i IN 1..circuit[gatep].fanout DO
+                                        flink:=circuit[gatep].forward_link[i];
+                                        IF (circuit[flink].output /= ONE)
+                                           AND
+                                           (circuit[flink].output /= ZERO) THEN
+                                                addr_queue$EnQueue(
+                                                      circuit[flink].address);
+                                        FI;
+                                OD;
+                        OD;
+                ELSE
+                        retval:=true;
+                FI;
+                RETURN retval;
+        END; # FUNCTION Consistent_State
+
+
+        FUNCTION Try(circuit:SHARED Circuit;truthtable:Truth_Table):boolean;
+
+	# Repeatedly a new, yet unassigned PI is chosen and assigned a value.
+        # If the resulting circuit state is consistent (it is possible that
+	# the current (partial) valuation of PIs will lead to a test) then
+	# the following PI is chosen.
+        # If the circuit state is inconsistent (going any further will not
+        # result in a testvector) backtracking is performed. Backtracking
+	# consists of undoing an PI-assignment made and assigning this PI the
+	# alternative value. An indicator associated with PI-assignments shows
+	# whether or not the alternative value has been tried.
+	# When the backtrack limit (BACKTRACK_LIMIT) is reached this process
+	# is stopped, the function returns false in that case.
+        #
+        # Furthermore, if this function returns true, the current
+        # valuation of the PI's show the applicable testvector.
+
+	addrstack: PI_Stack;
+	pi_rec:PI_record;
+	goaladdress,backtracks: integer;
+
+	BEGIN
+		backtracks:=0;
+# DEBUG 
+				# Is there an unassigned PI ?
+				IF Determine_Goal_Gate(circuit,goaladdress) THEN
+                                      IF Trace_To_Unassigned_PI(circuit,
+                                              goaladdress,pi_rec.address) THEN
+                                            # OK, assign it a value
+                                            Assign_PI(circuit,pi_rec.address,
+                                                                       ZERO);
+                                            pi_rec.alt_tried:=false;
+					    PI_Implication(circuit,truthtable,
+					       pi_rec.address,pi_rec.changeset);
+                                            addrstack$Push(pi_rec);
+# DEBUG
+#               Write_PI_Assignments(circuit);
+#	       Write_Circuit_State(circuit);
+# END DEBUG
+                                       ELSE
+					    LOG("Try()...ERROR..no more PIs");
+                                       FI;
+                               ELSE
+					LOG("Try()...ERROR..goal-gate");
+                               FI;
+# END DEBUG 
+		# Search a test pattern
+		WHILE NOT addrstack$IsEmpty() DO
+			IF Test_Found(circuit) THEN
+				RETURN true;
+			FI;
+			IF backtracks>BACKTRACK_LIMIT THEN
+# DEBUG
+				LOG("TRY...backtrack limit, fault aborted");
+				Write_Gate_Description(circuit,
+					circuit[circuit.faulty_gate].address);
+				CASE circuit.fault OF
+					Stuck_At_0 => WriteLine("Fault: s-a-0");
+				     |	Stuck_At_1 => WriteLine("Fault: s-a-1");
+				ESAC;
+# END DEBUG
+				RETURN false;
+			FI;
+			# Is there need for backtracking
+			IF NOT Consistent_State(circuit,truthtable) THEN
+				# Undo latest made PI-assignment which
+				# alternative has not been tried
+				IF addrstack$Pop(pi_rec) THEN
+				FI;
+				WHILE pi_rec.alt_tried DO
+					Undo_Changes(circuit,pi_rec.changeset);
+					Assign_PI(circuit,pi_rec.address,
+								    DONT_CARE);
+					IF NOT addrstack$Pop(pi_rec) THEN
+						# Fault is undetectable 
+						RETURN false;
+					FI;
+				OD;
+				# A PI-assignment has been found, the
+				# alternative value can be tried
+				# First undo this PI-assignment
+				Undo_Changes(circuit,pi_rec.changeset);
+				Assign_PI(circuit,pi_rec.address,ONE);
+				pi_rec.alt_tried:=true;
+				PI_Implication(circuit,truthtable,pi_rec.
+						address,pi_rec.changeset);
+				addrstack$Push(pi_rec);
+				backtracks+:=1;
+			ELSE
+				# Is there an unassigned PI ?
+				IF Determine_Goal_Gate(circuit,goaladdress) THEN
+                                      IF Trace_To_Unassigned_PI(circuit,
+                                              goaladdress,pi_rec.address) THEN
+                                            # OK, assign it a value
+                                            Assign_PI(circuit,pi_rec.address,
+                                                                       ZERO);
+                                            pi_rec.alt_tried:=false;
+					    PI_Implication(circuit,truthtable,
+					       pi_rec.address,pi_rec.changeset);
+                                            addrstack$Push(pi_rec);
+                                       ELSE
+					    LOG("Try()...ERROR..no more PIs");
+					    RETURN false;
+                                       FI;
+                               ELSE
+					LOG("Try()...ERROR..goal-gate");
+					RETURN false;
+                               FI;
+			FI;
+		OD;
+		RETURN false; # Should only happen when fault undetectable
+        END; #FUNCTION Try
+
+        FUNCTION Get_Testvector(circuit:SHARED Circuit;
+                                truthtable:Truth_Table):boolean;
+
+        # This function generates a testvector for the given circuit
+        # The variable circuit contains a circuit-description which
+        # includes a description of the fault and a description of the
+        # current state of the circuit.
+        # This function returns true if a test pattern is found
+        # if somehow no test pattern could be found false is returned.
+        #
+        # This implementation is based on the article: 'An Implicit
+        # Enumeration Algorithm to Generate Tests for Combinational
+        # Circuits' by Prabhakar Goel, IEEE Transactions on Computers,
+        # Vol. C-30 no. 3 march 1981.
+
+        BEGIN
+# DEBUG
+#	LOG("Get_Testvector....");
+#	Write_Gate_Description(circuit,circuit[circuit.faulty_gate].address);
+# END DEBUG
+                RETURN Try(circuit,truthtable);
+        END; # FUNCTION Get_Testvector
+
+
+        FUNCTION Write_PI_Assignments(circuit:Circuit);
+
+        # Print the current assignments to all PI's onto the standard output
+
+        BEGIN
+#		WriteLine();
+                FOR i IN 1..MAX_NO_OF_INPUTS DO
+			IF circuit.PI_ptr[i]/=NIL THEN
+#                        	Write("Input no. ",i," = ");
+                        	CASE circuit.PI_value[i] OF
+                           	     ZERO      =>    Write("0");
+                           	  |  ONE       =>    Write("1");
+                           	  |  D         =>    Write("D");
+                            	  |  NOT_D     =>    Write("N");
+                            	  |  DONT_CARE =>    Write("X");
+                        	ESAC;
+			FI;
+                OD;
+		WriteLine();
+        END; # FUNCTION Write_PI_Assignments
+
+
+        FUNCTION Get_PI_Assignments(circuit:Circuit;testvector:OUT Testvector);
+
+        # Return the currently assigned values to the PIs of the circuit in
+        # testvector.
+
+	BEGIN
+		FOR i IN 1..MAX_NO_OF_INPUTS DO
+			IF (circuit.PI_ptr[i]/=NIL) AND
+			   (circuit.PI_value[i]/=DONT_CARE) THEN
+				testvector[i]:=circuit.PI_value[i];
+			ELSE
+				testvector[i]:=DONT_CARE;
+			FI;
+		OD;
+	END; # FUNCTION Get_PI_Assignments
+
+
+        FUNCTION Make_PI_Assignments(circuit:SHARED Circuit;
+                                     testvector:Testvector);
+
+        # Make the input assignments to the PIs of circuit as specified in
+        # testvector.
+
+	BEGIN
+		FOR i IN 1..MAX_NO_OF_INPUTS DO
+			IF (circuit.PI_ptr[i]/=NIL) AND
+			   (testvector[i]/=DONT_CARE) THEN
+				circuit.PI_value[i]:=testvector[i];
+			ELSE
+				circuit.PI_value[i]:=DONT_CARE;
+			FI;
+		OD;
+	END; # FUNCTION Make_PI_Assignments
+
+	
+
+	FUNCTION Write_Gate_Description(circuit:Circuit;address:integer);
+
+	# Write the description of the gate indicated by its address
+	# onto stdout
+
+	node: Nodeptr;
+	stype:string;
+
+	BEGIN
+		node:=circuit.gateptr[address];
+		IF node=NIL THEN
+			WriteLine("Node = NIL");
+		ELSE
+			WriteLine();
+			WriteLine("Name    = ",circuit[node].gatename);
+			IF Type_To_String(circuit[node].gatetype,stype) THEN
+				WriteLine("Gatetype = ",stype);
+			ELSE
+				WriteLine("Gatetype = ???");
+			FI;
+			WriteLine("Address = ",circuit[node].address);
+			WriteLine("Fanin   = ",circuit[node].fanin);
+			WriteLine("Fanout  = ",circuit[node].fanout);
+		FI;
+	END; # FUNCTION Write_Gate_Description
+
+#DEBUG
+        FUNCTION Write_Circuit_State(circuit:Circuit);
+
+        # Write the state of all gates on standard output
+
+        ptr: Nodeptr;
+
+        BEGIN
+                FOR i IN 1..MAX_NO_OF_GATES DO
+                        ptr:=circuit.gateptr[i];
+			IF ptr/=NIL THEN
+                        	Write(circuit[ptr].address," ");
+                        	CASE circuit[ptr].output OF
+                      		     ZERO            => Write("ZERO         ");
+                             	  |  ONE             => Write("ONE          ");
+                                  |  D               => Write("D            ");
+                                  |  NOT_D           => Write("NOT_D        ");
+                                  |  DONT_CARE       => Write("DONT_CARE    ");
+                        	ESAC;
+                        	WriteLine();
+			FI;
+                OD;
+        END; # FUNCTION Write_Circuit_State
+
+# DEBUG
+        FUNCTION Do_Test(circuit:SHARED Circuit;truthtable:Truth_Table);
+
+
+        # Assign a testvector to the PI's and determine the state of the
+        # circuit (through calling Forward_Implication()).
+        # Print the current Circuit-state.
+
+	changeset: Change_Set;
+
+        BEGIN
+          LOG("Performing a test by placing a testvector on the PIs");
+	  # Say which gate is faulty
+	  Init_Circuit_Fault(circuit,602,Stuck_At_1);
+	  # Initialize circuit state
+	  Init_Circuit_State(circuit);
+# DEBUG
+	  IF Get_Testvector(circuit,truthtable) THEN
+		WriteLine();
+		WriteLine("YO, testvector found, 602 s-a-1");
+	 	Write_PI_Assignments(circuit);
+		RETURN;
+	  ELSE
+		WriteLine();
+		WriteLine("WRONG, no testvector found, 602 s-a-1");
+#		Write_Circuit_State(circuit);
+#		Forward_Implication(circuit,truthtable);
+#		Write_Circuit_State(circuit);
+		RETURN;
+	  FI;
+# END DEBUG
+          # Assign testvector to all PI's
+          circuit.PI_value[3]:=ZERO;
+          # Write circuit-state on standard-output
+	  Write_PI_Assignments(circuit);
+          Write_Circuit_State(circuit);
+          # Perform forward-implication
+          PI_Implication(circuit,truthtable,3,changeset);
+          # Write circuit-state on standard-output
+	  Write_PI_Assignments(circuit);
+          Write_Circuit_State(circuit);
+	  IF Consistent_State(circuit,truthtable) THEN
+		WriteLine("Consistent_State returns true");
+	  ELSE
+		WriteLine("Consistent_State returns false");
+	  FI;
+          IF Test_Found(circuit) THEN
+                WriteLine("HOERA");
+	  ELSE
+		WriteLine("Something went wrong");
+          FI;
+          WriteLine("End of Do_Test");
+        END; # FUNCTION DO_Test
+
+END; # MODULE IMPLEMENTATION Circuit

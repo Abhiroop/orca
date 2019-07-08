@@ -1,0 +1,108 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+OBJECT IMPLEMENTATION Game;
+
+	TYPE Board    = ARRAY [integer 1..Nsqrt, integer 1..Nsqrt] OF integer;
+	TYPE Path     = ARRAY [integer] OF Board;
+	TYPE Position = RECORD x, y : integer; END;
+
+	start : Board;
+	goal : ARRAY [integer 0 .. Npuzzle] OF Position;
+
+
+	OPERATION Value(x,y : integer) : integer;
+	BEGIN
+		RETURN start[x,y];
+	END;
+
+
+	OPERATION Distance(v : integer; x,y : integer): integer;
+	BEGIN
+		IF v = 0 THEN
+		    RETURN 0;
+		ELSE
+		    RETURN ABS(goal[v].x - x) + ABS(goal[v].y - y);
+		FI;
+	END;
+
+	FUNCTION step( board : Board; x,y, n,m : integer) : Board;
+	v : integer;
+	BEGIN
+		v := board[x,y];
+		board[x,y] := board[n,m];
+		board[n,m] := v;
+		RETURN board;
+	END;
+
+	OPERATION Init(length : integer);
+	path : Path[0 .. length];
+	v, x, y, nx, ny : integer;
+	N : integer;
+	BEGIN
+		v := 0;
+		FOR j IN 1 .. Nsqrt DO
+	    	    FOR i IN 1 .. Nsqrt DO
+			goal[v].x := i;
+			goal[v].y := j;
+			path[0][i,j] := v;
+			v +:= 1;
+	    	    OD;
+		OD;
+
+		# Generate a starting position by shuffling the blanc around
+		# in cycles. Just cycling along the outer bounds of the
+		# board yields low quality start positions whose solutions
+		# require less than 'length' steps. Therefore we use two
+		# alternating cycling dimensions.
+
+		N := Nsqrt-1;
+		x := 1; y := 1;		# position of the blanc
+		FOR i IN 1 .. length DO
+		    IF x = 1 THEN
+			IF y = N THEN
+			    nx := x+1;
+			    ny := y;
+			ELSE
+			    nx := x;
+			    ny := y+1;
+			    IF y = 1 THEN
+				IF N < Nsqrt THEN
+				    N := Nsqrt;
+				ELSE
+				    N := Nsqrt-1;
+				FI;
+			    FI;
+			FI;
+		    ELSIF x = N THEN
+			IF y = 1 THEN
+			    nx := x-1;
+			    ny := y;
+			ELSE
+			    nx := x;
+			    ny := y-1;
+			FI;
+		    ELSE
+			IF y = N THEN
+			    nx := x+1;
+			    ny := y;
+			ELSE
+			    nx := x-1;
+			    ny := y;
+			FI;
+		    FI;
+		    path[i] := step( path[i-1], x, y, nx, ny);
+		    x := nx; y := ny;
+		OD;
+
+		FOR j IN 1 .. Nsqrt DO
+	    	    FOR i IN 1 .. Nsqrt DO
+			v := path[length][i,j];
+			start[i,j] := v;
+	    	    OD;
+		OD;
+	END;
+
+BEGIN
+END;

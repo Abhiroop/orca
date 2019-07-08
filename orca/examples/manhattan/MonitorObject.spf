@@ -1,0 +1,20 @@
+OBJECT SPECIFICATION MonitorObject;
+
+	# Selectors:
+	OPERATION WorkerActive () : boolean;
+	OPERATION WorkerWaiting () : boolean;
+	OPERATION WorkerStop () : boolean;	# True when worker should stop
+	OPERATION JobsDone () : integer;
+
+	# Modifiers:
+	OPERATION WorkerStarted ();
+	OPERATION WorkerWait ();
+	OPERATION WorkerRecommence ();
+	OPERATION WorkerDone ();
+	OPERATION WorkerDoneOneJob ();
+
+	# Controlers:
+	OPERATION stopWorker ();
+
+END;
+

@@ -1,0 +1,13 @@
+MODULE SPECIFICATION Eval;
+
+FROM Types IMPORT DataRecord,EvalType;
+
+	FUNCTION Analyse(dr : SHARED DataRecord);
+	FUNCTION Evaluate(best : SHARED EvalType; dr : SHARED DataRecord;
+			  color,level,lmove : integer);
+	FUNCTION Threat(dr : SHARED DataRecord; color : integer;
+			move : integer) : integer;
+	FUNCTION Guards(dr : SHARED DataRecord; player : integer;
+		        x,y : integer; ap,dp,minval : SHARED integer);
+
+END;

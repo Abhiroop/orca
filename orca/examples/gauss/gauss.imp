@@ -1,0 +1,182 @@
+MODULE IMPLEMENTATION gauss;
+	# Pseudo-Gaussian elimination in Orca.
+	# Based on the Platinum program by R. Fowler.
+
+	FROM RowCollection IMPORT RowCollection, RowType;
+	IMPORT IntObject;
+	FROM Time IMPORT SysMilli, PrintTime;
+	FROM Finish IMPORT Finish;
+
+	CONST N = 300;
+
+	TYPE matrix = ARRAY[integer] OF RowType;
+
+	FUNCTION InitializeTable(nslaves, id, nrow: integer;
+						 C: OUT matrix[1..nrow][1..N]); 
+	FUNCTION TestMatrix(C: matrix; id, nslaves: integer): integer;
+
+	FUNCTION DoIteration(C: SHARED matrix; pivot: RowType;
+			     iter, StartRow: integer);
+		factor: integer;
+	BEGIN
+		FOR row IN StartRow..UB(C) DO
+			factor := C[row][iter] / pivot[iter];
+			FOR col IN iter .. N DO
+				C[row][col] := C[row][col]-(pivot[col]*factor);
+			OD;
+		OD;
+	END;
+		
+
+	FUNCTION ComputeRows(C: SHARED matrix; PivotRows: SHARED RowCollection;
+				id, nslaves: integer);
+		pivot: RowType;
+		StartRow: integer;
+	BEGIN  # Body of slave processes.
+		StartRow := id;
+		FOR iter IN 1 .. N DO  # do N iterations
+			IF (iter % nslaves) = id THEN
+				# I have pivot row; add it to PivotRows.
+				pivot := C[(iter - 1) / nslaves + 1];
+				PivotRows$AddRow(iter, pivot);
+			ELSE
+				# Someone else computed the pivot; wait for it.
+				pivot := PivotRows$AwaitRow(iter);
+			FI;
+			WHILE iter >= StartRow DO StartRow +:= nslaves; OD;
+			DoIteration(C, pivot, iter,
+						(StartRow - 1)/ nslaves + 1);
+		OD;
+	END;
+
+
+	# Description of slave processes.
+	PROCESS slave(PivotRows : SHARED RowCollection;
+			id, nslaves: integer; turn, go: SHARED IntObject);
+		C: matrix;
+		nrow: integer;
+	BEGIN
+		# Slave "id" takes care of rows id, i+nslaves, id+2*nslaves, ...
+
+		nrow := N / nslaves;
+		IF (N % nslaves /= 0) AND (id /= 0) AND (id <= (N % nslaves))
+		THEN
+			nrow +:= 1;
+		FI;
+		InitializeTable(nslaves, id, nrow, C);
+		go$AwaitValue(1);
+		# IF id = 1 THEN
+		#	WriteLine("Initial matrix: ");
+		#	PrintMatrix(C);
+		# FI;
+		#WriteLine("start computing");
+		ComputeRows(C, PivotRows, id, nslaves);
+		turn$AwaitValue(id);  # Wait until it's my turn to print results
+		IF TestMatrix(C, id, nslaves) > 0 THEN	# test output
+			WriteLine("error in slave: ", id);
+		FI;
+		turn$assign(id+1);  # Allow next slave to print
+	END;
+
+
+	FUNCTION InitializeTable(nslaves, id, nrow: integer;
+						 C: OUT matrix[1..nrow][1..N]); 
+		row: integer;
+	BEGIN
+		# The syntetic input is:
+		#
+		#  2 2 2 2 2  .
+		#  2 4 4 4 2  .
+		#  2 4 6 6 6  .
+		#  2 4 6 8 8  .
+		#  2 4 6 8 10 .
+		#  . . . . .  .
+
+		# IF id = 1 THEN
+		#	WriteLine("InitializeTable: id = ", id, " nrows =",
+		# 	nrow, " nslaves = ", nslaves);
+		# FI;
+
+		row := 0;
+		FOR i IN 1 .. N DO
+			IF (i % nslaves) = id THEN
+				row +:= 1;
+				FOR j IN 1 .. i DO
+					C[row][j] := 2*j;
+				OD;
+				FOR j IN i+1 .. N DO
+					C[row][j] := 2*i;
+				OD;
+			FI;
+		OD;
+	END;
+
+
+	FUNCTION TestMatrix(C: matrix; id, nslaves: integer): integer;
+		i: integer;
+		row: integer;
+		err: integer;
+	BEGIN
+		# Test the output, it should look like:
+		#
+		# 2 2 2 2 2  .
+		# 0 2 2 2 2  .
+		# 0 0 2 2 2  .
+		# 0 0 0 2 2  .
+		# 0 0 0 0 2  .
+		# . . . . .  .
+		err := 0;
+		IF id = 0 THEN
+			i := nslaves;
+		ELSE
+			i := id;
+		FI;
+		WHILE i <= N DO
+			row := (i - 1) / nslaves + 1;
+			FOR j IN 1..i-1 DO
+				IF C[row][j] /= 0 THEN err +:= 1; FI;
+			OD;
+			FOR j IN i .. N DO
+				IF C[row][j] /= 2 THEN err +:= 1; FI;
+			OD;
+			i +:= nslaves;
+		OD;
+		RETURN err;
+	END;
+
+
+#	FUNCTION PrintMatrix(C: matrix);
+#	BEGIN
+#		FOR i IN LB(C) .. UB(C) DO
+#			FOR j IN LB(C[i])..UB(C[i]) DO
+#				Write(C[i][j], ", ");
+#			OD;
+#			WriteLine();
+#		OD;
+#	END;
+
+
+
+	# Description of master process
+	PROCESS OrcaMain();
+		PivotRows: RowCollection;
+		nslaves: integer;
+		turn: IntObject; # used to coordinate printing
+		start, stop: integer;
+		go: IntObject;
+	BEGIN
+		PivotRows$init(N);
+		go$assign(0);
+		turn$assign(0); # initialize turn
+		nslaves := NCPUS();
+		FOR i IN 0 .. nslaves-1 DO
+			FORK slave(PivotRows, i, nslaves, turn, go) ON(i);
+		OD;
+		start := SysMilli();
+		go$assign(1);	# start slaves
+		turn$AwaitValue(nslaves);
+		stop := SysMilli();
+		PrintTime("Gauss", stop-start);
+		Finish();
+	END;
+END;

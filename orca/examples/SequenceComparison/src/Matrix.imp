@@ -1,0 +1,226 @@
+MODULE IMPLEMENTATION Matrix;
+
+    FROM InOut    IMPORT OpenOutputFile, CloseOutput;
+
+
+
+FUNCTION InitMatrix( Row, Col : integer; 
+                     Mat : OUT SeqMatrix[0..Row][0..Col] );
+BEGIN
+        FOR c IN 0..Col DO
+	    Mat[0][c].VALUE := 0.00;
+        OD;
+
+        FOR r IN 0..Row DO
+	    Mat[r][0].VALUE := 0.00;
+        OD;
+END;
+
+FUNCTION MaxScore( a,b : Vertex ): Vertex;
+BEGIN
+        IF a.VALUE > b.VALUE THEN 
+		RETURN a;
+	ELSE 
+		RETURN b;
+        FI;
+END;
+
+
+FUNCTION ComputeDiagScore( row, col :integer;
+                  seq1, seq2 : string;
+		  m : SeqMatrix ): Vertex;
+     diag : Vertex;
+BEGIN
+	diag.IVALUE := row - 1;
+        diag.JVALUE := col - 1;
+
+        IF (diag.IVALUE = 0) OR (diag.JVALUE = 0) THEN
+              diag.VALUE := 0.00;
+        ELSE
+	      diag.VALUE := m[diag.IVALUE][diag.JVALUE].VALUE;
+        FI;
+        IF seq1[row] = seq2[col] THEN
+              diag.VALUE +:=  MATCH;
+        ELSE
+	      diag.VALUE +:= MISMATCH;
+        FI;
+
+        RETURN diag;
+END;
+
+
+FUNCTION ComputeWeightValue( k : real ): real;
+BEGIN
+	RETURN 1.00 + k/3.00;
+END;
+     
+
+FUNCTION ComputeMaxRowScore( row, col :integer; m : SeqMatrix ): Vertex;
+     k : real;
+     score, max : Vertex;
+
+BEGIN
+     max.VALUE := 0.00;
+     max.IVALUE := -1;
+     max.JVALUE := -1;
+     k := FLOAT(col) - 1.00;
+     
+     FOR l IN 1..col - 1 DO
+	  score.IVALUE := row;
+          score.JVALUE := l;
+          score.VALUE  := m[row][l].VALUE - ComputeWeightValue(k);
+          max := MaxScore(max,score);
+          k -:= 1.00;
+     OD;
+ 
+	RETURN max;
+END;
+
+	 
+FUNCTION ComputeMaxColScore( row, col :integer; m : SeqMatrix ): Vertex;
+     k : real;
+     score, max : Vertex;
+
+BEGIN
+     max.VALUE := 0.00;
+     max.IVALUE := -1;
+     max.JVALUE := -1;
+     k := FLOAT(row) - 1.00;
+     
+     FOR l IN 1..row - 1 DO
+	  score.IVALUE := l;
+          score.JVALUE := col;
+          score.VALUE  := m[l][col].VALUE - ComputeWeightValue(k);
+          max := MaxScore(max,score);
+          k -:= 1.00;
+     OD;
+ 
+	RETURN max;
+END;
+
+
+FUNCTION ComputeScoreMatrix( Seq1, Seq2 : string;
+                             Part       : Partition;
+                             InMat      : SHARED SeqMatrix;
+                             Imax, Jmax : OUT integer ): Vertex;
+    maxrow, maxcol, max, nul, diagscore : Vertex;
+BEGIN
+    nul.VALUE := 0.00;
+    nul.IVALUE := -2;
+    nul.JVALUE := -2;
+    max.VALUE := 0.00;
+    max.IVALUE := -1;
+    max.JVALUE := -1;
+ 
+    FOR i IN Part.I1..Part.I3 DO
+	FOR j IN Part.J1..Part.J2 DO
+		maxrow    := ComputeMaxRowScore(i,j,InMat);
+		maxcol    := ComputeMaxColScore(i,j,InMat);
+		diagscore := ComputeDiagScore(i,j,Seq1,Seq2,InMat);
+                InMat[i][j] := MaxScore(MaxScore(maxrow,maxcol),
+			   	         MaxScore(diagscore,nul));
+
+		IF max.VALUE <= InMat[i][j].VALUE THEN
+			max  := InMat[i][j];
+			Imax := i;
+			Jmax := j;
+		FI;
+        OD;
+    OD;
+	RETURN max;
+END;
+
+
+FUNCTION FindBestLalign( Imax, Jmax : integer;
+                         Max_vertex : Vertex;
+			 Seq1, Seq2 : string;
+                         Mat        : SeqMatrix ): Result;
+    temp: Vertex;
+    res : Result;
+    itemp, idiag, jtemp, jdiag : integer;
+BEGIN
+	itemp         := Imax;
+        idiag         := Max_vertex.IVALUE;
+        jtemp         := Jmax;
+        #WriteLine("Imax and Jmax ",itemp,jtemp);
+        jdiag         := Max_vertex.JVALUE;
+	temp          := Max_vertex;  
+        res.ENDI      := Imax;
+        res.ENDJ      := Jmax;
+        res.SCORE     := Max_vertex.VALUE;
+        res.MATCH     := 0;
+        res.MISMATCH  := 0;
+        res.AL_LEN    := 0;
+        res.MATCH_PER := 0.00;
+        res.GAPS      := 0;
+
+	WHILE (temp.VALUE /= 0.00) DO
+
+            IF (itemp - 1 = idiag ) AND (jtemp - 1 = jdiag) THEN
+
+                  IF Seq1[itemp] = Seq2[jtemp] THEN
+                         res.MATCH +:= 1;
+                  ELSE
+		         res.MISMATCH +:= 1;
+                  FI;
+            ELSE
+		  res.GAPS +:= 1;
+            FI;
+
+	    res.AL_LEN +:= 1;
+	    itemp := idiag;
+            jtemp := jdiag;
+
+            IF (itemp = 0) OR (jtemp = 0) THEN
+		  temp.VALUE := 0.00;
+            ELSE
+            	  temp  := Mat[itemp][jtemp];
+                  idiag := temp.IVALUE;
+                  jdiag := temp.JVALUE;
+            FI;
+	OD;
+
+        res.STARTI := itemp + 1;
+        res.STARTJ := jtemp + 1;
+        res.MATCH_PER := (100.00 * FLOAT(res.MATCH)) / 
+                        FLOAT(res.AL_LEN);
+
+        RETURN res;
+
+END;
+ 
+
+FUNCTION PlotMatrix( Row, Col : integer; Mat : SeqMatrix );
+BEGIN
+
+    IF OpenOutputFile("matrix.OUT") THEN
+          FOR i IN 0..Row DO
+   	      FOR j IN 0..Col DO
+	  	    Write(" ",Mat[i][j].VALUE);
+              OD;
+	    WriteLine();
+          OD;
+        CloseOutput();
+    FI;
+END;
+
+
+FUNCTION ShowResult( res : Result );
+BEGIN 
+   WriteLine();
+   WriteLine(" ********************************************* ");
+   WriteLine(" Similarity Score: ",res.SCORE);
+   WriteLine(" Match Percentage: ",res.MATCH_PER);
+   WriteLine(" Number of Matches : ",res.MATCH);
+   WriteLine(" Number of Mismatches : ",res.MISMATCH);
+   WriteLine(" Total Length of Gaps : ",res.GAPS);
+   WriteLine(" Total Length of Alignment : ",res.AL_LEN);
+   WriteLine(" Begins at ",res.STARTI," ",res.STARTJ," and Ends at ",res.ENDI,
+           " ",res.ENDJ);
+   WriteLine(" ********************************************* ");
+   WriteLine();   
+END;
+
+END;
+
+

@@ -1,0 +1,13 @@
+#!/bin/csh -f
+#
+# Create $1, including all directories leading to $1 if necessary.
+
+set bin  = /usr/proj/panda/bin
+set this = mkpath
+
+if (! -d $1) then
+	set b = `basename $1`
+	set d = `dirname $1`
+	if (! -d $d) $bin/$this $d
+	mkdir $1
+endif

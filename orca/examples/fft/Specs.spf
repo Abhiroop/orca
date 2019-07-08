@@ -1,0 +1,10 @@
+MODULE SPECIFICATION Specs;
+CONST nn2=128;
+CONST iproc=8;
+CONST ilog=3; # ilog =  logarithme (grondtal 2) van iproc
+CONST nproc=nn2 / iproc;
+CONST nv=nn2+8;
+CONST pi2=1.57079632679489661923E+00;
+TYPE vector=ARRAY[integer 0..nv] OF longreal;
+TYPE vecproc = ARRAY[integer 0..nproc] OF longreal;
+END;

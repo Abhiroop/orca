@@ -1,0 +1,18 @@
+MODULE SPECIFICATION ConstructionModule;
+
+	FROM TspTypes IMPORT
+		TourArray,
+		NodeSubset,
+		NodeIndex;
+	FROM TourModule IMPORT
+		Tour;
+	IMPORT SpecificationObject;
+
+
+	FUNCTION NearestNeighbour (tour : OUT Tour;
+				nodes : NodeSubset; 
+				start : NodeIndex; 
+				spec : SpecificationObject);
+
+
+END;

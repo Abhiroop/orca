@@ -1,0 +1,56 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION pingpong;
+
+	IMPORT IntObject;
+	FROM Time IMPORT GetTime;
+	FROM Finish IMPORT Finish;
+	FROM args IMPORT Argc, Argv;
+	FROM conversions IMPORT StringToInt;
+
+	CONST	MAXCOUNT = 1000;
+
+	PROCESS slave(counter, end: SHARED IntObject; maxcount: integer);
+		i : integer;
+	BEGIN
+		WriteLine("Enter Slave");
+		i := MYCPU();
+		WHILE i <= maxcount DO
+			counter$AwaitValue(i);
+			WriteLine(i);
+			i +:= NCPUS();
+			counter$inc();
+		OD;
+		end$dec();
+	END;
+
+
+	PROCESS OrcaMain();
+		counter, end : IntObject;
+		start, stop : integer;
+		maxcount : integer;
+	BEGIN
+		# WriteLine("Enter Main");
+		counter$assign(0);
+		end$assign(NCPUS());
+		IF Argc() < 2 THEN
+			maxcount := MAXCOUNT;
+		ELSIF Argc() = 2 THEN
+			maxcount := StringToInt(Argv(1), start);
+		ELSE
+			WriteLine("Usage: ", Argv(0), " <N>");
+			RETURN;
+		FI;
+		start := GetTime();
+		FOR i IN 2..NCPUS() DO
+			FORK slave(counter, end, maxcount) ON (i-1);
+		OD;
+		FORK slave(counter, end, maxcount);
+		end$AwaitValue(0);
+		stop := GetTime();
+		WriteLine("time = ", (stop-start)/10, ".", (stop-start)%10, " sec.");
+		Finish();
+	END;
+END;

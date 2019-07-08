@@ -1,0 +1,460 @@
+OBJECT IMPLEMENTATION buffer;
+	FROM AwariTypes IMPORT GoedelNr, GTV;
+	FROM InOut IMPORT  Flush;
+
+	#CONST MAXIN = 80000;
+
+	CONST MAXIN = 50000;	# limit buffer size to shorten migration time
+
+	#CONST MAXIN = 250000;
+
+	#parameters for s=16, p=16
+	#CONST MAXIN = 250000;
+
+	CONST MINSIZE = 20;
+	# CONST MINSIZE = 10;
+		# try to send messages with >= MINSIZE items
+			
+
+	CONST CELLSIZE = 1000;
+
+	TYPE cellp = NODENAME OF OutputBuffers;
+
+	TYPE header =
+	    ARRAY[integer] OF
+		RECORD
+			outsize: integer;	# size of all cells
+			maxsize: integer;	# maximum size
+			outprio: integer;	# priority
+			first: cellp;		# first cell
+		END;
+	
+	TYPE OutputBuffers =
+		GRAPH
+			h: header;
+			ncells: integer;
+			maxcells: integer;
+		NODES
+			cellsize: integer;
+			next: cellp;
+			outGoedel: GoedelArray;
+			outGTV: GTVarray;
+		END;
+
+
+	# status of the object:
+
+	phase: integer;
+		# 1= worker is doing local partition
+		# 2= worker is in HandleTermination
+
+	in1, in2, insize : integer;
+	#inbuf: buftype;
+	inGoedel: GoedelArray;
+	inGTV: GTVarray;
+
+	OutBufs: OutputBuffers;
+	totalOut: integer;	# total number of items ever in output buffers
+	totalIn: integer;	# total number of items ever in input buffer
+	SumOutSize: integer;	# sum of individual outsize fields
+	OutEmpty: boolean;	# true want all items have been _delivered_ at
+				# the receiving cpus and all output queues
+				# are empty
+
+	ready: integer;	# messages ready to be sent (ie >= MINSIZE)
+
+	terminate: boolean;
+
+	# for statistics
+	maxinsize, maxoutsize: integer;
+	hipriocnt, lowpriocnt: integer;
+	sent, sentsmall: integer;
+
+
+	FUNCTION MakeGoedelArray(siz: integer; a: OUT GoedelArray[0 .. siz-1]);
+	BEGIN
+	END;
+
+	FUNCTION MakeGTVarray(siz: integer; a: OUT GTVarray[0 .. siz-1]);
+	BEGIN
+	END;
+
+	FUNCTION MakeHeader(p: integer; h: OUT header[0 .. p-1]);
+	BEGIN
+		FOR i IN 0 .. p-1 DO
+			h[i].outsize := 0;
+			h[i].maxsize := 0;
+			h[i].outprio := 0;
+			h[i].first := NIL;
+		OD;
+	END;
+
+
+	# This is a separate operation; putting it in OutPut doesn't work;
+	# bug in the rts .... ???
+
+	OPERATION SetPhase(p: integer);
+	BEGIN
+		phase := p;
+	END;
+
+	OPERATION GetLoad(load: OUT integer): boolean;
+	BEGIN
+		IF terminate THEN
+			RETURN false;
+		ELSE
+			IF phase = 1 THEN
+				load := -1;
+			ELSE
+				load := insize;
+			FI;
+			RETURN true;
+		FI;
+	END;
+
+	OPERATION InitBuffer(p: integer);
+	BEGIN
+		MakeHeader(p, OutBufs.h);
+		OutBufs.ncells := 0;
+		OutBufs.maxcells := 0;
+		MakeGoedelArray(MAXIN, inGoedel);
+		MakeGTVarray(MAXIN, inGTV);
+		in1 := 0;
+		in2 := 0;
+		insize := 0;
+
+		terminate := false;
+		maxinsize := 0;
+		maxoutsize := 0;
+		sent := 0;
+		sentsmall := 0;
+		hipriocnt := 0;
+		lowpriocnt := 0;
+		totalIn := 0;
+		totalOut := 0;
+		SumOutSize := 0;
+		ready := 0;
+		OutEmpty := true;
+	END;
+
+	OPERATION InputIsEmpty(): boolean;
+	BEGIN
+		RETURN (insize = 0);
+	END;
+
+	OPERATION InPut(msgs: buftype; fromcpu, load: integer);
+		# blocking put on input buffer with >=1 messages
+	BEGIN
+		GUARD (insize + (UB(msgs.ga) - LB(msgs.ga) + 1)) <= MAXIN DO
+			FOR i IN LB(msgs.ga) .. UB(msgs.ga) DO
+				inGoedel[in2] := msgs.ga[i];
+				inGTV[in2] := msgs.va[i];
+				in2 +:= 1;
+				IF in2 = MAXIN THEN in2 := 0; FI;
+				insize +:= 1;
+			OD;
+			IF insize > maxinsize THEN maxinsize := insize; FI;
+			totalIn +:= (UB(msgs.ga) - LB(msgs.ga) + 1);
+
+			# Handle piggybacked load info:
+			#IF (load > 50) AND (load < 500) THEN
+			#	OutBufs[fromcpu].outprio := MINSIZE;
+			#	lowpriocnt +:= 1;
+			#FI;
+				
+			#IF load < 10 THEN
+				# Remote cpu has little to do
+				#IF OutBufs[fromcpu].outsize >= 8 THEN
+					# send packet now
+					#OutBufs[fromcpu].outprio +:= 1000;
+					#OutBufs[fromcpu].outprio *:= 2;
+					# WriteLine("prio ", fromcpu);
+					#hipriocnt +:= 1;
+				#ELSE
+					#OutBufs[fromcpu].outprio +:= 10;
+				#FI;
+			#ELSIF load > 500 THEN
+				#IF OutBufs[fromcpu].outprio > MINSIZE THEN
+					#OutBufs[fromcpu].outprio := MINSIZE;
+					#lowpriocnt +:= 1;
+				#FI;
+			#FI;
+				
+		OD;
+	END;
+
+	OPERATION InSinglePut(g:GoedelNr; value: GTV);
+		# blocking put on input buffer
+	BEGIN
+		GUARD insize < MAXIN DO
+			inGoedel[in2] := g;
+			inGTV[in2] := CHR(value+128);
+			in2 +:= 1;
+			IF in2 = MAXIN THEN in2 := 0; FI;
+			insize +:= 1;
+			IF insize > maxinsize THEN maxinsize := insize; FI;
+			totalIn +:= 1;
+		OD;
+	END;
+
+
+	OPERATION InTryGet(g: OUT GoedelNr; value: OUT GTV;
+			   optimal: OUT boolean; do_go: OUT boolean) :boolean;
+		# nonblocking get from input buffer
+	BEGIN
+		IF insize > 0 THEN
+			g := inGoedel[in1];
+			value := ORD(inGTV[in1]) - 128;
+			# get piggy-backed 'optimal' bit
+			IF value > 32 THEN
+				optimal := true;
+				value -:= 64;
+			ELSE
+				optimal := false;
+			FI;
+			in1 +:= 1;
+			IF in1 = MAXIN THEN in1 := 0; FI;
+			insize -:= 1;
+			IF insize = 0 THEN do_go := true; FI;
+			RETURN true;
+		ELSE
+			do_go := false;
+			RETURN false;
+		FI;
+	END;
+
+	FUNCTION PutItem(g: GoedelNr; value: GTV;
+			 OutBufs: SHARED OutputBuffers; p: cellp);
+		out: integer;
+	BEGIN
+		out := OutBufs[p].cellsize;
+		OutBufs[p].outGoedel[out] := g;
+		OutBufs[p].outGTV[out] := CHR(value+128);
+		OutBufs[p].cellsize +:= 1;
+	END;
+	
+	OPERATION OutPut(g: GoedelNr; value: GTV; optimal: boolean;
+			 cpu: integer): boolean;
+		#blocking put on output buffer
+		oldguard, newguard: boolean;
+		p, q: cellp;
+	BEGIN
+		p := OutBufs.h[cpu].first;
+		IF (p = NIL) OR (OutBufs[p].cellsize = CELLSIZE) THEN
+			# current cell is full, make new cell at head of list
+			q := ADDNODE(OutBufs);
+			OutBufs.ncells +:= 1;
+			IF OutBufs.ncells > OutBufs.maxcells THEN
+			       OutBufs.maxcells := OutBufs.ncells;
+			FI;
+			OutBufs[q].next := p;
+			OutBufs[q].cellsize := 0;
+			MakeGoedelArray(CELLSIZE, OutBufs[q].outGoedel);
+			MakeGTVarray(CELLSIZE, OutBufs[q].outGTV);
+			OutBufs.h[cpu].first := q;
+			p := q;
+		FI;
+
+		oldguard :=  (((ready > 0) OR ((insize = 0)
+			AND (SumOutSize > 0))) AND (NOT terminate)) OR
+			((SumOutSize = 0) AND terminate);
+
+		IF optimal THEN
+			# piggyback 'optimal' bit
+			ASSERT(value < 32);
+			ASSERT(value > -32);
+			value +:= 64;
+		FI;
+
+		PutItem(g, value, OutBufs, p);
+		OutBufs.h[cpu].outsize +:= 1;
+		OutBufs.h[cpu].outprio +:= 1;
+		IF OutBufs.h[cpu].outsize > maxoutsize THEN
+			maxoutsize := OutBufs.h[cpu].outsize;
+		FI;
+		totalOut +:= 1;
+		SumOutSize +:= 1;
+		OutEmpty := false;
+		IF OutBufs.h[cpu].outsize = MINSIZE THEN
+			ready +:= 1;	# message may be sent now
+		FI;
+		#IF OutBufs[cpu].outsize >= OutBufs[cpu].maxsize THEN
+			#WriteLine("CPU ", cpu, " HAS OUTBUF OVFL: ",
+			#OutBufs[cpu].outsize);
+			#Flush();
+			#ASSERT(OutBufs[cpu].out1 <= OutBufs[cpu].out2);
+			#DoubleBuffer(OutBufs[cpu]);
+		#FI;
+		#newguard := ((ready > 0) OR ((insize = 0)
+		#	AND (SumOutSize > 0))) AND (NOT terminate);
+		#newguard :=  (((ready > 0) OR ((insize = 0)
+		#	AND (SumOutSize > 0))) AND (NOT terminate)) OR
+		#	((SumOutSize = 0) AND terminate);
+		newguard := 
+		    (ready > 0) OR
+		    ((insize = 0) AND (SumOutSize > 0)) OR
+		     terminate;
+		RETURN (oldguard = false) AND newguard;
+		# RETURN newguard;
+	END;
+
+	FUNCTION copy_cell(f: SHARED integer; tmp: SHARED buftype;
+				cellsize: integer;
+				outGoedel: GoedelArray;
+				outGTV: GTVarray);
+	BEGIN
+		ASSERT(cellsize > 0);
+		FOR i IN 0 .. cellsize - 1 DO
+			tmp.ga[f] := outGoedel[i];
+			tmp.va[f] := outGTV[i];
+			f +:= 1;
+		OD;
+	END;
+
+	# copy all cells for the give cpu
+	FUNCTION copy_cells(OutBufs: SHARED OutputBuffers; cpu: integer;
+				size: integer): buftype;
+		tmp: buftype;
+		f: integer;
+		p, q: cellp;
+	BEGIN
+		ASSERT(size > 0);
+		MakeGoedelArray(size, tmp.ga);
+		MakeGTVarray(size, tmp.va);
+		f := 0;
+		p := OutBufs.h[cpu].first;
+		WHILE p /= NIL DO
+			copy_cell(f, tmp, OutBufs[p].cellsize,
+					OutBufs[p].outGoedel,
+					OutBufs[p].outGTV);
+			q := OutBufs[p].next;
+			DELETENODE(OutBufs, p);
+			OutBufs.ncells -:= 1;
+			p := q;
+		OD;
+		OutBufs.h[cpu].first := NIL;
+		IF f /= size THEN
+			WriteLine("f = ", f, " size = ", size);
+		FI;
+		ASSERT(f = size);
+		RETURN tmp;
+	END;
+
+	FUNCTION copy_oldest_cell(OutBufs: SHARED OutputBuffers; cpu: integer;
+				size: integer; outsize: OUT integer): buftype;
+		tmp: buftype;
+		f: integer;
+		p, q: cellp;
+	BEGIN
+		ASSERT(size > 0);
+		f := 0;
+		p := OutBufs.h[cpu].first;
+		q := NIL;
+		ASSERT(p /= NIL);
+		WHILE OutBufs[p].next /= NIL DO
+			q := p;
+			p := OutBufs[p].next;
+		OD;
+		outsize := OutBufs[p].cellsize;
+		MakeGoedelArray(outsize, tmp.ga);
+		MakeGTVarray(outsize, tmp.va);
+		copy_cell(f, tmp, outsize,
+				OutBufs[p].outGoedel,
+				OutBufs[p].outGTV);
+		ASSERT(f = outsize);
+		DELETENODE(OutBufs, p);
+		OutBufs.ncells -:= 1;
+		IF q = NIL THEN
+			OutBufs.h[cpu].first := NIL;
+		ELSE
+			OutBufs[q].next := NIL;
+		FI;
+		RETURN tmp;
+	END;
+
+
+	OPERATION TryOutGet(res: OUT buftype; cpu: OUT integer;ok: OUT boolean;
+			load: OUT integer): boolean;
+		maxprio: integer;
+		siz, realsize: integer;
+	BEGIN
+		# A message is sent if either there is a packet ready
+		# or the input queue is empty
+		GUARD (SumOutSize > 0) OR (NOT terminate) DO
+			IF ((ready > 0) OR
+			    (phase = 2) AND ((insize = 0) AND (SumOutSize > 0)))
+			      # AND (NOT terminate) THEN
+			      THEN
+				maxprio := 0;
+				FOR i IN LB(OutBufs.h) .. UB(OutBufs.h) DO
+					IF OutBufs.h[i].outprio > maxprio THEN
+						cpu := i;
+						maxprio := OutBufs.h[i].outprio;
+					FI;
+				OD;
+				siz := OutBufs.h[cpu].outsize;
+				ASSERT(maxprio > 0);
+				ASSERT(OutBufs.h[cpu].outsize > 0);
+				#ASSERT((ready=0) OR (maxprio >= MINSIZE));
+				#SumOutSize -:= siz;
+
+				#res := copy_cells(OutBufs, cpu, siz);
+
+				#OutBufs.h[cpu].outsize := 0;
+				#OutBufs.h[cpu].outprio := 0;
+
+				res := copy_oldest_cell(OutBufs, cpu, siz, realsize);
+
+				OutBufs.h[cpu].outsize -:= realsize;
+				OutBufs.h[cpu].outprio -:= realsize;
+				SumOutSize -:= realsize;
+				IF (realsize >= MINSIZE) AND
+				   (OutBufs.h[cpu].outsize < MINSIZE) THEN
+					   ready -:= 1;
+				FI;
+				load := insize;	# piggyback my own load
+				sent +:= 1;
+				IF realsize < MINSIZE THEN sentsmall +:= 1; FI;
+				ok := true;
+			ELSE
+				ok := false;
+			FI;
+			RETURN true;
+		OD;
+		GUARD (SumOutSize = 0) AND terminate DO
+			RETURN false;
+		OD;
+	END;
+
+	OPERATION AwaitInNonemptyOrOutEmpty();
+	BEGIN
+		GUARD (insize > 0) OR OutEmpty DO OD;
+	END;
+
+	OPERATION CheckOutEmpty();
+	BEGIN
+		# This operation is called by the communication thread after
+		# it has delivered one or more items to other cpus.
+		IF SumOutSize = 0 THEN
+			OutEmpty := true;
+		FI;
+	END;
+
+	OPERATION TerminateCommunicationThread();
+	BEGIN
+		terminate := true;
+	END;
+
+	OPERATION PrintStatistics();
+	BEGIN
+		WriteLine("buffer ", MYCPU(), ": maxinsize = ", maxinsize,
+			" maxoutsize = ", maxoutsize,
+			" maxcells ", OutBufs.maxcells,
+			  ", tot in = ", totalIn,
+			  ", tot out = ", totalOut,
+			  ", sent = ", sent,
+			  ", sent small = ", sentsmall,
+			  ", high prio = ", hipriocnt,
+			  ", low prio = ", lowpriocnt);
+	END;
+END;

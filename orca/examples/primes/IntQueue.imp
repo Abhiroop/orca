@@ -1,0 +1,20 @@
+OBJECT IMPLEMENTATION IntQueue;
+
+	IMPORT IntList;
+
+	q: IntList;
+
+	OPERATION Enqueue(item: integer);
+	BEGIN
+		q$AppendItem(item);
+	END;
+
+	OPERATION Dequeue(): integer;
+	  i : integer;
+	BEGIN
+		GUARD NOT q$IsEmpty() DO
+			i := q$GetHead();
+			RETURN i;
+		OD;
+	END;
+END;

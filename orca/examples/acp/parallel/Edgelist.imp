@@ -1,0 +1,120 @@
+# ========================================================================
+# == File:      Edgelist.imp   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  implementation of Edgelist queue. Iplmenented as a queue==
+# ========================================================================
+MODULE IMPLEMENTATION Edgelist;
+
+FROM Edge IMPORT edge_info_t, copy_edge;
+
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+FUNCTION create_el(
+	e_list:	SHARED edgelist_t			# the list
+) : boolean;
+
+BEGIN
+	e_list.head := NIL;
+	e_list.tail := NIL;
+	e_list.num_elts := 0;
+	RETURN true;
+END;
+
+
+
+FUNCTION delete_el(
+	e_list : SHARED edgelist_t			# the list
+);
+
+        old_elt : edgelist_elt_p;			# pointer to list elt
+BEGIN
+        FOR i IN 1..e_list.num_elts DO
+                old_elt := e_list.head;
+                e_list.head := e_list[e_list.head].next;
+                DELETENODE(e_list, old_elt);
+        OD;
+END;
+
+
+FUNCTION insert_elt_el(
+	e_list : SHARED edgelist_t;			# the list
+	info   : edge_info_t				# edge info
+) : boolean;
+	
+	p : edgelist_elt_p;				# pointer to list elt
+BEGIN
+	p := ADDNODE(e_list);  # add a new node to list, return its name in p
+	copy_edge(e_list[p].data, info); # fill in data field of the new node
+
+        IF e_list.head = NIL THEN  # Is it the first node?
+		e_list.head := p;  # yes; assign it to global data field
+        ELSE
+                e_list[e_list.tail].next := p; # no; set its next field
+        FI;
+        e_list.tail := p;  # Assign to "tail" global data field
+	e_list.num_elts +:= 1;
+	RETURN true;
+END;
+  	
+
+FUNCTION num_elts_el(
+	e_list: edgelist_t				# the list
+) : integer;
+
+BEGIN
+	RETURN e_list.num_elts;
+END;
+
+
+
+FUNCTION give_ith_elt_el(
+	e_list: edgelist_t;				# the list
+	index :	integer; 				# index in list
+	info : 	SHARED edge_info_t			# edge data
+) : boolean;
+
+	ptr: edgelist_elt_p;				# pointer to list elt
+
+BEGIN   
+	IF (index < 1) OR (index > e_list.num_elts) THEN
+		RETURN false;
+	FI;
+
+	ptr := e_list.head;
+	FOR i IN 1..(index-1) DO
+		ptr := e_list[ptr].next;
+	OD;
+
+	copy_edge(info, e_list[ptr].data);
+	RETURN true;
+END;
+
+#
+# is_in_el() : check to see if a certain element is in the queue
+# 
+
+FUNCTION is_in_el(
+        e_list  : edgelist_t;                           # the list
+	my_index, combinator : integer;			# identification of the edge
+        index   : OUT integer                           # index in the list
+) : boolean;
+
+	ptr : edgelist_elt_p;
+BEGIN
+	ptr := e_list.head;
+
+	FOR i IN 1..e_list.num_elts DO
+		IF (e_list[ptr].data.my_index = my_index) AND
+		   (e_list[ptr].data.combinator = combinator)  THEN
+			index := i;
+			RETURN true;
+		FI;
+		ptr := e_list[ptr].next;
+	OD;
+	RETURN false;
+END;
+END;

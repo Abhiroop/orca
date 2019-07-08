@@ -1,0 +1,60 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT SPECIFICATION DBMetaDataObject;
+
+# Since Orca didn't allow a composite object of which one part (some object 
+# field[s]) is replicated on all the worker processes, and another part 
+# (another [set of] object field[s]) is migrated at the time of implementation,
+# a separate object containing the meta data of the database is needed. This
+# object contains this data, and define a couple of operations for retrieval 
+# and setting of the various fields.
+# This meta data comprises the input and output file names, the size of the 
+# database, the number of configurations in the database, the upper bound and
+# the number of database parts.
+
+
+
+OPERATION Set_Unattainable(n: IN integer);
+OPERATION Get_Unattainable(): integer;
+OPERATION Increase_Unattainable(): integer;
+
+
+OPERATION Set_DB_Size(new_db_size: IN integer);
+  # set the number of stones in the database
+
+OPERATION Get_DB_Size(current_db_size: OUT integer);
+  # returns the number of stones in the database
+
+
+
+OPERATION Set_DB_MetaData(new_nr_configs: IN longint; 
+			  new_nr_dbpart_objects: IN integer);
+
+  # Set the number of configurations and the number of database parts
+  # used.
+
+
+OPERATION Get_DB_MetaData(new_nr_configs: OUT longint;
+			  new_nr_dbpart_objects: OUT integer);
+
+  # Get the number of configurations and the number of database parts
+  # used.
+
+
+OPERATION Set_IO_Filenames(input_name:	IN string;
+			   output_name: IN string);
+
+  # Set the name of the input file and the name of the output file
+
+
+OPERATION Get_IO_Filenames(input_name:	OUT string;
+			   output_name: OUT string);
+
+  # Get the name of the input file and the name of the output file
+
+
+END; # DBMetaDataObject

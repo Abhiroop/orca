@@ -1,0 +1,97 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/*
+ * Currently, the fragment/message buffer stuff runs like this:
+ *
+ * Each fragment contains a pointer to a data buffer.
+ * This data buffer is the b_data field of a pan_sys_buffer_t of data size
+ * PACKET_SIZE (or less, if the buffer comes from an upcall).
+ * The pan_sys_buffer is an alias for FM buffer structs.
+ * This way, compatibility is ensured with buffers received from the
+ * FM layer.
+ *
+ * Clearing of a buffer is done by invoking pan_sys_buffer_clear on it.
+ */
+
+
+#ifndef __PAN_FRAGMENT_HDR_CI__
+#define __PAN_FRAGMENT_HDR_CI__
+
+
+#include <assert.h>
+
+#include "pan_sys.h"		/* Provides a system interface */
+
+#include "pan_global.h"
+#include "pan_buffer.h"
+#include "pan_fragment.h"
+#include "pan_fragment_hdr.h"
+#include "pan_nsap.h"
+#include "pan_comm.h"
+
+
+				/* Changed from pan_sys_fragment_received
+				 * to two functions:
+				 * pan_fragment_restore and
+				 * pan_sys_fragment_comm_hdr_restore.
+				 * The side-effects after receive are all done
+				 * in pan_fragment_restore.
+				 *				RFHH */
+STATIC_CI INLINE void
+pan_fragment_restore(pan_fragment_p frag, struct FM_buffer *data, int len)
+{
+    short      nsap_id;
+    char      *cdata = data->fm_buf;
+    pan_nsap_p nsap;
+    pan_sys_buffer_p buf;
+
+    buf = fm2buffer(data);
+    buffer_size(buf) = FM_buf_align_size(len);
+    fragment_buffer(frag) = buf;
+    fragment_data(frag)   = buffer_data(buf);
+
+    /* Get nsap */
+    assert(aligned(len, NSAP_HDR_SIZE));
+    len -= NSAP_HDR_SIZE;
+    nsap_id = *(short *)(cdata + len);
+    nsap = pan_sys_nsap_id(nsap_id);
+
+    fragment_nsap(frag)     = nsap;
+
+    len -= XCAST_HDR_SIZE(nsap);		/* Communication header */
+    assert(aligned(len, COMM_HDR_ALIGN(nsap)));
+
+    if (! (nsap->type & PAN_NSAP_SMALL)) {
+	len -= FRAG_HDR_SIZE(nsap);
+	assert(aligned(len, UNIVERSAL_ALIGNMENT));
+
+	buffer_offset(buf) = len;
+	buffer_type(buf)   = BUF_FM_BUFFER;
+    }
+
+    fragment_embedded(frag) = 0;
+    fragment_size(frag)     = len;
+}
+
+
+STATIC_CI INLINE int
+pan_sys_fragment_nsap_store(pan_fragment_p frag)
+{
+    pan_nsap_p nsap = fragment_nsap(frag);
+    int        nsap_offset;
+
+    nsap_offset = fragment_size(frag) + FRAG_HDR_SIZE(nsap) +
+		  XCAST_HDR_SIZE(nsap);
+
+    assert(nsap_offset + NSAP_HDR_SIZE <= PACKET_SIZE);
+    *(short *)(fragment_data(frag) + nsap_offset) = pan_sys_nsap_index(nsap);
+
+    return nsap_offset + NSAP_HDR_SIZE;
+}
+
+
+#endif

@@ -1,0 +1,188 @@
+OBJECT IMPLEMENTATION HashTableObject;
+
+FROM HashFunction IMPORT
+	Hash;
+FROM TspTypes IMPORT
+	MoveInfo;
+FROM TspFunctions IMPORT
+	AppendString;
+FROM PresentationModule IMPORT
+	Warning,
+	PrintMessageReal,
+	PrintMessageInt;
+FROM unix IMPORT
+	ReadString,
+	open,
+	close;
+FROM InOut IMPORT
+	WriteString,
+	WriteLn,
+	OpenOutputFile,
+	CloseOutput;
+FROM conversions IMPORT
+	StringToInt,
+	IntToString;
+
+OBJECT List = NEW GenericList (MoveInfo);
+
+CONST TableSize = 2000;
+
+
+ht : ARRAY [integer 0..TableSize] OF List;
+hits,
+objects : integer;
+
+
+OPERATION Lookup (id : string) : MoveInfo;
+	i : MoveInfo;
+	h : integer;
+BEGIN
+	h := Hash (id, SIZE (id));
+	IF NOT ht[h % TableSize]$Exists (id) THEN
+		i.valid := false;
+		RETURN i;
+	FI;
+	hits +:= 1;
+	RETURN 	ht[h % TableSize]$Info (id);
+END;
+
+
+
+OPERATION Insert (id : string; 
+		move : string; 
+		v : integer);
+	i : MoveInfo;
+	h : integer;
+BEGIN
+	h := Hash (id, SIZE (id));
+	
+	i.move := move;
+	i.val := v;
+	i.valid := true;
+	IF NOT ht[h % TableSize]$Exists (id) THEN
+		objects +:= 1;
+		ht[h % TableSize]$Insert (id, i);
+	ELSE
+		ht[h % TableSize]$Update (id, i);
+	FI;
+END;
+
+
+
+OPERATION PrintStatistics ();
+	max : integer;
+BEGIN
+	max := 0;
+	PrintMessageInt ("Transposition table hits:    ", hits);
+	PrintMessageInt ("Objects:                     ", objects);
+	FOR i IN LB(ht)..UB(ht) DO
+		IF ht[i]$Size () > max THEN
+			max := ht[i]$Size ();
+		FI;
+	OD;
+	PrintMessageInt ("Max inhabitants in one cell: ", max);
+	PrintMessageReal ("Mean inhabitation:           ", FLOAT (objects) / FLOAT (TableSize));
+END;
+
+
+FUNCTION PrintMove (m : MoveInfo);
+BEGIN
+	IF m.valid THEN
+		WriteString (m.move);
+		WriteString (" ;");
+		WriteLn ();
+		WriteString (IntToString (m.val));
+		WriteString (" ;");
+		WriteLn ();
+	ELSE
+		WriteLn ();
+		WriteLn ();
+	FI;
+END;	
+
+
+
+
+OPERATION Save (name : string);
+BEGIN
+	IF NOT OpenOutputFile (name) THEN
+		Warning ("Could not save transposition table");
+	ELSE
+		FOR i IN LB(ht)..UB(ht) DO
+			ht[i]$Print (PrintMove);
+		OD;
+		WriteString ("EOF");
+		WriteLn ();
+		CloseOutput ();
+	FI;
+			
+END;
+
+
+
+FUNCTION ReadLine (fildes : integer; s : OUT string);
+	str : string;
+	buff : string;
+BEGIN
+	str := "";
+	buff := ReadString (fildes);
+	WHILE ((buff /= ";") AND (buff /= "EOF")) DO
+		IF str /= "" THEN
+			str := AppendString (str, 
+				AppendString (" ", buff));
+		ELSE
+			str := buff;
+		FI;
+		buff := ReadString (fildes);
+	OD;
+	IF (buff = "EOF") THEN
+		s := "EOF";
+	ELSE
+		s := str;
+	FI;
+END;		
+		
+		
+
+
+OPERATION Load (name : string);
+	temp,
+	id,
+	move : string;
+	val : integer;
+	temp_int : integer;
+	fildes : integer;
+BEGIN
+	# Mode 0: O_RDONLY
+	fildes := open (name, 0);
+
+	IF fildes = -1 THEN
+		Warning ("Tranposition table persistent store could not be opened");
+	ELSE
+		ReadLine (fildes, id);
+		WHILE id /= "EOF" DO
+			ReadLine (fildes, move);
+			ReadLine (fildes, temp);
+			val := StringToInt (temp, temp_int);
+			SELF$Insert (id, move, val);				
+			ReadLine (fildes, id);
+		OD;
+		IF close (fildes) /= 0 THEN
+			Warning ("Transposition table persistent store could not be closed");
+		FI;
+	FI;
+END;
+
+
+
+BEGIN
+	hits := 0;
+	objects := 0;
+END;
+
+
+
+
+
+
+

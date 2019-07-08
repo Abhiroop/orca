@@ -1,0 +1,161 @@
+# ========================================================================
+# == File:      Nodelist.spf   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  data structure for a list of nodes			==
+# ========================================================================
+MODULE IMPLEMENTATION Nodelist;
+
+FROM EdgeCollection IMPORT edge_p;
+FROM Edgelist IMPORT create_el, delete_el, insert_elt_el;
+
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+#
+# create() : create the nodelist, contating num_elts elements
+#
+FUNCTION create_nl(
+	nl      :  SHARED node_list_t;
+	num_elts : integer			# number of elements of the list
+) : boolean;
+
+	ptr, prev : nl_node_t;			# pointers to elements in the list
+BEGIN
+	ptr := ADDNODE(nl);
+	IF NOT (create_el(nl[ptr].node.incoming_edges) AND
+		create_el(nl[ptr].node.outgoing_edges)) THEN
+		RETURN false;
+	FI;
+	
+	nl.head := ptr;
+	nl.tail := ptr;
+	prev := ptr;
+
+	FOR i IN 2..num_elts DO
+		ptr := ADDNODE(nl);
+		IF NOT (create_el(nl[ptr].node.incoming_edges) AND
+			create_el(nl[ptr].node.outgoing_edges)) THEN
+			RETURN false;
+		FI;
+		nl[prev].next := ptr;
+		nl.tail := ptr;
+		prev := ptr;
+	OD;		
+
+	nl[nl.tail].next := NIL;
+	nl.num_elts := num_elts;
+	RETURN true;
+END;
+
+
+#
+# delete() : delete the node list
+#
+FUNCTION delete_nl(
+	nl      :  SHARED node_list_t
+);
+
+	ptr : nl_node_t;			# pointer to element
+	old_node : nl_node_t;			# element to be deleted
+BEGIN
+	ptr := nl.head;
+	FOR i IN 1..nl.num_elts DO	
+		old_node := ptr;
+		delete_el(nl[ptr].node.incoming_edges);
+		delete_el(nl[ptr].node.outgoing_edges);	
+		ptr := nl[ptr].next;
+		DELETENODE(nl, old_node);
+	OD;
+END;
+
+
+#
+# add-incoming() ; add an edge to the incoming edgelist of a node
+#
+
+FUNCTION add_incoming_nl(	
+	nl      :  SHARED node_list_t;
+	node_nr  : integer; 			# index in list
+	edge     : edge_p			# edge to be added
+) : boolean;
+
+
+	ptr : nl_node_t;			# pointer to element
+BEGIN
+	ASSERT((1 <= node_nr) AND (node_nr <= nl.num_elts));
+
+	# go to correct node and insert
+	ptr := nl.head;
+	FOR i IN 1..(node_nr - 1) DO
+		ptr := nl[ptr].next;
+	OD;
+	
+	RETURN insert_elt_el(nl[ptr].node.incoming_edges, edge);
+END;
+
+
+# 
+# add_outgoing() : add edge to outgoing edgelist of a node
+#
+FUNCTION add_outgoing_nl(
+	nl      :  SHARED node_list_t;
+	node_nr  : integer; 			# index in list	
+	edge 	 : edge_p			# edge to be added
+) : boolean;
+
+	ptr : nl_node_t;			# pointer to element
+BEGIN
+	ASSERT((1 <= node_nr) AND (node_nr <= nl.num_elts));
+
+	# go to correct node and insert
+	ptr := nl.head;
+	FOR i IN 1..(node_nr-1) DO
+		ptr := nl[ptr].next;
+	OD;
+	
+	RETURN insert_elt_el(nl[ptr].node.outgoing_edges, edge);
+END;
+
+
+#
+# num_elts: return number of elements in the list
+#
+FUNCTION num_elts_nl(
+	nl      : node_list_t
+) : integer;					# nr of elements in list
+
+BEGIN
+	RETURN nl.num_elts;
+END;
+
+#
+# give_ith_elt() : give infor of ith element in the list
+#
+FUNCTION give_ith_elt_nl(
+	nl      : node_list_t;
+	index   : integer; 			# index in list
+	node    : SHARED nl_node_t		# node on position i
+) : boolean;
+
+	ptr : nl_node_t;			# pointer to element
+BEGIN
+	IF ((index < 1) OR (index > nl.num_elts)) THEN
+        	RETURN false;	
+	FI;
+		
+	ptr := nl.head;
+	FOR i IN 1..(index -1) DO
+ 		ptr := nl[ptr].next;
+	OD;
+		
+	node := ptr;
+
+	RETURN true;
+END;
+
+END;
+
+

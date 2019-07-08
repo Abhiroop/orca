@@ -1,0 +1,45 @@
+MODULE IMPLEMENTATION fft;
+  IMPORT Matrix;
+  FROM Matrix IMPORT DepsForComp;
+  FROM distributions IMPORT BLOCK;
+  FROM Time IMPORT SysMilli;
+  FROM args IMPORT Argc, Argv;
+  FROM conversions IMPORT StringToInt;
+
+  FUNCTION Do_fft(n: integer; npart_per_proc: integer; fn: string);
+    matrix: Matrix[0..(1<<n)-1];
+    start, end: integer;
+  BEGIN
+    matrix$$partition(NCPUS() * npart_per_proc);
+    matrix$$distribute_on_n(NCPUS(), BLOCK);
+    IF NOT matrix$Initial_A(fn) THEN
+	WriteLine("Could not open input file");
+	RETURN;
+    FI;
+    start := SysMilli();
+    FOR i IN 1..n DO
+	DepsForComp(matrix,n-i, npart_per_proc * NCPUS());
+	matrix$A_computation(n-i);
+    OD;
+    end := SysMilli();
+    WriteLine("#CPUS ", NCPUS(), ", k ", n, "		", FLOAT(end-start)/1000.0);
+  END;
+
+  PROCESS OrcaMain();
+    n: integer;
+    npart_per_proc: integer;
+    dummy: integer;
+  BEGIN
+    npart_per_proc := 1;
+    IF Argc() >= 4 THEN
+	npart_per_proc := StringToInt(Argv(3), dummy);
+    FI;
+    IF Argc() >= 3 THEN
+	n := StringToInt(Argv(1), dummy);
+    ELSE
+	WriteLine("Usage: fft <2logsz> <inputfile> [ <npart_per_processor> ]");
+	RETURN;
+    FI;
+    Do_fft(n, npart_per_proc, Argv(2));
+  END;
+END;

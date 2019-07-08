@@ -1,0 +1,147 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION lin_new;
+
+FROM FloatVector    IMPORT FloatVector, FloatMatrix;
+FROM FloatVectorObject IMPORT FloatVectorObject;
+FROM Finish         IMPORT Finish;
+FROM Time           IMPORT SysMilli, PrintTime;
+
+FROM args           IMPORT Argc, Argv;
+FROM conversions    IMPORT StringToInt;
+
+
+CONST default_N           = 180;
+
+CONST verbose = 0;		# 0 : no verbose
+
+CONST bound = 0.001;
+
+
+FUNCTION abs(r : real) : real;
+BEGIN
+    IF r >= 0.0
+    THEN RETURN r;
+    ELSE RETURN -r;
+    FI;
+END;
+
+
+PROCESS  Worker(N           : integer;
+		x_val       : SHARED FloatVectorObject;
+		offs        : integer;
+		sz          : integer);
+
+a           : FloatMatrix[1..sz][1..N];
+b           : FloatVector[1..sz];
+x_copy      : FloatVector;
+
+i_glob  : integer;
+new_x   : FloatVector[1 .. sz];
+residue : real;
+phase   : integer;
+
+BEGIN
+    # Initialize matices locally to circumvent max message limit
+    # Modification to avoid load imbalance due to timing variances of
+    # floating point operations (arithmetic with 0.0 is cheap) in combination
+    # with triangular matrix structure.
+    FOR j IN 1 .. sz
+	DO  FOR k IN 1 .. N
+	    DO  a[j][k] := 1.0;
+	    OD;
+	    a[j][offs + j] := FLOAT(N);		# 0 < eigen-values < 1
+	    b[j] := 1.0;
+	OD;
+
+    IF verbose > 0
+    THEN
+	WriteLine("Worker started on cpu ", MYCPU(), "; params:");
+	WriteLine("offs = ", offs, "; sz = ", sz);
+    FI;
+
+    phase := 0;
+    REPEAT
+        residue := 0.0;
+	phase +:= 1;
+	x_copy := x_val$value();	# performance hack; compiler job?
+	FOR i IN 1 .. sz
+	DO  i_glob := i + offs;
+	    new_x[i] := b[i];
+	    FOR j IN 1 .. i_glob - 1
+	    DO  new_x[i] -:= a[i][j] * x_copy[j];	# x_val$subscr(j)
+	    OD;
+	    FOR j IN i_glob + 1 .. N
+	    DO  new_x[i] -:= a[i][j] * x_copy[j];	# x_val$subscr(j)
+	    OD;
+	    new_x[i] /:= a[i][i_glob];
+	    residue +:= abs(new_x[i] - x_copy[i_glob]);	# x_val$subscr(i_glob)
+	OD;
+				IF verbose > 1
+				THEN WriteLine(MYCPU(), ": residue = ",residue);
+				FI;
+	x_val$set_arr(offs+1, sz, new_x, residue);
+    UNTIL x_val$done( phase);
+				IF verbose > 0
+				THEN WriteLine(MYCPU(), ": Worker finished...");
+				FI;
+END;
+
+PROCESS OrcaMain();
+
+offs        : integer;
+piece	    : integer;
+
+x_val       : FloatVectorObject;
+
+counter     : integer;
+start, stop : integer;
+
+N           : integer;
+dummy       : integer;
+
+BEGIN
+
+    IF Argc() = 1 THEN
+	N := default_N;
+    ELSIF Argc() = 2 THEN
+        N := StringToInt(Argv(1), dummy);
+    ELSE
+	WriteLine("Usage: ", Argv(0), " <N>");
+	RETURN;
+    FI;
+
+    x_val$init(N);
+
+    start := SysMilli();
+
+    x_val$set_all(0.0);
+
+    offs := N;
+    FOR i IN 1 .. NCPUS()
+    DO  piece := offs / (NCPUS()+1-i);
+	offs -:= piece;
+	FORK Worker(N, x_val, offs, piece) ON NCPUS()-i;
+    OD;
+
+    counter := 0;
+    REPEAT
+    	counter +:= 1;
+    UNTIL x_val$finished( bound);
+
+    stop := SysMilli();
+    WriteLine(counter, " iterations");
+    WriteLine("Solution vector:");
+    FOR i IN 1 .. 1 #N
+    DO 
+	IF x_val$subscr(i) /= 0.0 THEN
+	    WriteLine("x[", i, "] = ", x_val$subscr(i));
+	FI;
+    OD;
+    PrintTime("lin_solver_bc", stop - start);
+    Finish();
+END;
+
+END;

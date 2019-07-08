@@ -1,0 +1,41 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION DataBaseModule;
+
+# This module forms an interface tot the database part objects and the meta 
+# data object of the database, together with another few used object and 
+# modules.
+# By using this module, the workers can abstract from the fragmentation of the
+# database across the workers, and perceive the database as one (virtual) 
+# database which is directly accessible.
+
+
+FROM  AwariTypes	IMPORT	GoedelNr, GTV, ConfigUnit, ElementUnit, 
+				ConfigListSize, ConfigList, GoedelAdresList;
+FROM  DataBaseTypes	IMPORT	DataBaseObject, AdresTable;
+
+
+
+TYPE ConfigCheckList = ARRAY [integer] OF boolean;
+TYPE ConfigTemplate = ARRAY[integer] OF ElementUnit;
+
+
+#-----------------------------------------------------------------------
+
+
+FUNCTION Get_DBPartObject_LB(cpu_table: IN AdresTable; 
+			     lower_bound: OUT GoedelNr);
+  # get lower bound
+
+
+FUNCTION Get_DBPartObject_UB(cpu_table: IN AdresTable; 
+			     upper_bound: OUT GoedelNr);
+  # get upper bound
+
+
+
+END; # DataBaseModule

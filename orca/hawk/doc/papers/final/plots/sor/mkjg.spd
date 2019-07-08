@@ -1,0 +1,9 @@
+echo 'newgraph border clip X 3.8'
+echo 'xaxis min 0 max 35 label : number of CPUs'
+echo 'yaxis min 0 label : speedup'
+echo 'newcurve linetype solid marktype circle'
+echo 'pts '
+cat sor.dp.768.spd
+echo 'newcurve linetype dotted marktype circle'
+echo 'pts '
+cat sor.tp.768.spd

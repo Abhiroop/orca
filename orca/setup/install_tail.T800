@@ -1,0 +1,335 @@
+case $ORCA_HOME in
+/*)	;;
+*)	echo "something is wrong: ORCA_HOME is not an absolute pathname" 1>&2
+	exit 1
+	;;
+esac
+
+case $PANDA_PROJ in
+/*)	;;
+*)	echo "something is wrong: PANDA_PROJ is not an absolute pathname" 1>&2
+	exit 1
+	;;
+esac
+
+PANDA_VERSION=2
+
+# find out what system we are running on. Choice is between Solaris-2 and
+# Sunos4.
+
+case `uname -r` in
+4*)	MACH=sun4
+	;;
+5*)	MACH=sol2
+	;;
+*)	# Huh? try using echo command ...
+	if /bin/echo 'a\c' | grep 'c' >/dev/null ; then
+		: We have BSD-like echo command.
+		MACH=sun4
+	else
+		: We have SystemV-like echo command.
+		MACH=sol2
+	fi
+esac
+
+case $MACH in
+sun4)	echo "Installing for SunOS4 on `date`"
+	;;
+sol2)	echo "Installing for Solaris2 on `date`"
+	;;
+esac
+echo
+
+export MACH
+
+if [ -d $ORCA_HOME/lib/LLgen ] ; then : ; else mkdir -p $ORCA_HOME/lib/LLgen ; fi
+if [ -d $ORCA_HOME/bin ] ; then : ; else mkdir $ORCA_HOME/bin ; fi
+if [ -d $ORCA_HOME/bin.$MACH ] ; then : ; else mkdir $ORCA_HOME/bin.$MACH ; fi
+if [ -d $ORCA_HOME/man ] ; then : ; else mkdir $ORCA_HOME/man ; fi
+if [ -d $ORCA_HOME/man/man1 ] ; then : ; else mkdir $ORCA_HOME/man/man1 ; fi
+
+# put Orca bin directory in path
+
+PATH="$ORCA_HOME/bin:$ORCA_HOME/bin.$MACH:$PATH"; export PATH
+
+# determine config directory
+
+case $MACH in
+sun4)	CONF=$ORCA_HOME/conf.sparc_sunos4
+	MACH_SYS=sparc_sunos4
+	TARGET_MACH_SYS=parix-T800
+	PANDARUN=parix2.1-T800
+	;;
+sol2)	CONF=$ORCA_HOME/conf.sparc_solaris2
+	MACH_SYS=sparc_solaris2
+	TARGET_MACH_SYS=parix-T800
+	PANDARUN=parix2.1-T800
+	;;
+*)	echo "MACH should be set to either 'sun4' or 'sol2'" 1>&2
+	exit 1
+	;;
+esac
+
+echo "Creating Panda platform libraries ..."
+cd $PANDA_PROJ/panda$PANDA_VERSION.0
+for SPECIAL in . optimized # profiling tracing
+do
+( cd lib/$PANDARUN/$SPECIAL
+  if gmake > Out 2>&1
+  then	:
+  else	echo "make failed, see $PANDA_PROJ/panda$PANDA_VERSION.0/lib/$PANDARUN/$SPECIAL/Out"
+	exit 1
+  fi
+)
+done
+echo "Done"
+
+echo "Creating configuration directory ..."
+if [ -d $CONF ]
+then	:
+elif  mkdir -p $CONF
+then	:
+else	echo "Could not create directory $CONF" 1>&2
+	exit 1
+fi
+
+( cd $ORCA_HOME/conf_src ; tar cf - . ) | ( cd $CONF ; tar xf - )
+
+cd $CONF
+rm -f READ_ME
+echo "Configuration tree for $MACH_SYS" > READ_ME
+if [ -f make_params ]
+then	:
+else	cp params.$MACH_SYS make_params
+fi
+
+cat > make_paths << EOF
+ORCA_HOME	= $ORCA_HOME
+ORCA_TARGET	= $TARGET
+PANDA_PROJ	= $PANDA_PROJ
+VERSION		= lib
+BINSUF		= $MACH
+EOF
+echo "Done"
+
+if [ -d $TARGET ]
+then	:
+elif  mkdir -p $TARGET
+then	:
+else	echo "Could not create directory $TARGET" 1>&2
+	exit 1
+fi
+
+if [ ! -f $TARGET/orca_obj_ops ]
+then cp $ORCA_HOME/orca_states $ORCA_HOME/orca_obj_ops $TARGET
+fi
+
+echo "Creating C preprocessor ... "
+cd $CONF/ncpp
+if make > Out 2>&1
+then
+	/bin/cp ncpp $ORCA_HOME/bin.$MACH
+else	echo "make C processor failed, see $CONF/ncpp/Out"
+fi
+
+echo "Creating mfilter ... "
+cd $CONF/mfilter
+if make > Out 2>&1
+then
+	/bin/cp mfilter $ORCA_HOME/bin.$MACH
+else	echo "make mfilter failed, see $CONF/mfilter/Out"
+fi
+
+echo "Creating parser generator ... "
+cd $CONF/LLgen
+if make install > Out 2>&1
+then
+	make clean > /dev/null 2>&1
+	rm -f Out
+	echo "Done"
+else	echo "make parser generator failed, see $CONF/LLgen/Out"
+	exit 1
+fi
+
+echo "Creating compiler support libraries ... "
+cd $CONF/libs
+for i in system flt_arith alloc
+do
+( cd $i
+  if make > Out 2>&1
+  then	:
+  else	echo "make $i library failed, see $CONF/libs/$i/Out"
+	exit 1
+  fi
+)
+done
+echo "Done"
+
+echo "Creating compiler binary ..."
+cd $CONF/comp
+if make install > Out 2>&1
+then	make clean > /dev/null 2>&1
+	rm -f Out
+	echo "Done"
+else	echo "make compiler failed, see $CONF/comp/Out"
+	exit 1
+fi
+
+echo "Creating compiler driver ..."
+cd $CONF/driver
+if make install > Out 2>&1
+then	make clean > /dev/null 2>&1
+	rm -f Out
+else	echo "make compiler driver failed, see $CONF/driver/Out"
+	exit 1
+fi
+
+echo "Installing shell scripts ..."
+rm -f $TARGET/bin/makedepend $TARGET/bin.$MACH/makedepend
+mkdep=`which makedepend`
+case "$mkdep" in
+'no '*)	unset mkdep
+	;;
+esac
+cd $CONF/scripts
+if $MAKE install > Out 2>&1
+then	echo "Done"
+else	echo "make scripts failed, see $CONF/scripts/Out"
+	exit 1
+fi
+
+echo "Creating standard modules ..."
+
+if [ -d $TARGET/lib/std ]
+then	:
+elif  mkdir -p $TARGET/lib/std
+then	:
+else	echo "Could not create directory $TARGET/lib/std" 1>&2
+	exit 1
+fi
+
+cd $TARGET/lib/std
+
+( cd $ORCA_HOME/src/rts/std ; tar cf - . ) | tar xf -
+
+if [ -f Makefile.orig ]
+then	:
+else	cp Makefile Makefile.orig
+fi
+sed "s+^\(ORCA_HOME[ 	]*= \).*+\1$TARGET+" < Makefile.orig > Makefile
+if $MAKE > Out 2>&1
+then	rm -f Out
+else	echo "make failed, see $TARGET/lib/std/Out"
+	exit 1
+fi
+
+cd $ORCA_HOME/src/rts/std
+if [ -f Makefile.orig ]
+then	:
+else	cp Makefile Makefile.orig
+fi
+sed "s+^\(ORCA_HOME[ 	]*= \).*+\1$TARGET+" < Makefile.orig > Makefile
+if $MAKE > Out 2>&1
+then	rm -f Out
+	echo "Done"
+else	echo "make failed, see $ORCA_HOME/src/rts/std/Out"
+	exit 1
+fi
+
+if [ -d $TARGET/lib/include ]
+then	:
+elif  mkdir -p $TARGET/lib/include
+then	:
+else	echo "Could not create directory $TARGET/lib/include" 1>&2
+	exit 1
+fi
+
+cd $TARGET/lib/include
+
+( cd $ORCA_HOME/src/rts/include ; tar cf - . ) | tar xf -
+
+cd $TARGET/lib
+if [ -f make_paths ]
+then	:
+else	cp $CONF/make_paths make_paths
+fi
+
+( cd $ORCA_HOME/lib_src ; tar cf - . ) | tar xf -
+
+case $TARGET_MACH_SYS in
+parix*)
+    ;;
+*)
+    echo "Creating unixproc RTS libraries ..."
+    rm -rf include/system/unixproc/src
+    mkdir -p include/system/unixproc/src
+    cd include/system/unixproc/src
+    ( cd $ORCA_HOME/src/rts/system/unixproc ; tar cf - . ) | tar xf -
+    cd ../../../..
+    for i in . optimized profiling
+    do
+	if [ -d $TARGET/lib/unixproc/$TARGET_MACH_SYS/$i ]
+	then	:
+	else	mkdir -p $TARGET/lib/unixproc/$TARGET_MACH_SYS/$i
+	fi
+	cd $TARGET/lib/unixproc/$TARGET_MACH_SYS/$i
+	if [ -f Makefile ]
+	then	:
+	else	cp $TARGET/lib/unixproc/makes/$i/Makefile Makefile
+	fi
+	if $MAKE > Out 2>&1
+	then	rm -rf objects
+	else
+		echo "make failed, see $TARGET/lib/unixproc/$TARGET_MACH_SYS/$i/Out"
+		exit 1
+	fi
+    done
+    echo "Done"
+    ;;
+esac
+
+cd $TARGET/lib
+echo "Creating Panda $PANDA_VERSION.0 RTS libraries ..."
+rm -rf include/system/panda$PANDA_VERSION.0/src
+mkdir -p include/system/panda$PANDA_VERSION.0/src
+cd include/system/panda$PANDA_VERSION.0/src
+( cd $ORCA_HOME/src/rts/system/panda$PANDA_VERSION.0 ; tar cf - . ) | tar xf -
+cd ../../../..
+for i in . optimized profiling
+do
+	if [ -d $TARGET/lib/panda$PANDA_VERSION.0/$TARGET_MACH_SYS/$i ]
+	then	:
+	else	mkdir -p $TARGET/lib/panda$PANDA_VERSION.0/$TARGET_MACH_SYS/$i
+	fi
+	cd $TARGET/lib/panda$PANDA_VERSION.0/$TARGET_MACH_SYS/$i
+	if [ -f Makefile ]
+	then	:
+	else	cp $TARGET/lib/panda$PANDA_VERSION.0/makes/$i/Makefile Makefile
+	fi
+	if $MAKE > Out 2>&1
+	then	rm -rf objects
+	else
+		echo "make failed, see $TARGET/lib/panda$PANDA_VERSION.0/$TARGET_MACH_SYS/$i/Out"
+		exit 1
+	fi
+done
+echo "Done"
+
+if [ -d $TARGET/doc ]
+then	:
+elif  mkdir -p $TARGET/doc
+then	:
+else	echo "Could not create directory $TARGET/doc" 1>&2
+	exit 1
+fi
+
+cd $TARGET/doc
+if [ $TARGET/doc = $ORCA_HOME/doc ]
+then	:
+else	( cd $ORCA_HOME/doc ; tar cf - . ) | tar xf -
+fi
+
+chmod -Rf g-w $TARGET $BASE
+
+echo
+echo "Installation complete on `date`"

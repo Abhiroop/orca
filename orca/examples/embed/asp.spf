@@ -1,0 +1,7 @@
+# This is an adapted version of the program found in orca/examples/asp/
+MODULE SPECIFICATION asp;
+IMPORT IntObject;
+FROM RowCollection IMPORT RowCollection, RowType;
+PROCESS aspMain(RowkColl : SHARED RowCollection; 
+		finished : SHARED IntObject);
+END;

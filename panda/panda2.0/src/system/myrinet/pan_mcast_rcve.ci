@@ -1,0 +1,285 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+
+#ifndef __PAN_MCAST_RCVE_CI__
+#define __PAN_MCAST_RCVE_CI__
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+
+#include "fm.h"				/* Fast Messages for Myrinet */
+
+#include "pan_sys_msg.h"
+
+#include "pan_system.h"
+#include "pan_sync.h"			/* Use macros */
+
+#include "pan_global.h"
+
+#include "pan_comm.h"
+
+#include "pan_mcast_bitset.h"
+#include "pan_mcast_global.h"
+#include "pan_mcast_header.h"
+
+#include "pan_mcast_forward.ci"
+
+#include "pan_mcast_rcve.h"
+
+#include "pan_timer.h"
+
+#include "pan_trace.h"
+
+
+
+
+/*
+ * Global variables
+ */
+
+
+
+#ifdef RANDOM_DISCARD
+extern long random();
+extern int  srandom(int seed);
+#endif
+
+
+/*
+ * Include the .c files: allows inline substitution of functions
+ */
+
+
+/*
+ *	Global variables.
+ */
+
+
+
+
+/*
+ *  This module implements the receiving functionality of the mcast protocol
+ *  in so far as it is shared between purge watchdog and orderer.
+ *  Incoming messages are dispatched to the corresponding module.
+ *
+ *  This module exports the following user level functions:
+ *      - <none>
+ *  It exports communication with the sender module:
+ */
+
+
+
+static void
+cont_append(pan_msg_p msg, pan_msg_p *queue)
+{
+    pan_msg_p q, prev;
+
+    msg->next = NULL;
+
+    q = *queue;
+    prev = NULL;
+    while (q != NULL) {
+	prev = q;
+	q = q->next;
+    }
+    if (prev == NULL) {
+	*queue = msg;
+    } else {
+	prev->next = msg;
+    }
+}
+
+
+
+STATIC_CI INLINE void
+pan_mcast_data_upcall(pan_msg_p msg)
+{
+    pan_mcast_hdr_p hdr;
+#ifdef TRACING
+    pan_nsap_p      nsap;
+#endif
+
+#ifdef RANDOM_DISCARD
+    if (random() % 100 < RANDOM_DISCARD) {
+					STATDISCARD(DX_RANDOM, 1);
+	return;
+    }
+#endif
+
+					STATINC(ST_LOW_LEVEL_UPCALL);
+
+    hdr = msg_comm_hdr(msg);
+
+#if (! defined RELIABLE_NETWORK) && (! defined PANDA_MULTICASTS)
+    if (hdr->sender == pan_my_pid() && hdr->type == MCAST_GSB) {
+					STATDISCARD(DX_NETWORK, 1);
+	return;
+    }
+#endif
+
+#ifdef PANDA_MULTICASTS
+    forward(hdr->sender, pan_mcast_data_handler, msg_data(msg),
+	    msg_data_len(msg));
+#endif
+
+    pan_mutex_lock(pan_mcast_upcall_lock);
+
+    if (pan_mcast_state.ordr_flags & MCAST_in_ordr) {
+					/* Another thread is in an upcall.
+					 * Must create a continuation for
+					 * our msg */
+				/* Append our msg */
+	cont_append(msg, &pan_mcast_state.ordr_queue);
+
+	pan_mutex_unlock(pan_mcast_upcall_lock);
+	return;
+    }
+
+    pan_mcast_state.ordr_flags |= MCAST_in_ordr;
+
+    do {
+
+#ifdef TRACING
+	nsap = msg_nsap(msg);
+	trc_event(trc_start_upcall, &nsap);
+#endif
+
+#ifndef RELIABLE_NETWORK
+
+	if (hdr->type != MCAST_GSB && hdr->type != MCAST_REXMIT) {
+	    pan_panic("Wrong data mcast msg arrived at orderer's\n");
+	}
+
+	if (pan_mcast_state.purge_pe == pan_my_pid()) {
+						/* Process the piggy-back */
+	    pan_mcast_purge_upcall(hdr);
+	}
+
+#endif		/* RELIABLE_NETWORK */
+
+	pan_mcast_ordr_data_upcall(msg, hdr);
+
+	trc_event(trc_end_upcall, &nsap);
+
+	if (pan_mcast_state.ordr_queue == NULL) {
+	    break;
+	}
+
+	msg = pan_mcast_state.ordr_queue;
+	pan_mcast_state.ordr_queue = msg->next;
+	hdr = msg_comm_hdr(msg);
+    } while (TRUE);
+
+    pan_mcast_state.ordr_flags &= ~MCAST_in_ordr;
+
+    pan_mutex_unlock(pan_mcast_upcall_lock);
+}
+
+
+
+
+STATIC_CI void
+pan_mcast_data_handler(struct FM_buffer *data, int size)
+{
+    pan_msg_p msg;
+
+    pan_timer_stop(poll_timer);
+    pan_timer_stop(fm_latency_timer);
+    pan_timer_start(panda_timer);
+
+    msg = pan_msg_restore(data, size);
+
+#ifdef STATISTICS
+    if (msg_nsap(msg)->type & PAN_NSAP_SMALL) {
+	SYS_STATINC(pan_n_mcast_rcve_small);
+    } else {
+	SYS_STATINC(pan_n_mcast_rcve_data);
+    }
+#endif
+
+    pan_mcast_data_upcall(msg);			/* Callee clears msg */
+ 
+    pan_timer_stop(panda_timer);
+}
+
+
+#ifndef RELIABLE_NETWORK
+
+
+STATIC_CI INLINE void
+pan_mcast_cntrl_upcall(pan_mcast_hdr_p hdr)
+{
+#ifdef RANDOM_DISCARD
+    if (random() % 100 < RANDOM_DISCARD) {
+					STATDISCARD(DX_RANDOM, 1);
+	return;
+    }
+#endif
+
+#ifdef PANDA_MULTICASTS
+    forward(hdr->sender, pan_mcast_cntrl_handler, hdr, sizeof(pan_mcast_hdr_t));
+#endif
+
+    pan_mutex_lock(pan_mcast_upcall_lock);
+
+					STATINC(ST_LOW_LEVEL_UPCALL);
+    trc_event(trc_start_upcall, &pan_mcast_nsap);
+
+    if (pan_mcast_state.purge_pe == pan_my_pid() && hdr->type == MCAST_STATUS) {
+						/* For the purge process only */
+	pan_mcast_purge_upcall(hdr);
+
+    } else {
+						/* For the orderer */
+	if (hdr->type != MCAST_SYNC && hdr->type != MCAST_PURGE  &&
+	    hdr->type != MCAST_REXMITREQ) {
+	    pan_panic("Wrong cntrl mcast msg arrived at orderer's\n");
+	}
+
+	pan_mcast_ordr_cntrl_upcall(hdr);
+    }
+    trc_event(trc_end_upcall, &pan_mcast_nsap);
+
+    pan_mutex_unlock(pan_mcast_upcall_lock);
+}
+
+
+
+					/* A broadcast control msg arrives */
+STATIC_CI void
+pan_mcast_cntrl_handler(struct FM_buffer *data)
+{
+    pan_timer_start(panda_timer);
+
+    pan_mcast_cntrl_upcall((pan_mcast_hdr_p)(data->fm_buf));
+
+    FM_free_buf(data);
+
+    pan_timer_stop(panda_timer);
+}
+
+#endif		/* RELIABLE_NETWORK */
+
+
+/* mcast receive initialisation */
+STATIC_CI void
+pan_mcast_rcve_init(void)
+{
+}
+
+
+
+STATIC_CI void
+pan_mcast_rcve_end(void)
+{
+}
+
+
+#endif

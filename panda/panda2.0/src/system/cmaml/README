@@ -1,0 +1,9 @@
+This directory contains the sources of a Panda2.0 port to 
+CMAML, TMC's Active Message interface. A number of implementations
+of this interface exist.
+
+1) TMC's implementation for the CM-5
+2) My MAMA implementation for Amoeba
+3) My implementation that uses 
+   Berkeley Active Messages on Myrinet.
+

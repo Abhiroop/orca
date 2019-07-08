@@ -1,0 +1,311 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+
+#ifndef __PAN_MCAST_PURGE_CI__
+#define __PAN_MCAST_PURGE_CI__
+
+
+#ifndef RELIABLE_NETWORK
+
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+
+#include "fm.h"				/* Fast Messages for Myrinet */
+
+#include "pan_sys_msg.h"
+
+#include "pan_system.h"
+#include "pan_sync.h"			/* Use macros */
+
+#include "pan_global.h"
+
+#include "pan_comm.h"
+
+#include "pan_mcast_bitset.h"
+#include "pan_mcast_memlist.ci"		/* Include .c file for performance */
+#include "pan_mcast_global.h"
+#include "pan_mcast_sweep.h"
+#include "pan_mcast_header.h"
+#include "pan_mcast_ordr.h"
+
+#include "pan_mcast_purge.h"
+
+#include "pan_timer.h"
+
+#include "pan_util.h"
+
+#include "pan_trace.h"
+
+
+
+/*
+ * This module implements the one centralized purge watchdog.
+ *
+ * Idea:
+ * Look repeatedly whether the acknowledged seen_seqnos have arrived at the
+ * next value that validates a PURGE multicast.
+ * Also, watch out that members are not too far behind with notification of
+ * their status: request their status if they take too long in reporting it
+ * of their own initiative.
+ */
+
+
+/*
+ * Local types
+ */
+
+
+/*
+ *	Global variables.
+ */
+
+static const double PURGE_PART	= 0.5;
+static const double BEHIND_PART	= 0.2;	/* 0.0: no lagging behind allowed */
+
+static int   pan_mcast_hist_purge;
+static int   pan_mcast_hist_little_behind;
+
+static trc_event_t send_sync_ev;
+
+static pan_timer_p purge_timer;
+
+
+
+
+
+/* Send out a sync or purge request
+ * Requirement: caller must hold pan_mcast_upcall_lock
+ */
+static void
+mcast_sync_msg(pan_mcast_msg_t msg_tp)
+{
+    pan_mcast_hdr_t   hdr;
+
+    trc_event(send_sync_ev, &msg_tp);
+
+    hdr.type       = msg_tp;
+    hdr.seqno      = pan_mcast_state.global_next_accept - 1;
+    hdr.seen_seqno = pan_mcast_state.global_min_seen;
+
+						/* Record we sent out this
+						 * purge seqno */
+    pan_mcast_state.purge_sent = pan_mcast_state.global_min_seen;
+
+						/* Broadcast the control msg
+						 * to the others */
+    pan_mutex_unlock(pan_mcast_upcall_lock);
+    FM_broadcast(pan_mcast_cntrl_handler, (char*)&hdr, sizeof(pan_mcast_hdr_t));
+    pan_mutex_lock(pan_mcast_upcall_lock);
+
+						/* Do the control upcall at
+						 * home */
+    pan_mcast_ordr_cntrl_upcall(&hdr);
+}
+
+
+
+/* Update member info: sender's latest seen seqno.
+ * Also update global minimum sequence number and broadcast PURGE control
+ * message so members can clear their history of acknowledged messages.
+ * Requirement: caller must hold pan_mcast_upcall_lock
+ */
+static void
+update_mem_seen(int mem, int seen_seqno)
+{
+    int prev_seen;
+
+    prev_seen = pan_mcast_state.seen_seqno[mem];
+    if (seen_seqno <= prev_seen) {
+	return;
+    }
+
+    pan_mcast_state.seen_seqno[mem] = seen_seqno;
+    if (prev_seen != pan_mcast_state.global_min_seen) {
+	assert(prev_seen > pan_mcast_state.global_min_seen);
+	return;
+    }
+
+					/* Update global minimum seen seqno
+					 * with new value */
+    pan_mcast_state.global_min_seen =
+			pan_mcast_mem_lst_min_seen(pan_mcast_state.seen_seqno);
+
+    if (pan_mcast_state.global_min_seen - pan_mcast_state.purge_sent >
+	    pan_mcast_hist_purge) {
+	assert(pan_mcast_state.purge_sent < pan_mcast_state.global_min_seen);
+					STATINC(ST_PURGE_SYNC);
+	mcast_sync_msg(MCAST_PURGE);
+    }
+}
+
+
+
+
+/* Check if we must enter sync mode
+ * Requirement: caller must hold pan_mcast_upcall_lock
+ */
+static void
+check_sync(void)
+{
+    int n_behind;
+
+    n_behind = pan_mcast_mem_lst_n_behind(pan_mcast_state.seen_seqno,
+					  pan_mcast_state.global_next_accept -
+					      pan_mcast_hist_little_behind);
+
+    if (n_behind == 0) {
+	unset_flag(pan_mcast_state.purge_flags, MCAST_syncing);
+	return;
+    }
+
+    if (isset_flag(pan_mcast_state.purge_flags, MCAST_syncing)) {
+					/* The daemon copes with repeated
+					 * syncs/purges */
+	return;
+    }
+
+					/* send sync msg: first attempt */
+    set_flag(pan_mcast_state.purge_flags, MCAST_syncing);
+
+					STATINC(ST_SYNC_SYNC);
+    mcast_sync_msg(MCAST_SYNC);
+}
+
+
+
+
+/* The purge upcall.
+ * Requirement: caller must hold pan_mcast_upcall_lock
+ */
+STATIC_CI void
+pan_mcast_purge_upcall(pan_mcast_hdr_p cntrl_msg)
+{
+    pan_timer_start(purge_timer);
+
+    assert(cntrl_msg->type == MCAST_STATUS ||
+	   cntrl_msg->type == MCAST_REXMIT || cntrl_msg->type == MCAST_GSB);
+
+					STATINC(ST_PURGE_PE_CNTRL_UPCALL);
+
+    pan_mcast_state.watch_counter = 0;	/* Reset the watch counter, since >= 1
+					 * member lives */
+
+					/* Record seqno seen by sender */
+    update_mem_seen(cntrl_msg->sender, cntrl_msg->seen_seqno);
+
+					/* Update global_next_accept if we are
+					 * behind ourselves */
+					/* global_next_accept protected by
+					 * upcall_lock */
+    if (pan_mcast_state.global_next_accept < cntrl_msg->seqno) {
+	pan_mcast_state.global_next_accept = cntrl_msg->seqno;
+    }
+
+    check_sync();
+
+    pan_timer_stop(purge_timer);
+}
+
+
+
+
+static void
+purge_sweep(void *args)
+{
+/* The purge sweeper function. Called regularly by the sweeper daemon.
+ * Periodically checks whether any members are behind with acknowledging the
+ * receipt of mcast msgs.
+ * Send a sync message under the following conditions:
+ *
+ * - if the whole system is silent for a while;
+ * - if the previous purge message is far back (in purge numbers);
+ * - if any are far behind.
+ */
+    pan_mcast_msg_t tp;
+    int             n_behind;
+
+
+				/* pan_mcast_upcall_lock is grabbed by the
+				 * sweeper: protect
+				 * pan_mcast_state.{seen_seqno,
+				 *	global_next_accept, global_min_seen,
+				 *	watch_counter} */
+
+    ++pan_mcast_state.watch_counter;
+    if (pan_mcast_state.watch_counter == pan_mcast_watch_ticks) {
+	n_behind = pan_nr_platforms();
+	pan_mcast_state.watch_counter = 0;
+	tp = MCAST_SYNC;
+					STATINC(ST_SYNC_WATCH);
+    } else if (pan_mcast_state.global_min_seen - pan_mcast_state.purge_sent >
+		pan_mcast_hist_purge) {
+	n_behind = pan_nr_platforms();
+	tp = MCAST_PURGE;
+					STATINC(ST_PURGE_ASYNC);
+    } else {
+	n_behind = pan_mcast_mem_lst_n_behind(pan_mcast_state.seen_seqno,
+					pan_mcast_state.global_next_accept -
+					    pan_mcast_hist_little_behind);
+	tp = MCAST_SYNC;
+					if (n_behind > 0) {
+					    STATINC(ST_SYNC_ASYNC);
+					}
+    }
+
+    if (n_behind > 0) {
+					/* send sync msg */
+	mcast_sync_msg(tp);
+    }
+
+}
+
+
+
+
+STATIC_CI void
+pan_mcast_purge_init(void)
+{
+    assert(pan_mcast_state.purge_pe == pan_my_pid());
+
+    pan_mcast_state.global_min_seen        = -1;
+
+    pan_mcast_state.watch_counter          = 0;
+    pan_mcast_state.purge_flags            = 0;
+    pan_mcast_state.seen_seqno             = pan_mcast_mem_lst_create();
+    pan_mcast_hist_purge      = pan_mcast_hist_size * PURGE_PART;
+    pan_mcast_hist_little_behind = pan_mcast_hist_size * BEHIND_PART;
+
+    send_sync_ev = trc_new_event(2500, sizeof(int), "send_sync",
+				 "sync type %d");
+    purge_timer = pan_timer_create();
+
+				    /* Register purge with sweeper */
+    pan_mcast_sweep_register(purge_sweep, NULL);
+}
+
+
+
+STATIC_CI void
+pan_mcast_purge_end(void)
+{
+    pan_timer_print(purge_timer, "purge upcall");
+
+    pan_timer_clear(purge_timer);
+
+    pan_mcast_mem_lst_clear(pan_mcast_state.seen_seqno);
+}
+
+
+
+#endif		/* RELIABLE_NETWORK */
+
+
+#endif

@@ -1,0 +1,79 @@
+\section{Conclusion}
+
+Parallelising the Turing Ring in Orca proved to be worthwhile.
+Programming in Orca is not very difficult, although the lack of 
+debugging tools was annoying. The Distributed Shared Memory model
+works well in practice. It offers a clean interface to parallel
+systems without diminishing the functionality.
+Programming in parallel is still more complicated than serial, since
+the
+programmer must be aware of the fact that many things are happening at
+the same time, and must take care of synchronisation.
+
+\begin{sloppypar}
+Although parallel
+Orca programs do have communication overhead, speedups are achieved at medium
+problem sizes, assuming a practical decomposition of the problem is
+available. Finding such a decomposition is a specific difficulty
+of parallel programming.
+\end{sloppypar}
+
+Programming in Orca can be done without much knowledge about the
+underlying distributed system. However, tuning the performance of the program
+cannot be done without this knowledge. 
+For example, to minimise the number of messages send over the Ethernet
+one must understand the run-time system in detail. The compiler cannot
+optimise communication used for different operations. 
+
+Some features found in other modern languages would be very welcome.
+Currently there is no way of reading command line parameters or
+environment variables. Conditional compilation (like C's {\tt
+\#ifdef}/{\tt \#endif} would help to make larger projects easier to
+handle and to enhance efficiency on different hardware. These changes
+are currently under development.
+
+The Turing Ring is well-suited for parallelisation. Because the
+communication overhead grows as the number of processors grow, rather
+than the problem size,
+reasonable speedups can be achieved.
+Although the speedup drops as the number of processors is increased,
+the efficiency grows with the job size. The optimal number of
+processors (i.e.\ the number of processors to be used to get a minimal
+execution time) thus becomes larger as the jobs get larger. 
+This kind of application is sensible to parallelise even for relatively
+small problems.
+A well-designed load balancing
+strategy is necessary, though, to achieve a better hardware
+utilisation. 
+
+A suggestion for future work would be to optimise the synchronisation
+at the end of each iteration. Currently, each worker waits until all
+workers are ready. In reality, a worker only has to wait until its
+immediate 
+neighbours are finished. This can effectively put one worker process ahead
+of others. 
+This could accomplish some natural load balancing, and could also reduce network
+congestion as some workers might be communicating earlier than
+others.
+
+Another optimisation could be useful if different hardware is used.
+Currently it is assumed that shared variables are replicated, as is
+the case on Amoeba, and thus read operations do not 
+involve any network traffic. Although the read operations on the same
+object which always follow each other are always implemented as a
+single
+operation, there are some read operations followed by a conditional
+read operation. These could be optimised by implementing a combined
+operation which is invoked if the condition yields true, and calling
+the single operation otherwise. This might reduce network traffic on
+systems which do not use replication.
+
+One other possibility for optimisation lies in random number
+generation. As discussed in Section \ref{sImpTur}, a 32-bit random
+number is not necessary for the calculations made. Using bit-operators
+(which were added to the language while this work was under way)
+a more economic way of
+handling random numbers could be implemented. This might improve
+performance dramatically, because currently random number generation
+still takes a large portion of the calculation time.
+

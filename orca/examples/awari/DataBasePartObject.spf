@@ -1,0 +1,120 @@
+#-----------------------------------------------#
+# Author : E.J.J. de Waal			#
+# Date   : August 1994 				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT SPECIFICATION DataBasePartObject;
+
+FROM AwariTypes IMPORT ConfigUnit, ElementUnit, ConfigList, GTV,
+		       GoedelNr, GoedelAdresList;
+		IMPORT ConverterObject;
+
+
+
+
+OPERATION InitDataBasePart(size: integer; 
+			   begin_adres: GoedelNr; 
+			   end_adres: GoedelNr);
+    # Tel the DataBase how much stones there are
+    # and do some initialisation
+
+
+OPERATION ReadDBPFromDisk(filename: string);
+    # read part of DataBase from disk and put it into memory
+    # just for debugging purposes.
+
+
+OPERATION ReadPreviousDB(filename: string; 
+			 b_adres, 
+			 e_adres: GoedelNr;
+			 convert: ConverterObject);
+    # read part of previous DataBase from disk and put it into memory
+    # on new positions in the database
+
+
+OPERATION WriteDBPToDisk(filename: string; parno: integer; onefile: boolean);
+    # read part of DataBase from memory and write it to disk
+
+
+#-------------------------------------------------------------
+
+OPERATION Get_DBPart_Element(goedel_index: IN GoedelNr; 
+			     element: OUT ConfigUnit);
+    # Get a single element (value and nr_successors)
+
+
+OPERATION Get_DBPart_Element_Value(goedel_index: IN GoedelNr; 
+				  element_value: OUT GTV);
+    # Get the value of a single element
+
+
+OPERATION Get_DBPart_Elements(goedel_nr_list: GoedelAdresList;
+			      element_list: OUT ConfigList);
+    # Get a list of elements (value and nr_successors)
+
+
+
+
+OPERATION Set_DBPart_Element(element: IN ElementUnit);
+    # Set a single element
+
+
+OPERATION Put_DBPart_Element(element: IN ElementUnit);
+    # Put a single element
+
+
+OPERATION Put_DBPart_Element_Value(goedel_index: IN GoedelNr; 
+			           element_value: IN GTV);
+    # Put the value of a single element
+
+
+OPERATION Put_DBPart_Elements(element_list: IN ConfigList);
+    # Put a list of elements (value and nr_successors)
+
+
+
+OPERATION Update_DBPart_Element_Value(goedel_index: IN GoedelNr; 
+				     element_value: IN GTV;
+				     optimal: IN boolean;
+				     best_value: OUT GTV): boolean;
+    # Place a single element, if it is better than the current value.
+    # Return true if GtvKnown has been assigned to this node
+
+OPERATION Place_DBPart_Element(element: IN ElementUnit);
+    # Place a single element
+
+
+OPERATION Place_DBPart_Element_Value(goedel_index: IN GoedelNr; 
+				     element_value: IN GTV);
+    # Place the value of a single element
+
+
+OPERATION Place_DBPart_Elements(element_list: IN ConfigList);
+    # Place a list of elements (value and nr_successors)
+
+
+ 
+OPERATION Set_DBPart_Element_Determined(goedel_index: IN GoedelNr);
+    # Set the given element to its final state.
+    
+
+
+OPERATION SetDBPartReady();
+    # Tell the databasepart that there are no more new values.
+
+
+OPERATION SetDBPartNotReady();
+    # Tell the databasepart that there is work to be done.
+
+
+OPERATION IsDBPartReady():boolean;
+    # Check whether there is still work to be done.
+
+
+
+OPERATION CopyUnattainable(value: integer);
+    # Copy the global 'unattainable' value to the local databasepart.
+
+
+END;

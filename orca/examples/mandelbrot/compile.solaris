@@ -1,0 +1,1 @@
+/usr/proj/orca/latest_greatest/bin/oc_panda -v -O2 -CHK --O --V Mandelbrot.imp xdisplay/*.c -I/usr/openwin/include -L/usr/openwin/lib -R/usr/openwin/lib -lXaw -lXmu -lXext -lXt -lX11

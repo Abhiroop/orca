@@ -1,0 +1,89 @@
+\sectionLabel{Parallel Optimizations}
+
+In the sequential algorithm the Sort-and-Delete method was used to
+reduce the number of comparisons, which improved the overlay process
+drastically.
+In order to apply the Sort-and-Delete method to the parallel algorithms
+both the Sort-and-Delete method and the parallel algorithms have to be
+adapted slightly, which is discussed below.
+
+This section also addresses another optimization in
+\refSection{Message Fragmentation}, which involves message fragmentation.
+
+
+\subsectionLabel{Sort-and-Delete}
+
+The Sort-and-Delete method has already been discussed in
+\refSection{The Sort-and-Delete Method} for the sequential algorithm.
+
+In both the remaining parallel methods it is possible to apply
+the Sort-and-Delete method separately to each processor's A and B
+sub-maps.
+The only difference with the sequential case is that the two sub-maps
+are not completely overlapping.
+This means that it is no longer valid, to 
+stop checking a polygon if all its surface has been overlapped.
+In each parallel method this problem is solved differently.
+
+\subsubsection{Data-Parallel Overlay}
+
+To increase parallelism, the A sub-maps are sorted on each
+processor.
+The B map is sorted before replicating it on all processors,
+because then this sorting can already start at the master processor
+while the slave processors are sorting their A sub-maps.
+Note that sorting introduces a sequential aspect, which reduces
+speedup, but the gain is that the number of comparisons is reduced
+dramatically.
+
+On each processor each polygon of the A sub-map will be completely
+overlapped by the polygons of the B map by definition, but the
+converse is definitely not true.
+The consequence of this is that a B polygon must be deleted from the
+map not only if it has been completely overlapped, but also if
+its lower right corner is smaller than the upper left corner of the A
+polygon currently checked.
+
+
+\subsubsection{Patchwised Overlay}
+
+The A and B sub-maps are sorted locally at each processor.
+
+In the case of Duplicate-and-Filter, the surface of each A and B border
+polygon is adjusted to only be the size of what falls within the borders of
+the underlying patch.
+If during overlay a border polygon has a non-empty intersection with
+an other border polygon, then only the resulting surface that lays
+within the underlying patch is subtracted from both polygons.
+Therefore the search per polygon in the other map can stop if its surface
+has been completely overlapped, because now both maps have the same surface
+to be intersected.
+
+
+\subsectionLabel{Message Fragmentation}
+
+At first Orca did not do message fragmentation, which imposed a
+restriction on the amount of data for operation parameters. 
+As a consequence the distribution of larger (sub)maps was impossible.
+Therefore the Orca code was modified to send a large map as a sequence of
+chunks.
+In essence, the code was modified to do message fragmentation by hand,
+but having implemented the message fragmentation the following
+optimizations could be realized.
+
+Instead of at the end sending all the resulting polygons to the
+collector, which writes them to a file,
+the sending is done when enough resulting polygons have been produced
+to fill a result sub-map to the maximum message size.
+The advantage of this approach is that it reduces contention by
+overlapping communication and computation.
+
+An other optimization can be done in the Data-Parallel case during the
+sorting and sending of the B map.
+Instead of first sorting the entire map and than cutting it up and
+sending it to all the processors, the map is first cut up in pieces
+and than successively each part is sorted and sent to the other
+processors.
+At the processor side the parts are merged. 
+In this way the sorting is done by the process that sends and all the
+processes that receive the parts.

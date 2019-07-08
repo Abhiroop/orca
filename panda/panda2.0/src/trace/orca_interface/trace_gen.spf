@@ -1,0 +1,18 @@
+GENERIC (TYPE T)
+MODULE SPECIFICATION trace_gen;
+
+  # Generic part of the interface to the trace package. It must be
+  # instantiated for every user_info type. This type must be static,
+  # or new_event will complain loudly.
+
+  FROM trace IMPORT event_type;
+
+  FUNCTION new_event(level: integer;
+		     name: string;
+		     fmt: string): event_type;
+  # Looks non-generic, but implementation uses T.
+
+  FUNCTION event(e: event_type;
+		 user_info: T);
+
+END GENERIC;

@@ -1,0 +1,150 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/*
+ * Currently, the fragment/message buffer stuff runs like this:
+ *
+ * Each fragment contains a pointer to a data buffer.
+ * This data buffer is the b_data field of a pan_sys_buffer_t of data size
+ * PACKET_SIZE (or less, if the buffer comes from an upcall).
+ * The pan_sys_buffer is an alias for FM buffer structs.
+ * This way, compatibility is ensured with buffers received from the
+ * FM layer.
+ *
+ * Clearing of a buffer is done by invoking pan_sys_buffer_clear on it.
+ */
+
+
+#ifndef __PAN_FRAGMENT_CI__
+#define __PAN_FRAGMENT_CI__
+
+
+
+#include <string.h>
+#include <assert.h>
+
+#include "pan_sys.h"		/* Provides a system interface */
+#include "pan_global.h"
+#include "pan_fragment.h"
+#include "pan_message.h"
+#include "pan_nsap.h"
+#include "pan_comm.h"
+
+
+
+void 
+pan_sys_fragment_start(void)
+{
+}
+
+
+void 
+pan_sys_fragment_end(void)
+{
+}
+
+
+pan_fragment_p 
+pan_fragment_create(void)
+{
+    pan_fragment_p    frag;
+
+    frag = pan_malloc(sizeof(struct pan_fragment));
+
+    fragment_buffer(frag)   = NULL;
+    fragment_size(frag)     = 0;
+    fragment_embedded(frag) = 0;
+
+    return frag;
+}
+
+void
+pan_fragment_clear(pan_fragment_p frag)
+{
+    assert(! fragment_embedded(frag));
+
+    if (fragment_buffer(frag) != NULL) {
+	pan_sys_buffer_clear(fragment_buffer(frag));
+    }
+    pan_free(frag);
+}
+
+
+int
+pan_fragment_copy(pan_fragment_p frag, pan_fragment_p copy, int preserve)
+{
+    pan_fragment_t tmp;
+    int            size;
+    
+    assert(! fragment_embedded(copy));
+    assert(fragment_buffer(copy) == NULL);
+    
+    if (preserve || fragment_embedded(frag)) {
+	size = fragment_size(frag) + TOTAL_HDR_SIZE(fragment_nsap(frag));
+	assert(size <= PACKET_SIZE);
+
+	fragment_buffer(copy)   = pan_sys_buffer_create(size);
+	fragment_data(copy)     = buffer_data(fragment_buffer(copy));
+	fragment_size(copy)     = fragment_size(frag);
+	fragment_nsap(copy)     = fragment_nsap(frag);
+
+	memcpy(fragment_data(copy), fragment_data(frag), size);
+
+	buffer_offset(fragment_buffer(copy)) = fragment_size(copy);
+
+	return 1;
+    } else {
+	tmp = *frag;
+	*frag = *copy;
+	*copy = tmp;
+
+	return 0;
+    }
+
+    /* not reached */
+    return -1;
+}
+
+
+void
+pan_fragment_nsap(pan_fragment_p fragment, pan_nsap_p nsap)
+{
+    /* XXX: build hierarchy of nsaps, and check before assignment */
+    fragment_nsap(fragment) = nsap;
+}
+
+
+void *
+pan_fragment_header(pan_fragment_p frag)
+{
+    assert(fragment_size(frag) + TOTAL_HDR_SIZE(fragment_nsap(frag)) <=
+	   PACKET_SIZE);
+    assert(aligned(fragment_common_hdr(frag) - fragment_data(frag),
+		   UNIVERSAL_ALIGNMENT));
+
+    return fragment_common_hdr(frag);
+}
+
+int
+pan_fragment_flags(pan_fragment_p frag)
+{
+    return frag_hdr_get_flags(fragment_frag_hdr(frag));
+}
+
+int
+pan_fragment_length(pan_fragment_p frag)
+{
+    return fragment_size(frag);
+}
+
+int
+pan_sys_fragment_data_len(pan_fragment_p frag)
+{
+    return fragment_size(frag) + TOTAL_HDR_SIZE(fragment_nsap(frag));
+}
+
+
+#endif

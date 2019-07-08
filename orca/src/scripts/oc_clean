@@ -1,0 +1,38 @@
+#!/bin/sh
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: oc_clean,v 1.4 1997/04/24 11:20:49 ceriel Exp $
+
+list=
+tempfile=/tmp/yy$$
+trap "rm -f $tempfile" 0 1 2 3 15
+
+rm -rf .oc_driver .Amake
+rm -f .*.db
+rm -f *.o
+rm -f .info.*
+
+for i in *.imp
+do
+	n=`basename $i .imp`
+	list="$list $n.gc $n.gh $n.c $n.h"
+done
+for i in *.spf
+do
+	n=`basename $i .spf`
+	list="$list $n.gc $n.gh $n.c $n.h"
+done
+
+echo '/* Produced by the Orca-to-C compiler */' > $tempfile
+for i in $list
+do
+	if [ -f $i ]
+	then
+		if head -1 $i | cmp -s - $tempfile
+		then
+			rm -f $i
+		fi
+	fi
+done

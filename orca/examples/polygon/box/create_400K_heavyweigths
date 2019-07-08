@@ -1,0 +1,2 @@
+boxMaker -zx 8000 -zy 8000 -n 298000 -s 1 > zx8000zy8000n298000s1.box
+boxMaker -zx 8000 -zy 8000 -n 298000 -s 2 > zx8000zy8000n298000s2.box

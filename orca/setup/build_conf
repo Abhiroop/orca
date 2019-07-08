@@ -1,0 +1,65 @@
+# determine and build config directory
+
+echo "Building configuration directory ..."
+
+case $MACH in
+linux)	MACH_SYS=i386_linux
+        ;;
+bsdi)	MACH_SYS=i386_bsdi
+	;;
+sun4)	MACH_SYS=sparc_sunos4
+	;;
+sol2)	MACH_SYS=sparc_solaris2
+	;;
+*)	echo "MACH should be set to either 'linux', 'bsdi', 'sun4' or 'sol2'" 1>&2
+	exit 1
+	;;
+esac
+
+case X$ORCA_HOME in
+X)	echo "ORCA_HOME is not set" 1>&2
+	exit 1
+	;;
+esac
+case X$PANDA_PROJ in
+X)	echo "PANDA_PROJ is not set" 1>&2
+	exit 1
+	;;
+esac
+
+CONF=$ORCA_HOME/conf.$MACH_SYS
+
+if  mkdir -p $CONF
+then	:
+else	echo "Could not create directory $CONF" 1>&2
+	exit 1
+fi
+
+cd $CONF
+
+( cd $ORCA_HOME/conf_src ; tar cf - . ) | tar xf -
+find . -name CVS -exec rm -rf {} \; > /dev/null 2>&1
+
+rm -f READ_ME
+echo "Configuration tree for $MACH_SYS" > READ_ME
+if [ -f make_params ]
+then	:
+else	cp params.$MACH_SYS make_params
+fi
+
+case X$TARGET in	
+X)	TARGET=$ORCA_HOME
+	;;
+esac
+
+cat > make_paths << EOF
+ORCA_HOME	= $ORCA_HOME
+ORCA_TARGET	= $TARGET
+AMOEBA_HOME	= $AMOEBA_HOME
+PANDA_PROJ	= $PANDA_PROJ
+VERSION		= lib
+BINSUF		= $MACH
+AM_BINSUF	= sun4
+EOF
+
+echo "Configuration directory $CONF built."

@@ -1,0 +1,197 @@
+#===============================================================
+#=======        LoadBal.imp: Load balancing function    ========
+#===                                                        ====
+MODULE IMPLEMENTATION LoadBal;
+
+IMPORT LinkObj;
+
+# @ InitLoadBal: Initialises the load balancing function
+FUNCTION InitLoadBal(
+        LStatus: SHARED StatusType;     # Status with left neighbour
+        RStatus: SHARED StatusType      # Status with right neighbour
+);
+BEGIN
+        LStatus.State := 2;
+        RStatus.State := 2;
+END;
+
+# @ Negotiate: negotiate with neighbours to find out wether to send a cell
+FUNCTION Negotiate(
+	WorkLoad: integer;		# The callers current workload
+        LLoadDiff: integer;             # The load of left border cell
+        RLoadDiff: integer;             # The load of right border cell
+        LStatus: SHARED StatusType;     # Status with left neighbour
+        RStatus: SHARED StatusType;     # Status with right neighbour
+        LLinkUp: SHARED LinkObj;        # Link to left neighbour
+        LLinkDn: SHARED LinkObj;        # Link from left neighbour
+        RLinkUp: SHARED LinkObj;        # Link to right neighbour
+        RLinkDn: SHARED LinkObj         # Link from right neighbour
+);
+
+        FLoad: integer;                 # to calculate future load
+        RSendPossible,
+        LSendPossible: boolean;         # Flags for reconsidering in state 2
+BEGIN
+        # Next state in FSA
+        IF (LStatus.State /= RStatus.State) OR
+                        (LStatus.State < 0) OR
+                        (LStatus.State > 2) OR
+                        (RStatus.State < 0) OR
+                        (RStatus.State > 2) 
+                THEN
+                WriteLine("Inconsistent states in Negotiate!");
+        FI;
+
+        IF LStatus.State = 2 THEN
+                LStatus.State := 0;
+                RStatus.State := 0;
+	ELSE
+                LStatus.State +:= 1;
+                RStatus.State +:= 1;
+	FI;
+
+        CASE LStatus.State OF
+        # First state of the automaton: Inititialise, send load information
+        # to the neighbours
+	0 => 
+                # Init the FSA
+                LStatus.Send := false;
+                RStatus.Send := false;
+                LStatus.PlannedSend := false;
+                RStatus.PlannedSend := false;
+                LStatus.Load := WorkLoad;
+                RStatus.Load := WorkLoad;
+                LStatus.LoadDiff := LLoadDiff;
+                RStatus.LoadDiff := RLoadDiff;
+                # Send load to neighbours
+                # LLinkUp$SetLoad(WorkLoad);
+                # LLinkUp$SetLoadDiff(LLoadDiff);
+		LLinkUp$SetInitInfo(WorkLoad, LLoadDiff);
+		# RLinkUp$SetLoad(WorkLoad);
+                # RLinkUp$SetLoadDiff(RLoadDiff);
+		RLinkUp$SetInitInfo(WorkLoad, RLoadDiff);
+                RETURN;
+	|
+        # Second state: Get the neighbour's information, calculate the
+        # planned action
+	1 =>
+                # LLinkDn$GetLoad(LStatus.NBLoad);
+                # LLinkDn$GetLoadDiff(LStatus.NBLoadDiff);
+		LLinkDn$GetInitInfo(LStatus.NBLoad, LStatus.NBLoadDiff);
+                # RLinkDn$GetLoad(RStatus.NBLoad);
+                # RLinkDn$GetLoadDiff(RStatus.NBLoadDiff);
+		RLinkDn$GetInitInfo(RStatus.NBLoad, RStatus.NBLoadDiff);
+
+                # Calculate expected load
+                FLoad := LStatus.Load;
+
+                IF LStatus.Load - LStatus.NBLoad > MaxLoadDiff THEN
+                        # Left neighbour has nothing to do. We try to send
+                        LStatus.PlannedSend := true;
+                        FLoad -:= LStatus.LoadDiff;
+		FI;
+                IF RStatus.Load - RStatus.NBLoad > MaxLoadDiff THEN
+                        # Right neighbour has nothing to do. We try to send
+                        RStatus.PlannedSend := true;
+                        FLoad -:= RStatus.LoadDiff;
+		FI;
+
+                IF LStatus.NBLoad - LStatus.Load > MaxLoadDiff THEN
+                        # Left neighbour has too much to do. We try to receive
+                        FLoad +:= LStatus.NBLoadDiff;
+                FI;
+
+                IF RStatus.NBLoad - RStatus.Load > MaxLoadDiff THEN
+                        # Right neighbour has too much to do. We try to receive
+                        FLoad +:= RStatus.NBLoadDiff;
+                FI;
+
+                # Tell our expected load to the neighbours
+                LStatus.FLoad := FLoad;
+                RStatus.FLoad := FLoad;
+                LLinkUp$SetFLoad(LStatus.FLoad);
+                RLinkUp$SetFLoad(RStatus.FLoad);
+
+
+                RETURN;
+        |
+        # Third state: See what our neighbour has found out; reconsider
+        # whether to send anything; set *Status.Send to true or false.
+	2 =>
+                # Get neigbours' expected load
+                LLinkDn$GetFLoad(LStatus.NBFLoad);
+                RLinkDn$GetFLoad(RStatus.NBFLoad);
+
+                IF LStatus.PlannedSend AND NOT RStatus.PlannedSend THEN
+			# We want to send to the left, not to the right.
+                        # Reconsider it
+                        IF LStatus.NBFLoad - LStatus.FLoad <= MaxLoadDiff THEN
+				# Neighbour's load will be within bounds;
+                                # Proceed
+                                LStatus.Send := true;
+                        FI;
+                ELSIF RStatus.PlannedSend AND NOT LStatus.PlannedSend THEN
+			# We want to send to the right, not to the left.
+                        # Reconsider it
+                        IF RStatus.NBFLoad - RStatus.FLoad <= MaxLoadDiff THEN
+				# Neighbour's load will be within bounds;
+                                # Proceed
+                                RStatus.Send := true;
+                        FI;
+		ELSIF RStatus.PlannedSend AND LStatus.PlannedSend THEN
+			# We want to send to both sides.
+			# Reconsider
+                        IF (RStatus.NBFLoad - RStatus.FLoad <= MaxLoadDiff)
+					AND
+					(LStatus.NBFLoad - LStatus.FLoad
+							<= MaxLoadDiff)
+				THEN
+				# Allright to send to both sides: Proceed
+                                LStatus.Send := true;
+                                RStatus.Send := true;
+			ELSE
+				# We try to send to the left and not to the 
+				# right. See if it's possible.
+				LSendPossible := false;
+				RSendPossible := false;
+				IF LStatus.NBFLoad - (LStatus.FLoad +
+					RStatus.LoadDiff) <= MaxLoadDiff THEN
+					# Neighbour's load will be in bounds;
+					LSendPossible := true;
+				FI;
+				# We try to send to the right and not to the 
+				# left. See if it's possible.
+				IF RStatus.NBFLoad - (RStatus.FLoad +
+					LStatus.LoadDiff) <= MaxLoadDiff THEN
+					# Neighbour's load will be in bounds;
+					RSendPossible := true;
+				FI;
+				IF LSendPossible AND RSendPossible THEN
+					# Choose the smallest
+					IF LStatus.LoadDiff < RStatus.LoadDiff 
+							THEN
+						LStatus.Send := true;
+					ELSE
+						RStatus.Send := true;
+					FI;
+				# Choose the appropriate one if it exists
+				ELSIF LSendPossible THEN
+					LStatus.Send := true;
+				ELSIF RSendPossible THEN
+					RStatus.Send := true;
+				FI;
+			FI;
+		FI;
+	ELSE
+		WriteLine("Unknown state in Negotiate:", LStatus.State);
+                RETURN;
+	ESAC;
+	
+END;
+
+
+END;
+
+#===                                                        ====
+#=======        LoadBal.imp                             ========
+#===============================================================

@@ -1,0 +1,234 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION WaterManager;
+
+# This is the water program from the SPLASH benchmark suite.  The
+# original program was written in C for a shared memory
+# multiprocessor.
+#
+# This Orca version is based upon the work of John Romein who coded a
+# sequential water program in Orca, and who also coded a parallel
+# version in C that runs on a distibuted memory machine (the Amoeba
+# processor pool).
+#
+# Frank Seinstra has combined John's versions into a parallel Orca
+# program.  
+#
+# Finally, Koen Langendoen has fine tuned this Orca program, see the
+# file NOTES.  As a result, water in Orca runs approximately a factor
+# 1.3 slower than the C version written by John Romein, both
+# sequentially and in parallel.
+#
+# Raoul Bhoedjang added the new input routine which achieves better
+# load balance.
+#
+# John Romein fixed the counting bug in DoInterForces and DoPotEnergy
+# which caused some pairs to be skipped in the interaction computations.
+
+
+IMPORT	barrier;
+IMPORT	DirArrayObject;
+IMPORT	LongRealObject;
+
+FROM	Common		IMPORT	InputArrayType, PCC_Type, TLC_Type;
+FROM	GlobalType	IMPORT	GlobalObject;
+FROM	WaterWorker	IMPORT	WaterWorker;
+FROM	Consts		IMPORT	NVALS, ComputePccConstants,
+				SetUpSystemConstants, PrintConstants;
+FROM	InOut		IMPORT	ReadInt, ReadLongReal,
+				WriteLn,
+				OpenInputFile, CloseInput;
+FROM	args		IMPORT	Argc, Argv;
+
+
+CONST	MAXMOLS		= 4096;
+CONST	INPUTFILE	= "input";
+
+
+# Raoul: this input routine takes the (sorted) input file and
+# distributes the molecules block-wise over all processors.
+
+FUNCTION OldReadInput(NrParts, MolsPerPart, Rest : integer;
+		   InArray : OUT InputArrayType[0 .. NrParts - 1]
+			      [0 .. (MolsPerPart + 1) * NVALS * 2 - 1]);
+	NrMols, NrVals : integer;
+BEGIN
+
+    ###	Read the data needed for each molecule.
+    ###	The array-bounds of 'InArray' are set in the function header.
+
+	FOR cpu IN 0 .. NrParts - 1 DO
+	    NrMols := MolsPerPart;
+
+	    IF Rest > 0 THEN
+		NrMols +:= 1;
+		Rest   -:= 1;
+	    FI;
+
+	    NrVals := NrMols * NVALS * 2;
+
+	    FOR val IN 0 .. NrVals - 1 DO
+		ReadLongReal(InArray[cpu][val]);
+	    OD;
+	OD;
+END;
+
+	
+# Raoul: this new input routine takes the (sorted) input file and
+# distributes the molecules cyclically over all processors. This
+# results in a better load balance.
+
+FUNCTION NewReadInput(NrParts, MolsPerPart, Rest : integer;
+		   InArray : OUT InputArrayType[0 .. NrParts - 1]
+			      [0 .. (MolsPerPart + 1) * NVALS * 2 - 1]);
+	cpu : integer;
+BEGIN
+    ###	Read the data needed for each molecule.
+    ###	The array-bounds of 'InArray' are set in the function header.
+
+	cpu := 0;
+	FOR mol IN 0..NrParts * MolsPerPart + Rest - 1 DO
+	    FOR i IN 0..NVALS * 2 - 1 DO
+		ReadLongReal(InArray[cpu][(NVALS * 2 * (mol / NCPUS())) + i]);
+	    OD;
+	    cpu := (cpu + 1) % NCPUS();	# Cycle over processors.
+	OD;
+END;
+	
+
+
+PROCESS OrcaMain();
+	Data        : GlobalObject[0 .. NCPUS() - 1];
+	RandomArray : InputArrayType;
+
+	NrParts, MolsPerPart, Rest, StartMol, LastMol : integer;
+
+	NMOL, NSTEP, NORDER, NPRINT, NATMO : integer;
+	TSTEP, BOXH, BOXL, REF1,
+	savtstep,				# Ceriel: Added; prints wrong
+						# timestep otherwise.
+	CUTOFF, FHM, FOM, FKIN, FPOT : longreal;
+
+	PCC : PCC_Type;
+	TLC : TLC_Type;
+
+	Min, Sum, Su                         : DirArrayObject;
+	TVIR, TKIN, Total, POTA, POTR, POTRF : LongRealObject;
+	Barrier                              : barrier;
+	inputfile 			     : string;
+	new				     : boolean;
+BEGIN
+
+    ### Read some specific constants from the input-file
+
+	new := true;
+
+	IF Argc() = 1 THEN
+	    inputfile := INPUTFILE;
+	ELSIF Argc() = 2 THEN
+	    inputfile := Argv(1);
+	ELSIF (Argc() = 3) AND (Argv(2) = "-blocked") THEN
+	    inputfile := Argv(1);
+	    new := false;
+	ELSE
+	    WriteLine( "usage: ", Argv(0), "-OC [<inputfile>] [-blocked]");
+	    RETURN;
+	FI;
+
+	IF NOT OpenInputFile(inputfile) THEN
+	    WriteLine("ERROR: input file '", inputfile, "' not found.");
+	    RETURN;
+	FI;
+
+	ReadLongReal(TSTEP);
+	savtstep := TSTEP;		# Ceriel: added
+	ReadInt(NSTEP);
+	ReadInt(NMOL);
+	ReadInt(NORDER);
+	ReadInt(NPRINT);
+
+	IF NMOL > MAXMOLS THEN
+	    WriteLine("ERROR: Too many molecules.");
+	    CloseInput();
+	    RETURN;
+	FI;
+
+	IF NPRINT <= 0 THEN
+	    WriteLine("ERROR: NPRINT must be positive.");
+	    CloseInput();
+	    RETURN;
+	FI;
+
+
+    ### Compute, set up and print some constants
+
+	ComputePccConstants(NORDER + 1, TLC, PCC);
+	SetUpSystemConstants(NMOL, TSTEP, NATMO, CUTOFF, FPOT,
+				FKIN, BOXH, BOXL, REF1, FHM, FOM);
+	# Ceriel: use savtstep instead of TSTEP because TSTEP has just been
+	# modified.
+	# PrintConstants(NSTEP, NMOL, NORDER, TSTEP, CUTOFF);
+	PrintConstants(NSTEP, NMOL, NORDER, savtstep, CUTOFF);
+
+
+    ### Do some pre-strategey/fork calculations and initializations
+
+	MolsPerPart := NMOL / NCPUS();
+	Rest        := NMOL % NCPUS();
+	StartMol    := 0;
+
+	IF MolsPerPart = 0 THEN
+	    NrParts := Rest;
+	ELSE
+	    NrParts := NCPUS();
+	FI;
+
+	IF new THEN
+		WriteLine("Reading with new input routine");
+		NewReadInput(NrParts, MolsPerPart, Rest, RandomArray);
+	ELSE
+		WriteLine("Reading with old input routine");
+		OldReadInput(NrParts, MolsPerPart, Rest, RandomArray);
+	FI;
+	CloseInput();
+
+	Barrier$init(NrParts);
+
+	WriteLine("**** NEW RUN STARTING FROM COORDINATES OF WATERS");
+	WriteLn();
+
+
+    ### Put object 'Data[cpu]' on processor 'cpu' permanently
+
+	FOR cpu IN 0 .. NrParts - 1 DO
+	    Strategy(Data[cpu], 0, cpu);
+	OD;
+
+
+    ### FORK a 'WaterWorker'-process for each 'Data'-part
+
+	FOR cpu IN 0 .. NrParts - 1 DO
+	    LastMol := StartMol + MolsPerPart - 1;
+	    IF Rest > 0 THEN
+		LastMol +:= 1;
+		Rest    -:= 1;
+	    FI;
+	    FORK WaterWorker(Data, Barrier, Min,
+			     Sum, Su, TVIR, TKIN, Total, POTA, POTR,
+			     POTRF, RandomArray, TLC, PCC, StartMol,
+			     LastMol - StartMol, NMOL, NrParts, NATMO,
+			     NSTEP, NORDER, NPRINT, TSTEP, BOXH, BOXL,
+			     REF1, CUTOFF, CUTOFF * CUTOFF, FHM, FOM,
+			     FPOT, FKIN) ON cpu;
+	    WriteLine("Forked worker ", cpu);
+	    StartMol := LastMol + 1;
+	OD;
+
+    ### Master has nothing more to do.
+
+END;
+
+
+END;

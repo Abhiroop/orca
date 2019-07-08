@@ -1,0 +1,46 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+OBJECT SPECIFICATION DirArrayObject;
+
+FROM Common IMPORT	DirectionType, DirTableType;
+
+
+### Assign 'Val' to DirArrayObject[Dir]
+#
+OPERATION SetVal(Dir : DirectionType; Val : longreal);
+
+
+### Retrieve DirArrayObject[Dir]
+#
+OPERATION GetVal(Dir : DirectionType) : longreal;
+
+
+### Add 'Val' to DirArrayObject[Dir]
+#
+OPERATION IncVal(Dir : DirectionType; Val : longreal);
+
+
+### Assign 'Val' to DirArrayObject
+#
+OPERATION SetAllVal(Val : DirTableType);
+
+
+### Retrieve DirArrayObject
+#
+OPERATION GetAllVal() : DirTableType;
+
+
+### Add 'Val[dir]' to DirArrayObject[Dir] (for each dir in XDIR .. ZDIR)
+#
+OPERATION IncAllVal(Val : DirTableType);
+
+
+### Compute minimal values of 'Val[dir]' and DirArrayObject[Dir]
+#   (for each dir in XDIR .. ZDIR)
+#
+OPERATION MinAllVal(Val : DirTableType);
+
+
+END;

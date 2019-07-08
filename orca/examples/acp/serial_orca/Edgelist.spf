@@ -1,0 +1,59 @@
+# ========================================================================
+# == File:      Edgelist.spf   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  specification of a list of edges			==
+# ========================================================================
+MODULE SPECIFICATION Edgelist;
+
+FROM EdgeCollection IMPORT edge_p;
+
+# ========================================================================
+# == types								==
+# ========================================================================
+
+TYPE edgelist_elt_p 	= NODENAME OF edgelist_t;
+
+TYPE edgelist_t =
+	GRAPH
+		head, tail : edgelist_elt_p;
+		num_elts   : integer;
+        NODES
+                next	   : edgelist_elt_p;
+                data 	   : edge_p;
+        END;
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+FUNCTION create_el(
+	e_list 	: SHARED edgelist_t
+) : boolean;
+
+
+FUNCTION delete_el(
+	e_list 	: SHARED edgelist_t
+);
+
+
+FUNCTION insert_elt_el(
+	e_list 	: SHARED edgelist_t;
+	edge	: edge_p
+) : boolean;
+
+
+FUNCTION num_elts_el(
+	e_list : edgelist_t
+) : integer;
+
+
+FUNCTION give_ith_elt_el(
+	e_list 	: edgelist_t;
+	index	: integer; 
+	edge 	: SHARED edge_p
+) : boolean;
+
+
+END;
+

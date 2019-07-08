@@ -1,0 +1,16 @@
+echo 'newgraph border clip X 3.8'
+echo 'xaxis min 0 max 35 label : number of CPUs'
+echo 'yaxis min 0 max 24 label : execution time (seconds)'
+echo 'newcurve linetype solid marktype none label : 1 CPU per worker'
+echo 'pts '
+cat ntr.tp.plot
+echo 'newcurve linetype dotted marktype circle label : 2 CPUs per worker'
+echo 'pts '
+cat ntr.2.plot
+echo 'newcurve linetype dashed marktype diamond label : 4 CPUs per worker'
+echo 'pts '
+cat ntr.4.plot
+echo 'newcurve linetype longdash marktype triangle label : 8 CPUs per worker'
+echo 'pts '
+cat ntr.8.plot
+echo 'legend defaults x 35 y 23 hjr vjt'

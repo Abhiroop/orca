@@ -1,0 +1,7 @@
+MODULE SPECIFICATION output_solution;
+
+FROM CromoVector IMPORT individual;
+
+FUNCTION write_solution(nb_nodes: integer; solution: individual);
+
+END;

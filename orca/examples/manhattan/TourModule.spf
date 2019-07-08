@@ -1,0 +1,60 @@
+MODULE SPECIFICATION TourModule;
+
+	FROM TspTypes IMPORT 
+		NodeIndex;
+	IMPORT SpecificationObject;
+
+	
+	TYPE Node = NODENAME OF Tour;
+	TYPE Tour = 
+		GRAPH
+			root : Node;
+			firstInserted : Node;
+			lastInserted : Node;
+			nodes : integer;
+		NODES
+			nr : NodeIndex;		# The NodeIndex of the node
+			next : Node;		# Next node in tour
+			prev : Node;		# Previous node in tour
+			next_inserted : Node; 	# Next node that was initially inserted. 
+		END;
+
+	TYPE TourCollection = ARRAY[integer] OF Tour;
+#	TYPE IntTourBoolFunType = FUNCTION (IN integer, IN Tour, IN boolean) : Tour;
+	TYPE DirectionType = ( next, previous );
+
+
+	FUNCTION InitializeTour () : Tour;
+	FUNCTION PrintTour (t : Tour);
+
+	FUNCTION InsertAtEnd (nr : NodeIndex; t : Tour) : Tour;
+	FUNCTION InsertAtBest (nr : NodeIndex; t : Tour; value : OUT integer; spec : SpecificationObject) : Tour;
+	FUNCTION RemoveNode (i : NodeIndex; t : Tour; value : OUT integer; spec : SpecificationObject) : Tour;
+	FUNCTION ClearTour (t : Tour) : Tour;
+	FUNCTION Swap (n1, n2 : Node; t : Tour) : Tour;
+	FUNCTION SwapCost (n1, n2 : Node; t : Tour; spec : SpecificationObject) : integer;
+
+	FUNCTION Size (t : Tour) : integer;
+	FUNCTION Empty (t : Tour) : boolean;
+	FUNCTION First (t : Tour) : Node;
+	FUNCTION Last (t : Tour) : Node;
+	FUNCTION Next (n : Node; t : Tour) : Node;
+	FUNCTION Prev (n : Node; t : Tour) : Node;
+	FUNCTION Index (n : Node; t : Tour) : NodeIndex;
+	FUNCTION Present (city : integer; t : Tour) : boolean;
+
+	FUNCTION ConsistentTour (t : Tour) : boolean;
+
+	FUNCTION UnorderedNext (n : Node; t: Tour) : Node;
+	FUNCTION UnorderedFirst (t : Tour) : Node;
+	FUNCTION UnorderedLast (t : Tour) : Node;
+	FUNCTION TourValue (t : SHARED Tour; spec : SpecificationObject) : integer;
+
+	FUNCTION TwoOptReorder (n, m: Node; t : Tour) : Tour;
+	FUNCTION ROptReorder (start : Node; n : Node; m : Node; k : Node; direction : DirectionType; t : Tour) : Tour;
+END;
+
+	
+
+
+

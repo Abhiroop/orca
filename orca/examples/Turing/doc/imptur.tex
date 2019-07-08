@@ -1,0 +1,357 @@
+\section{Implementing the Turing Ring}
+\label{sImpTur}
+
+Implementing the Turing Ring in a serial language is
+straightforward. The ring can be represented by an array of records,
+each of which contains the prey and predator population for a single cell.
+The program then loops over all cells in the ring, determining for
+each individual whether it gives birth, dies, or
+migrates. For migration a second array is used, to which the processed
+animals are moved. This avoids processing twice the animals which
+migrate to a cell which is not yet processed.
+
+\begin{figure}
+\begin{tgrind}
+\input{sertur.pseu.tex}
+\end{tgrind}
+\caption{Serial Implementation of the Turing Ring}
+\label{fSerialTuring}
+\end{figure}
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{migration.eps}
+\caption{Representation of the Turing Ring}
+\label{fRepresentation}
+\end{figure}
+
+The Turing Ring was implemented in ANSI~C using this method.
+A simple graphical interface was added to inspect the results.
+Profiling this program revealed that 90\% of the
+execution time was spent generating random numbers. 
+
+One way to reduce this cost would be to increase the efficiency of the
+way the random numbers are used. To determine if one predator or prey
+gives birth or dies does not require a 32-bit random number. The
+program could split the random number into parts, thus generating only
+one random number for a few probabilistic decisions. This was not
+implemented, because it was not in the scope of this work.
+
+The ANSI~C program was then translated into strictly sequential Orca, and 
+run on one
+processor. This way the speed of Orca could be compared with that of
+ANSI~C. It was found that the Orca program was about 2.5 times slower
+than ANSI~C. This was mostly due to the dynamic array bound checking done
+by the Orca run-time system.
+
+\subsection {Parallelising the Turing Ring}
+
+To parallelise the Turing Ring the problem must be {\em decomposed}.
+There are two obvious compositions of the Turing Ring: a spatial
+decomposition or a decomposition per animal.
+
+A spatial decomposition would have each processor take care
+of a number of cells. Since animals only move between adjacent cells, it
+would furthermore be practical to have adjacent cells be processed by
+one processor. This way a processor would only have to exchange information
+regarding its cells with two other processors.
+
+The decomposition per animal implies that every processor takes care of
+a number of animals, which may be anywhere in the ring. This
+decomposition seemed impractical, since a processor needs
+information about a cell's population to determine the behaviour of a
+single animal. If the population of a cell is scattered over all 
+processors, this information is not readily available.
+Therefore, the first approach was taken.
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{distributing.eps}
+\caption{Spatial Decomposition of the Turing Ring}
+\label{fSpatialDecomposition}
+\end{figure}
+
+Each processor holds a proper
+interval of the ring. Most of the calculations for animal migration can
+then be
+processed on the processor itself, as in the serial program. Only the
+animals migrating from a processor's border cells need to be sent to
+another processor.
+
+This means that each processor needs to know which
+cells are located on which processor. This can be accomplished by using
+a shared array which contains this information. A simpler way is also
+possible. If every processor contains a proper interval of the total
+number of cells, and these intervals are given to the processors in
+sequence, processor $i$ only needs to communicate with processor
+$i - 1$ and processor $i + 1$ (and processor $1$ with processor $n$ and
+vice versa).
+
+The first solution has higher communication overhead,
+but might be better in the general
+case. In a two dimensional grid for example, load balancing would be much
+harder using the latter approach, since the processors could not keep track
+of where cells are located (see Section \ref{sPrevWork}).
+In a ring, this problem does not occur. Therefore, the first solution was
+chosen for this program.
+
+\subsubsection{Implementation of the Turing Ring}
+
+The parallel program consists of two modules. The main program is
+contained in the module {\tt Turing}.
+The communication channel between processors is implemented by an
+object called {\tt LinkObj}.
+
+\begin{figure}
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+DisplayFreq: integer	& Display frequency \\
+\hline
+NOCells: integer	& Number of cells \\
+\hline
+NOIterations: integer	& Number of iterations \\
+\hline
+RandomSeed: integer	& Seed to initialise random numbers \\
+\hline
+TimeStep: real		& time step used \\
+\hline
+Explode: integer	& maximum number of animals in a cell \\
+\hline
+PredPopInit: integer	& initial predator population \\
+\hline
+PredDeathA: real	& \\
+PredDeathB: real	& predator coefficients \\
+PredBirth: real		& \\
+PredMigrate: real	& \\
+\hline
+PreyPopInit: integer	& initial prey population \\
+\hline
+PreyDeathA: real	& \\
+PreyDeathB: real	& prey coefficients \\
+PreyBirth: real		& \\
+PreyMigrate: real	& \\
+\hline
+\end{tabular}
+\end{center}
+\caption{The {\tt Params} data structure}
+\label{fParams}
+\end{figure}
+
+The main process, {\tt OrcaMain}, initialises the work. First, it
+reads the user-specified parameters from the standard input. (The
+current Orca system has no support for command line parameters.) It
+then forks off as many worker processes as there are CPUs available
+and blocks until the worker processes have finished.
+
+In the main process two arrays of link objects are declared. Each consecutive 
+pair
+of worker processes gets one link object of each array passed as a shared
+parameter. These two links act as read and write channels between
+neighbouring worker processes.
+
+Each worker initially has a range of cells assigned to it for
+processing. At the start, all cells are distributed evenly over 
+all processors.
+Each worker process also gets a copy of the parameters
+the main process has read.
+
+The worker process uses two arrays to store its part of the ring.
+It initialises its part using the user provided parameters and then
+starts iterating. On each iteration, it performs the following
+steps:
+\begin{itemize}
+	\item[1.] Accept the animals which migrated from the neighbouring
+	processors during the previous iteration.
+	\item[2.] Display the current state of its part of the ring,
+	if necessary.
+	\item[3.] Generate birth and death in its part of the ring.
+	\item[4.] Handle migration within its part of the ring, and
+	determine which animals move to the neighbouring CPUs.
+	\item[5.] Send migrating animals to its neighbours.
+	\item[6.] Wait for the other workers to finish this iteration.
+\end{itemize}
+For inter-processor communication (step 1 and 5) the link object is
+used. This is an object which contains operations for writing and
+reading data which denote the number of predators and prey which
+migrate between processors.
+
+The synchronisation in step 6 is necessary to ensure that each
+worker actually receives the migration data sent to it in step 5. Not
+every worker will finish step 3 and 4 at the same time, since the
+amount of work done in these steps is determined by the number of
+animals which is presently in its part of the ring. Since this number
+can vary by hundreds, some processors may have to wait.
+
+After all iterations have been performed, the workers inform the main
+process that they are done using barrier synchronisation. The main
+process can then terminate.
+
+\subsubsection{Load Balancing}
+
+As mentioned above, a processor may have to wait for other processors
+to finish their work. If the variance of execution time of an iteration
+between processors becomes too large, some processors will do nothing
+most of the time while others have lots of work to do. To prevent this
+situation, a load balancing strategy has to be used. It should ensure
+that the workload is evenly distributed amongst processors during every
+iteration.
+
+Initially, all cells in the ring contain the same number of animals,
+so an even distribution of workload can be achieved by distributing
+the cells evenly amongst processors at startup. This is called static
+load balancing.
+
+However, since populations can vary dramatically, some dynamic load
+balancing has to be done as well. This means a processor must be able to
+pass some of its work, i.e.\ some of its cells, to another, lightly
+loaded, processor during run-time. Devising a good dynamic load balancing
+strategy was a major part of this work.
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{shifting.eps}
+\caption{Shifting a cell to a neighbour}
+\label{fShifting}
+\end{figure}
+
+
+It would be possible to have a master process collect all information and
+then redistribute the work. However, as a consequence of the spatial
+decomposition as depicted in Figure \ref{fSpatialDecomposition}, a
+processor should only shift cells to its neighbours. Furthermore, the
+populations (thus workload) of a processor's cells are not likely to
+change rapidly. Therefore, a
+processor can decide whether to shift cells to its neighbours based on
+local data. This takes away the need for a central master process. In
+addition, the channels for information exchange between neighbouring
+processors have already been defined for migration. The load balancing
+information can therefore be piggy-backed with this data.
+
+A naive load balancing algorithm would do the following. On each
+iteration, it would compare its own workload with that of its
+neighbours. If the difference between the loads exceeded a certain
+threshold, cells would be shifted to or from the neighbour (Figure
+\ref{fShifting}).
+
+This load balancing scheme suffers from two
+problems. First, if most of the load of a heavily loaded 
+processor comes from
+one cell, (one cell contains almost all of the predators
+and prey it has to handle,) and this cell happens to be a border cell,
+shifting the cell would result in the neighbouring processor becoming
+heavily loaded while the processor itself would lose most of its load. So
+in the next iteration the neighbour will shift the cell back in an
+attempt to redistribute the total workload more evenly. This way a
+heavily loaded cell would be shifted back and forth until its population
+has died out. This phenomenon is called {\em thrashing}.
+
+Secondly, the following situation might occur. Imagine that a processor's
+neighbours are both heavily loaded, and both decide to shift cells to
+that processor. Then that processor would be heavily loaded, maybe even more
+than its two neighbours were, so the workload would not be evenly
+distributed. This situation is called {\em overloading}.
+
+To avoid these two problems, a better load balancing scheme is needed.
+Since processors need to know more about their neighbours's load, a
+{\em multi-iteration protocol} is used. A processor not only receives
+its neighbours's workload, but also an estimate of what its workload
+would be after shifting. Now it decides whether shifting cells will
+result in a more evenly distributed workload or not and acts
+accordingly.  The new control structure is outlined in Figure
+\ref{fWorker}.
+
+\begin{figure}
+\begin{tgrind}
+\input{worker.pseu.tex}
+\end{tgrind}
+\caption{The Worker Process}
+\label{fWorker}
+\end{figure}
+
+The algorithm is implemented using two functions,
+{\tt InitLoadBal} and {\tt Negotiate}. It uses two {\em status records} to
+keep information about the current phase of negotiation with the
+neighbouring CPUs. These records are initialised when {\tt
+InitLoadBal} is invoked.
+
+Each worker process calls {\tt Negotiate} on every iteration. This
+function communicates with the neighbours according to a three stage
+protocol:
+\begin{itemize}
+        \item[1.] Send current workload to both neighbours, along
+        with border cell's load.
+        \item[2.] Receive neighbours's load information, send expected load.
+        \item[3.] Receive neighbours's expected load.
+\end{itemize}
+In stage 1 all workers send their current load to their neighbours.
+Since the workload is determined by the number of animals a processor
+has to manage, it is actually this number that is sent. The worker also
+sends the number of animals in the cell bordering the neighbour's cell.
+This is the amount of load the worker would lose, if it decided to
+shift a cell to the neighbour.
+
+The load information is written to the link structures which connect the
+neighbouring workers. It is not necessary to create another
+communication channel if {\em piggy-backing} can be used. This however prevents
+the load balancing algorithm from being implemented as an object, since
+Orca does not allow shared variables as parameters to an
+operation. (The link structures have to be passed to {\tt Negotiate}.)
+
+In stage 2 every worker receives load balancing information from its
+neighbours. It can then calculate the difference between its own load
+and that of its neighbours. If the difference exceeds a certain threshold, it
+decides to shift cells to or from the neighbour. Since the neighbour
+makes the same calculations, it makes the same decision.
+Now the worker calculates what its future load will be if all the shifts
+actually take place, and sends this number to its neighbours.
+
+In stage 3 each worker receives its neighbours's expected load, so it
+knows what load it will have and what load its neighbours will have. It
+now reconsiders the shifting of cells as it was planned in the previous
+step.
+
+If the worker wanted to send, but this would result in a situation where
+its neighbour would get so much to do that the difference in load would
+exceed the threshold again, there is no use in sending, so the worker
+does not do it. This way thrashing can never occur: a cell which
+contains so much load that the neighbour will want to send it back
+immediately will never be sent. Also overloading is prevented, since a
+worker takes into account what its neighbour's other neighbour will
+send.
+
+Another unwanted situation now can occur. Suppose a cell wants to send
+to both neighbours. Its expected load will be its current load minus
+the load of its two border cells. If this load is low compared to its
+neighbours', it will refrain from sending in both direction, even if
+the load distribution would be better if it would send to one of its
+neighbours (Figure \ref{fSendOne}).
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{sendone.eps}
+\caption{A Worker which should send to one side}
+\label{fSendOne}
+\end{figure}
+
+If CPU~5 would want to send cells to both CPU~4 and CPU~6, its future
+load would be very low. But sending its border cell to CPU~6 would not
+happen anyway, because CPU~6 would send it back immediately. Sending to
+CPU~4 still seems a good idea, but if the future workload of CPU~5 is
+compared to that of CPU~4, this will not happen either.
+
+The following solution to this problem is used in the current
+implementation. When a worker
+finds out it planned to send to both its neighbours, but after
+reconsidering it does not send to either of them, it determines if it
+is possible to send to only one of them. In Figure \ref{fSendOne}, CPU~5
+would decide it could send to CPU~4 after all, since the difference in
+load after shifting would be very small. If a worker can send to
+both neighbours, but not at the same time, it sends the border cell
+containing the least workload.
+
+Using this strategy, a worker which has a high workload and a heavily
+loaded border cell will drop its load on the other side instead of
+thrashing the heavily loaded cell back and forth. Only if
+a worker has heavily loaded border cells on {\em both} sides would load
+balancing be impossible.

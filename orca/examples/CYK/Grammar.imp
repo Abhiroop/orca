@@ -1,0 +1,69 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+OBJECT IMPLEMENTATION Grammar;
+
+
+	FROM unix IMPORT ReadString, ReadInt, open, close;
+	FROM CYKtypes IMPORT ProdSet, ColProdSet;
+
+	TYPE NontermLefts   = ARRAY [char 'A'..'Z'] OF ProdSet;
+	TYPE LeftOfNonTerms = ARRAY [char 'A'..'Z'] OF NontermLefts;
+	TYPE LeftOfLetter   = ARRAY [char 'a'..'z'] OF ProdSet;
+
+
+	ProdsOfNonterm : LeftOfNonTerms;
+	ProdsOfTerm    : LeftOfLetter;
+
+
+OPERATION ProdsOfLetter (Letter : char) : ProdSet;
+
+BEGIN
+	RETURN (ProdsOfTerm[Letter]);
+END;
+
+
+OPERATION ProdsOfStr (VertCol, DiagCol : ColProdSet; 
+              NrEltsInCol : integer) : ProdSet;
+
+	s : ProdSet;
+
+BEGIN
+	FOR i IN 1..NrEltsInCol DO
+	    FOR elt1 IN VertCol[i] DO
+		FOR elt2 IN DiagCol[NrEltsInCol-i+1] DO
+		    s +:= ProdsOfNonterm[elt1][elt2];
+		OD;
+	    OD;
+	OD;
+	RETURN s;
+END;
+
+
+
+FUNCTION ReadProductions (ProdsOfNonterm : SHARED LeftOfNonTerms; 
+             ProdsOfTerm : SHARED LeftOfLetter);
+
+	n, fd, NrProds : integer;
+	prod     : string;
+
+BEGIN
+	fd := open ("cyk.grammar", 0);
+	NrProds := ReadInt (fd);
+
+	FOR i IN 1..NrProds DO
+	    prod := ReadString (fd);
+
+	    IF prod[3] = '$' 
+                 THEN INSERT (prod[1], ProdsOfTerm[prod[2]]);
+		 ELSE INSERT (prod[1], ProdsOfNonterm[prod[2]][prod[3]]);
+            FI;
+	OD;
+	n := close (fd);
+	ASSERT (n = 0);
+END;
+
+BEGIN
+	ReadProductions (ProdsOfNonterm, ProdsOfTerm);
+END;

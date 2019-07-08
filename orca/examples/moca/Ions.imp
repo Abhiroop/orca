@@ -1,0 +1,609 @@
+MODULE IMPLEMENTATION Ions;
+
+IMPORT	Barrier;
+IMPORT	VarObject;
+IMPORT	RandObject;
+FROM Common	IMPORT	MREC, IntArrayType, RealArrayType, IntKinsType,
+			IntMrecType, RealMrecType, IntMrecArray,
+			RealMrecArray, NTYPInfType, RealTableType,
+			IntRecordType, RealRecordType, SqArrayType, 
+			PosArrayType, ParTypType, InfoType, ConstType;
+FROM Math	IMPORT	log10, sqrt, IntToLongReal, LongRealToInt;
+FROM InOut	IMPORT	WriteLn;
+FROM RandObject	IMPORT	GetRan;
+FROM Barrier	IMPORT	Sync;
+
+
+TYPE	BoolMrecType	= ARRAY [integer 1 .. MREC] OF boolean;
+
+
+FUNCTION GetFromGlob(GLOB               : SHARED VarObject;
+		     FLOATCPU, FLOATALL : integer;
+		     TION               : OUT integer;
+		     WHERE              : SHARED IntRecordType;
+		     INF                : SHARED InfoType;
+		     NTS                : SHARED NTYPInfType);
+
+    ###	Get information on all elements in the system
+    ###	(CPU number, position on CPU, X/Y/Z coordinates, etc).
+
+	TMP : integer;
+	TOT : IntArrayType[0 .. FLOATCPU - 1];
+BEGIN
+
+    ###	NOTE: GetSomePosInfo contains integrated synchronization.
+
+	GLOB$GetSomePosInfo(FLOATCPU, FLOATALL, TION, TOT, INF, NTS);
+	TMP := 0;
+
+	FOR cpu IN 0 .. FLOATCPU - 1 DO
+	    FOR elt IN TMP + 1 .. TMP + TOT[cpu] DO
+		WHERE[elt, 1] := cpu;
+		WHERE[elt, 2] := elt - TMP;
+	    OD;
+	    TMP +:= TOT[cpu];
+	OD;
+END;
+
+
+FUNCTION MoveIons(GLOB               : SHARED VarObject;
+		  CNST               : ConstType;
+		  TDT                : real;
+		  NRP, NRE, FLOATCPU : integer;
+		  FEX                : RealTableType;
+		  SEED               : SHARED integer;
+		  RAND               : SHARED RandObject);
+
+    ###	Move all particles on MYCPU() to their new positions.
+
+	MyCPU         : integer;
+	DL2, UDT, SDT : real;
+	Ran           : RealArrayType[1 .. 3 * (NRP + NRE)];
+	POS, EPOS     : PosArrayType[1 .. NRP + NRE];
+BEGIN
+	MyCPU := MYCPU();
+
+	IF CNST.RAND = 0 THEN
+	    GetRan(SEED, 3 * (NRP + NRE), Ran);
+	ELSE
+	    RAND$GetValsSEQ(MyCPU, 3 * (NRP + NRE), FLOATCPU, Ran);
+	FI;
+
+
+    ###	If 0 elements are left on this CPU, still 'GetValsSEQ' has to
+    ###	be called before we may leave this function. This is to avoid
+    ###	deadlocks, as 'GetValsSEQ' gives turn to all CPUs in sequence.
+
+	IF NRP + NRE = 0 THEN
+	    RETURN;
+	FI;
+
+	GLOB$GetPosField(MyCPU, POS, EPOS);
+
+    ###	Cations:
+
+	SDT := sqrt(TDT);
+	DL2 := CNST.DL2PL * SDT;
+	UDT := CNST.UPL * TDT;
+
+	FOR i IN 1 .. NRP DO
+	  POS[i].X +:= UDT *(EPOS[i].X +FEX[1]) +(Ran[i*3-2] -0.5) *DL2;
+	  POS[i].Y +:= UDT *(EPOS[i].Y +FEX[2]) +(Ran[i*3-1] -0.5) *DL2;
+	  POS[i].Z +:= UDT *(EPOS[i].Z +FEX[3]) +(Ran[i * 3] -0.5) *DL2;
+	OD;
+
+    ###	Electrons:
+
+	DL2 := CNST.DL2EL * SDT;
+	UDT := CNST.UEL * TDT;
+	
+	FOR i IN NRP + 1 .. NRP + NRE DO
+	  POS[i].X +:= UDT *(EPOS[i].X -FEX[1]) +(Ran[i*3-2] -0.5) *DL2;
+	  POS[i].Y +:= UDT *(EPOS[i].Y -FEX[2]) +(Ran[i*3-1] -0.5) *DL2;
+	  POS[i].Z +:= UDT *(EPOS[i].Z -FEX[3]) +(Ran[i * 3] -0.5) *DL2;
+	OD;
+
+	GLOB$SetPosField(MyCPU, FLOATCPU, POS);
+END;
+
+
+FUNCTION ReduceCPUs(GLOB                 : SHARED VarObject;
+		    BARRIER              : SHARED Barrier;
+		    WHERE                : IntRecordType;
+		    TION, NEWCPU, OLDCPU : integer;
+		    IDX, NRP, NRE        : SHARED integer);
+
+    ###	This function performs the real process reduction. All data
+    ### (esp. particle info) is re-assigned to the processes that are
+    ###	allowed to continue working. The other processes are (tempora-
+    ###	rily) abandoned, and are caught (later on) by a special barrier
+    ###	(the catcher, see MocaWorker.imp)
+
+	MyCPU, NION, MINION, REST, HALF, SIZE : integer;
+
+	POS, EPOS   : PosArrayType[1 .. TION / NEWCPU + 1];
+	IQ          : RealArrayType[1 .. TION / NEWCPU + 1];
+	PARTYP      : ParTypType[1 .. TION / NEWCPU + 1];
+BEGIN
+	MyCPU := MYCPU();
+
+	IF MyCPU >= NEWCPU THEN
+	    NION := 0;
+	    IDX  := TION;
+	    NRP  := 0;
+	    NRE  := 0;
+	ELSE
+	    MINION := TION / NEWCPU;
+	    REST   := TION % NEWCPU;
+	    HALF   := TION / 2;
+	    SIZE   := MINION + 1;
+
+	    IF MyCPU < REST THEN
+		NION := MINION + 1;
+		IDX  := NION * MyCPU;
+            ELSE
+		NION := MINION;
+		IDX  := NION * MyCPU + REST;
+            FI;
+ 
+	    IF IDX + NION <= HALF THEN  # Only positive ions
+		NRP := NION;
+		NRE := 0;
+            ELSIF IDX >= HALF THEN      # Only electrons
+		NRP := 0;
+		NRE := NION;
+            ELSE                        # Positive ions and electrons
+		NRP := HALF - IDX;
+		NRE := NION - NRP;
+	    FI;
+
+
+	### NOTE: GetAllInfo contains integrated synchronization.
+
+	    GLOB$GetAllInfo(NION, IDX,
+			    SIZE, OLDCPU, WHERE, POS, EPOS, IQ, PARTYP);
+	    Sync(BARRIER, NEWCPU);
+	    GLOB$SetAllInfo(MyCPU, NION, NEWCPU, POS, EPOS, IQ, PARTYP);
+	FI;
+END;
+
+
+FUNCTION KinCurve(CNST : ConstType;
+		  NREC : integer;
+		  T    : real;
+		  IKIN : SHARED IntKinsType);
+ 
+	IT  : integer;
+	TND : real;
+BEGIN
+ 
+    ###	Calculate kinetic curve.
+ 
+	TND := T / CNST.TUN;
+	IF TND <= CNST.TK0 THEN
+	    IT := 0;
+	ELSE
+	    TND := log10(TND) - IntToLongReal(CNST.K0);
+	    IT  := LongRealToInt(TND * IntToLongReal(CNST.KD)) + 1;
+	FI;
+
+	IF IT <= CNST.IKMAX THEN
+	    IKIN[IT] +:= NREC;
+	FI;
+END;
+
+
+FUNCTION IonReac(GLOB                : SHARED VarObject;
+		 BARRIER             : SHARED Barrier;
+		 CNST                : ConstType;
+		 WHERE               : IntRecordType;
+		 FLOATCPU            : integer;
+		 T                   : real;
+		 NRREAC,
+		 TION, NRP, NRE, IDX : SHARED integer;
+		 STOP                : SHARED boolean;
+		 IKIN                : SHARED IntKinsType;
+		 NRECORD             : SHARED IntRecordType;
+		 TRECORD             : SHARED RealRecordType) : boolean;
+
+    ###	Performs the ion recombination.
+
+	MyCPU, IREC, IROUT, NREC, IRFST, IMIN,
+	IPR, IMR, ADJUST, LAST, COUNT, TMP, TMPP, TMPE : integer;
+
+	RSQMIN       : real;
+	READY        : boolean;
+	IRP, IRM     : IntMrecType;
+	RREC         : RealMrecType;
+	RLGC         : BoolMrecType;
+	IRCM         : IntArrayType[1 .. TION];
+	TIRECs       : IntArrayType[0 .. FLOATCPU - 1];
+	TIRPs, TIRMs : IntMrecArray[0 .. FLOATCPU - 1];
+	TRRECs       : RealMrecArray[0 .. FLOATCPU - 1];
+	PARTYP       : ParTypType[1 .. NRP + NRE];
+	POS          : PosArrayType[1 .. NRP + NRE];
+	IQ           : RealArrayType[1 .. NRP + NRE];
+BEGIN
+	MyCPU := MYCPU();
+	IREC  := 0;
+	IROUT := 0;
+	NREC  := 0;
+	IRFST := TION;
+	READY := false;
+
+
+    ### Get recombination data from all cpus
+
+	GLOB$GetReac(FLOATCPU, TIRECs, TIRPs, TIRMs, TRRECs);
+
+	FOR cpu IN 0 .. FLOATCPU - 1 DO
+	    IF TIRECs[cpu] + IREC > MREC THEN
+		IF MyCPU = 0 THEN
+		    WriteLine("ERROR: IREC > MREC");
+		    WriteLn();
+		FI;
+		RETURN false;
+	    FI;
+
+	    FOR i IN 1 .. TIRECs[cpu] DO
+		IRP[i + IREC]  := TIRPs[cpu][i];
+		IRM[i + IREC]  := TIRMs[cpu][i];
+		RREC[i + IREC] := TRRECs[cpu][i];
+	    OD;
+
+	    IREC +:= TIRECs[cpu];
+	OD;
+
+	FOR i IN 1 .. TION DO
+	    IRCM[i] := 0;
+	OD;
+
+	FOR i IN 1 .. IREC DO
+	    RLGC[i] := false;
+	OD;
+
+
+    ### Mark all recombining ions.
+
+	WHILE NOT READY DO
+
+	### Choose the pair with minimum distance.
+
+	    RSQMIN := 1.0E+30;
+	    FOR i IN 1 .. IREC DO
+		IF (NOT RLGC[i]) AND (RREC[i] < RSQMIN) THEN
+		    RSQMIN := RREC[i];
+		    IMIN := i;
+		FI;
+	    OD;
+
+	### Mark the recombining pair.
+
+	    IPR := IRP[IMIN];
+	    IMR := IRM[IMIN];
+
+	    IF MyCPU = 0 THEN
+		NRREAC +:= 1;
+		NRECORD[1, NRREAC] :=
+			GLOB$ValNPAR(WHERE[IPR, 1], WHERE[IPR, 2]);
+		NRECORD[2, NRREAC] :=
+			GLOB$ValNPAR(WHERE[IMR, 1], WHERE[IMR, 2]);
+		TRECORD[1, NRREAC] := T;
+		TRECORD[2, NRREAC] := 1.0;
+	    FI;
+
+	    IF IPR < IRFST THEN
+		IRFST := IPR;
+	    FI;
+
+	    NREC  +:= 1;
+	    IROUT +:= 1;
+	    IRCM[IPR]  := IMR;
+	    IRCM[IMR]  := IPR;
+	    RLGC[IMIN] := true;
+	    IF IROUT = IREC THEN
+		READY := true;
+	    ELSE
+
+	### Delete the ion pairs containing the just recombined ions.
+
+		FOR i IN 1 .. IREC DO
+		    IF (NOT RLGC[i]) AND
+		       ((IRP[i] = IPR) OR (IRM[i] = IMR)) THEN
+			RLGC[i] := true;
+			IROUT  +:= 1;
+			IF IROUT = IREC THEN
+			    READY := true;
+			    EXIT;
+			FI;
+		    FI;
+		OD;
+	    FI;
+	OD;
+
+	IF MyCPU = 0 THEN
+	    KinCurve(CNST, NREC, T, IKIN);
+	FI;
+
+	Sync(BARRIER, FLOATCPU);
+
+
+    ### Return if no elements left.
+
+	IF (TION - NREC * 2 <= 0) THEN
+	    STOP := true;
+	ELSE
+
+
+    ### Delete the recombined ions from the simulation.
+
+	    ADJUST := 0;
+	    TMPP   := 0;
+	    TMPE   := 0;
+	    COUNT  := 0;
+	    LAST   := IDX + NRP + NRE;
+
+	    GLOB$GetPosInfo(MyCPU, POS, IQ, PARTYP);
+
+	    FOR i IN IRFST .. LAST DO
+		IF IRCM[i] /= 0 THEN
+		    IF i <= IDX THEN
+			COUNT +:= 1;
+		    ELSE
+			TMP := i - IDX - ADJUST;
+			FOR j IN TMP + 1 .. NRP + NRE DO
+			    POS[TMP].X := POS[j].X;
+			    POS[TMP].Y := POS[j].Y;
+			    POS[TMP].Z := POS[j].Z;
+			    IQ[TMP]    := IQ[j];
+			    PARTYP[TMP].NTYP := PARTYP[j].NTYP;
+			    PARTYP[TMP].NPAR := PARTYP[j].NPAR;
+			    TMP       +:= 1;
+			OD;
+
+			IF i <= IDX + NRP THEN
+			    TMPP +:= 1;
+			ELSE
+			    TMPE +:= 1;
+			FI;
+
+			ADJUST +:= 1;
+		    FI;
+		FI;
+	    OD;
+
+	    NRP  -:= TMPP;
+	    NRE  -:= TMPE;
+	    IDX  -:= COUNT;
+	    TION -:= 2 * NREC;
+
+	    GLOB$SetUp(MyCPU, TION, NRP+NRE, FLOATCPU, POS, IQ, PARTYP);
+	FI;
+
+	RETURN true;
+END;
+
+
+FUNCTION CheckR(GLOB                  : SHARED VarObject;
+		BARRIER               : SHARED Barrier;
+		CNST                  : ConstType;
+		T                     : real;
+		FLOATALL, FLOATCPU,
+		NRREAC, NRP, NRE, IDX : SHARED integer;
+		STOP                  : SHARED boolean;
+		IKIN                  : SHARED IntKinsType;
+		NRECORD               : SHARED IntRecordType;
+		TRECORD               : SHARED RealRecordType): boolean;
+
+    ###	Checks all the pairs of particles if they are within respective
+    ###	reaction spheres. If so, calls the reaction subroutines. Calcu-
+    ### lates the mutual electric field for the charged particles.
+
+	ETX, ETY, ETZ, EFAC, RRIONSQ,
+	RSQ, X1, X2, Y1, Y2, Z1, Z2, IQ1, IQ2, TDT, DTT    : real;
+	MyCPU, OLDCPU, TION, NEL, IREC, NRCALCS, CALCION, REST,
+	LAST, II, JJ, CPU1, CPU2, Elt1, Elt2, NTYP1, NTYP2 : integer;
+
+	TREC     : boolean;
+	IRP, IRM : IntMrecType;
+	RREC     : RealMrecType;
+	RSQM     : SqArrayType;
+	EPOS     : PosArrayType[1 .. FLOATALL];
+	NTS      : NTYPInfType[0 .. FLOATCPU - 1];
+	WHERE    : IntRecordType[1 .. FLOATALL, 1 .. 2];
+	INF      : InfoType[0 .. FLOATCPU - 1];
+BEGIN
+	MyCPU   := MYCPU();
+	RRIONSQ := CNST.RRION * CNST.RRION;
+
+	REPEAT
+
+	    TREC := false;
+	    IREC := 0;
+
+	    GetFromGlob(GLOB,
+			FLOATCPU, FLOATALL, TION, WHERE, INF, NTS);
+
+	    FOR i IN 1 .. 2 DO
+		FOR j IN i .. 2 DO
+		    RSQM[i, j] := 1.0E+30;
+		OD;
+	    OD;
+
+	    FOR i IN 1 .. TION DO
+		EPOS[i].X := 0.0;
+		EPOS[i].Y := 0.0;
+		EPOS[i].Z := 0.0;
+	    OD;
+
+	    NRCALCS := (TION * (TION - 1)) / 2;
+	    CALCION := NRCALCS / TION;
+	    REST    := NRCALCS % TION;
+	    NEL     := TION / 2;
+
+
+	### Loop over ion pairs.
+
+	    FOR i IN 1 + IDX .. NRP + NRE + IDX DO
+
+ 		II := i;
+		IF i > REST THEN
+		    LAST := CALCION;
+		ELSE
+		    LAST := CALCION + 1;
+		FI;
+
+
+		FOR j IN i + 1 .. i + LAST DO
+
+		### Calculate the distances between the ions.
+
+		    JJ := j;
+		    IF JJ <= TION THEN
+			CPU1 := MyCPU;
+			Elt1 := i - IDX;
+			CPU2 := WHERE[JJ, 1];
+			Elt2 := WHERE[JJ, 2];
+		    ELSE
+			II   := JJ - TION;
+			JJ   := i;
+			CPU1 := WHERE[II, 1];
+			Elt1 := WHERE[II, 2];
+			CPU2 := MyCPU;
+			Elt2 := JJ - IDX;
+		    FI;
+
+		    X1 := INF[CPU1].POS[Elt1].X;
+		    Y1 := INF[CPU1].POS[Elt1].Y;
+		    Z1 := INF[CPU1].POS[Elt1].Z;
+		    X2 := INF[CPU2].POS[Elt2].X;
+		    Y2 := INF[CPU2].POS[Elt2].Y;
+		    Z2 := INF[CPU2].POS[Elt2].Z;
+
+		    RSQ := (X1 - X2) * (X1 - X2) + (Y1 - Y2) *
+			   (Y1 - Y2) + (Z1 - Z2) * (Z1 - Z2); 
+
+
+		### Find minimum distance for each ionic species-pair.
+
+		    NTYP1 := NTS[CPU1][Elt1];
+		    NTYP2 := NTS[CPU2][Elt2];
+
+		    IF RSQ < RSQM[NTYP1, NTYP2] THEN
+			RSQM[NTYP1, NTYP2] := RSQ;
+		    FI;
+
+
+		### Mark opposite ions if closer than reaction radius.
+
+		    IF (RSQ <= RRIONSQ) AND
+		       (II <= NEL) AND (JJ > NEL) THEN
+			TREC  := true;
+			IREC +:= 1;
+
+			IF IREC <= MREC THEN
+			    IRP[IREC]  := II;
+			    IRM[IREC]  := JJ;
+			    RREC[IREC] := RSQ;
+			FI;
+		    FI;
+
+
+		### Calculate the component of the electric field.
+
+		    IQ1  := INF[CPU1].IQ[Elt1];
+		    IQ2  := INF[CPU2].IQ[Elt2];
+
+		    EFAC := IQ1 * IQ2 * CNST.FACEF / (RSQ * sqrt(RSQ));
+		    ETX  := EFAC * (X1 - X2);
+		    ETY  := EFAC * (Y1 - Y2);
+		    ETZ  := EFAC * (Z1 - Z2);
+
+		    EPOS[II].X +:= ETX;
+		    EPOS[II].Y +:= ETY;
+		    EPOS[II].Z +:= ETZ;
+		    EPOS[JJ].X -:= ETX;
+		    EPOS[JJ].Y -:= ETY;
+		    EPOS[JJ].Z -:= ETZ;
+		OD;
+	    OD;
+
+	    IF TREC THEN
+		GLOB$SetReac(MyCPU, IREC, IRP, IRM, RREC);
+	    FI;
+
+	    Sync(BARRIER, FLOATCPU);
+
+	    IF GLOB$Recombined() THEN
+		IF NOT IonReac(GLOB, BARRIER, CNST, WHERE,
+			       FLOATCPU, T, NRREAC, TION, NRP, NRE,
+			       IDX, STOP, IKIN, NRECORD, TRECORD) THEN
+		    RETURN false;
+		FI;
+
+		IF STOP THEN
+		    RETURN true;
+		FI;
+
+		TREC := true;
+	    FI;
+
+
+	### If any particle has reacted, calculate electric field again.
+
+	UNTIL NOT TREC;
+
+
+    ###	Find minimum time step (for ionic species) and
+    ### add calculated electric fields to global values.
+
+	TDT := CNST.BETA[1, 1] * RSQM[1, 1];
+	DTT := CNST.BETA[1, 2] * RSQM[1, 2];
+
+	IF DTT < TDT THEN
+	    TDT := DTT;
+	FI;
+
+	DTT := CNST.BETA[2, 2] * RSQM[2, 2];
+	IF DTT < TDT THEN
+	    TDT := DTT;
+	FI;
+
+	GLOB$AddFieldsTime(EPOS, TDT);
+
+
+    ###	If the current number of elements  drops below the minimum
+    ###	number that still allows a parallel run, or if only CNST.PERC %
+    ###	of all elements (here 'FLOATALL') is left _and_ the number
+    ###	of elements per CPU is below the optimum, reduce the number of
+    ###	CPUs to restore near-optimal performance. 
+
+	IF (FLOATCPU > 1) AND ((TION <= CNST.MINELTS)
+			   OR ((TION <= CNST.PERC * FLOATALL / 100)
+			  AND  (FLOATCPU > TION / CNST.OPTELTS))) THEN
+
+	    OLDCPU := FLOATCPU;
+
+	    ###	Determine new number of CPUs that should be used.
+
+	    IF (TION <= CNST.MINELTS) THEN
+		FLOATCPU := 1;
+	    ELSE
+		FLOATCPU := TION / (CNST.OPTELTS +
+				   (TION - CNST.MINELTS) / CNST.EXTRA);
+		IF FLOATCPU = 0 THEN
+		    FLOATCPU := 1;
+		FI;
+	    FI;
+
+	    FLOATALL := TION;
+
+	    ReduceCPUs(GLOB, BARRIER,
+		       WHERE, TION, FLOATCPU, OLDCPU, IDX, NRP, NRE);
+	FI;
+
+	RETURN true;
+END;
+
+
+END;

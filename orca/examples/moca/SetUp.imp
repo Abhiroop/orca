@@ -1,0 +1,220 @@
+MODULE IMPLEMENTATION SetUp;
+
+IMPORT	VarObject;
+IMPORT	RandObject;
+FROM	Common	IMPORT	KINS, Kind1Type,
+			Kind2Type, RealArrayType, IntKinsType,
+			RealKinsType, IntKind2Type, RealKind2Type,
+			CombiType, PosArrayType, ParTypType, ConstType;
+FROM	Math	IMPORT	exp, log, log10, pow, sqrt,
+			IntToLongReal, LongRealToInt;
+FROM	InOut	IMPORT	WriteString, WriteLn;
+
+
+FUNCTION MainInit(CNST : SHARED ConstType) : boolean;
+
+	TND : real;
+BEGIN
+	TND        := log10(CNST.TAUMAX) - IntToLongReal(CNST.K0);
+	CNST.IKMAX := LongRealToInt(TND * IntToLongReal(CNST.KD) + 0.5);
+
+	IF CNST.IKMAX > KINS THEN
+	    WriteString("ERROR: IKMAX > KINS (not allowed).");
+	    WriteLn();
+	    WriteLn();
+	    RETURN false;
+	FI;
+
+	CNST.DL2PL := 2.0 * sqrt(6.0 * CNST.DPL);
+	CNST.DL2EL := 2.0 * sqrt(6.0 * CNST.DEL);
+	CNST.FACEF := CNST.RONS * CNST.DPL / CNST.UPL;
+	CNST.ETERM := 1.6022E-19 * CNST.DPL / CNST.UPL;
+	CNST.TUN   := CNST.RONS * CNST.RONS / (CNST.DPL + CNST.DEL);
+	CNST.TMAX  := CNST.TAUMAX * CNST.TUN;
+	CNST.TK0   := pow(10.0, IntToLongReal(CNST.K0));
+
+	CNST.BETA[1, 1] := 0.01 / 6.0 / 2.0 / CNST.DPL;
+	CNST.BETA[1, 2] := 0.01 / 6.0 / (CNST.DPL + CNST.DEL);
+	CNST.BETA[2, 2] := 0.01 / 6.0 / 2.0 / CNST.DEL;
+
+    ### Field strengths in kV/cm.
+
+	CNST.EFIELD[ 1] :=    0.0;
+	CNST.EFIELD[ 2] :=   4.98;
+	CNST.EFIELD[ 3] :=   7.21;
+	CNST.EFIELD[ 4] :=  10.09;
+	CNST.EFIELD[ 5] :=  12.97;
+	CNST.EFIELD[ 6] :=  15.86;
+	CNST.EFIELD[ 7] :=   15.0;
+	CNST.EFIELD[ 8] :=   20.0;
+	CNST.EFIELD[ 9] :=   50.0;
+	CNST.EFIELD[10] :=  100.0;
+	CNST.EFIELD[11] :=  500.0;
+	CNST.EFIELD[12] := 1000.0;
+
+	RETURN true;
+END;
+
+
+FUNCTION TrackInit(CNST                     : ConstType;
+		   itrack                   : integer;
+		   ISER                     : OUT integer;
+                   AD, ESCC, SUMES, SUMESSQ : OUT real;
+		   PR                       : OUT CombiType;
+                   IKIN                     : OUT IntKinsType;
+		   INT                      : OUT IntKind2Type;
+                   SUMK                     : OUT RealKinsType;
+                   SUM                      : OUT RealKind2Type);
+BEGIN
+	ISER    := 0;
+	ESCC    := 0.0;
+	SUMES   := 0.0;
+	SUMESSQ := 0.0;
+
+	FOR a IN x .. q DO
+	    FOR b IN sh .. tm DO
+		PR[a, b] := 0.0;
+	    OD;
+	OD;
+
+	FOR i IN 0 .. CNST.IKMAX DO
+	    IKIN[i]  := 0;
+	    SUMK[i]  := 0.0;
+	    FOR a IN sh .. tm DO
+		INT[a][i] := 0;
+		SUM[a][i] := 0.0;
+	    OD;
+	OD;
+
+	AD := IntToLongReal(CNST.NRPSC * CNST.DAT[itrack].Nion0) / 2.0;
+END;
+
+
+FUNCTION DoInit(GLOB                : SHARED VarObject;
+	        CNST                : ConstType;
+	        NION0, itrack       : integer;
+	        NRP, NRE, IDX, SEED : OUT integer;
+	        RAND                : SHARED RandObject);
+
+	MyCPU, NION, MINION, REST, HALF, TMP     : integer;
+	XG, YG, ZG, RG2, FR, rprb8, prob8, prob9 : real;
+
+	COORDS : PosArrayType;
+	Ran    : RealArrayType[1 .. 3];
+	POS    : PosArrayType[1 .. NION0 / CNST.NCPUS + 1];
+	IQ     : RealArrayType[1 .. NION0 / CNST.NCPUS + 1];
+	PARTYP : ParTypType[1 .. NION0 / CNST.NCPUS + 1];
+BEGIN
+
+    ###	Calculate number of ions to (re-)set on this CPU.
+
+	MyCPU  := MYCPU();
+	COORDS := CNST.DAT[itrack].Coords;
+	MINION := NION0 / CNST.NCPUS;
+	REST   := NION0 % CNST.NCPUS;
+	HALF   := NION0 / 2;
+
+	IF MyCPU < REST THEN
+	    NION := MINION + 1;
+	    IDX  := NION * MyCPU;
+	ELSE
+	    NION := MINION;
+	    IDX  := NION * MyCPU + REST;
+	FI;
+
+	IF IDX + NION <= HALF THEN  # Only positive ions
+	    NRP := NION;
+	    NRE := 0;
+	ELSIF IDX >= HALF THEN	    # Only electrons (or no ions at all)
+	    NRP := 0;
+	    NRE := NION;
+	ELSE			    # Both positive ions and electrons
+	    NRP := HALF - IDX;
+	    NRE := NION - NRP;
+	FI;
+
+
+    ###	Initialize positions of ions in the cluster.
+    ###	Tracks with many ion pairs.
+
+    ### Positive ions:
+
+	FOR i IN 1 .. NRP DO
+	    POS[i].X := COORDS[i + IDX].X;
+	    POS[i].Y := COORDS[i + IDX].Y;
+	    POS[i].Z := COORDS[i + IDX].Z;
+	    IQ[i]    := 1.0;
+	    PARTYP[i].NTYP := 1;
+	    PARTYP[i].NPAR := i + IDX;
+	OD;
+
+
+    ###	Wait for turn (to be allowed to acquire random numbers).
+
+	RAND$AwaitTurn(MyCPU, CNST.NCPUS);
+
+
+    ### Electrons:
+
+	IF CNST.IDIS = 0 THEN	    # Gaussian electron distribution
+
+	    FOR i IN 1 .. NRE DO
+		REPEAT
+		    RAND$GetVals(3, Ran);
+		    XG  := Ran[1] - 0.5;
+		    YG  := Ran[2] - 0.5;
+		    ZG  := Ran[3] - 0.5;
+		    RG2 := XG * XG + YG * YG + ZG * ZG;
+		UNTIL (RG2 <= 0.25);
+
+		REPEAT
+		    RAND$GetVals(2, Ran);
+		    rprb8 := Ran[1] * 6.0 * CNST.RPM;
+		    prob8 := pow(rprb8 / CNST.RPM, 2.0);
+		    prob8 := prob8 * exp(1.0 - prob8);
+		    prob9 := Ran[2];
+		UNTIL (prob9 <= prob8);
+
+		FR         := rprb8 / sqrt(RG2);
+		TMP        := NRP + i;
+		POS[TMP].X := COORDS[TMP + IDX - HALF].X + XG * FR;
+		POS[TMP].Y := COORDS[TMP + IDX - HALF].Y + YG * FR;
+		POS[TMP].Z := COORDS[TMP + IDX - HALF].Z + ZG * FR;
+		IQ[TMP]    := -1.0;
+		PARTYP[TMP].NTYP := 2;
+		PARTYP[TMP].NPAR := TMP + IDX - HALF;
+	    OD;
+
+	ELSIF CNST.IDIS = 1 THEN    # Exponential electron distribution
+
+	    FOR i IN 1 .. NRE DO
+		REPEAT
+		    RAND$GetVals(3, Ran);
+		    XG  := Ran[1] - 0.5;
+		    YG  := Ran[2] - 0.5;
+		    ZG  := Ran[3] - 0.5;
+		    RG2 := XG * XG + YG * YG + ZG * ZG;
+		UNTIL (RG2 <= 0.25);
+
+		FR := (CNST.RRION - CNST.RPM *
+				log(1.0 - RAND$Ran())) / sqrt(RG2);
+
+		TMP        := NRP + i;
+		POS[TMP].X := COORDS[TMP + IDX - HALF].X + XG * FR;
+		POS[TMP].Y := COORDS[TMP + IDX - HALF].Y + YG * FR;
+		POS[TMP].Z := COORDS[TMP + IDX - HALF].Z + ZG * FR;
+		IQ[TMP]    := -1.0;
+		PARTYP[TMP].NTYP := 2;
+		PARTYP[TMP].NPAR := TMP + IDX - HALF;
+	    OD;
+	FI;
+
+
+    ###	Give turn to next process and continue.
+
+	RAND$TurnInc(SEED);
+	GLOB$SetUp(MyCPU, NION0, NRP+NRE, CNST.NCPUS, POS, IQ, PARTYP);
+END;
+
+
+END;

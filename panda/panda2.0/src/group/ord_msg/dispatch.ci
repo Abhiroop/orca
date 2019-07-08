@@ -1,0 +1,59 @@
+#ifndef __GRP_DISPATCH_CI__
+#define __GRP_DISPATCH_CI__
+
+#include "pan_sys_msg.h"
+
+#include "dispatch.h"
+#include "global.h"
+#include "grp.h"
+#include "join_leave.h"
+/* #include "name_server.h" */
+#include "send.ci"			/* Include .c file for inlining */
+
+
+/* Author: Raoul Bhoedjang, October 1993
+ *
+ * Dispatch:
+ *   The nsap for group msgs is created/cleared.
+ *   Dispatch strips incoming group messages from their header
+ *   and uses the type field in the header to determine to
+ *   what module the message should be passed on.
+ */
+
+
+#ifndef STATIC_CI
+#  define STATIC_CI	static
+#endif
+
+STATIC_CI void
+pan_grp_msg_switch(pan_msg_p msg)
+{
+    grp_hdr_p hdr = pan_msg_pop(msg, sizeof(grp_hdr_t), alignof(grp_hdr_t));
+
+					/* No switch statement to choose most
+					 * common case first */
+    if (hdr->type == G_SEND) {
+	pan_grp_handle_send(hdr, msg);
+    } else if (hdr->type == G_JOIN) {
+	pan_grp_handle_join(hdr, msg);
+    } else if (hdr->type == G_LEAVE) {
+	pan_grp_handle_leave(hdr, msg);
+    } else {
+	pan_panic("pan_grp_msg_switch: illegal type");
+    }
+}
+
+
+STATIC_CI void
+pan_grp_disp_start(void)
+{
+}
+
+
+STATIC_CI void
+pan_grp_disp_end(void)
+{
+}
+
+
+#endif

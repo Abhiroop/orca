@@ -1,0 +1,31 @@
+MODULE SPECIFICATION unmove;
+
+FROM AwariTypes IMPORT Configuration, GoedelNr, GTV, PitNr, PitsPerSide;
+
+TYPE PositionType =
+   RECORD
+	configuration: Configuration;
+	godelCode:  GoedelNr;
+	# contents: GTV;
+   END;
+
+
+
+TYPE CapturedType = ARRAY[integer 1..PitsPerSide] OF integer;
+
+TYPE ParentType =
+   RECORD
+	# startConfig: 	PositionType;
+	# parentConfig:	PositionType;
+	startPit:	PitNr;
+	endPit:		PitNr;
+	nstones:	integer;
+	captured:	CapturedType;
+   END;
+
+FUNCTION NextParent(parent: SHARED ParentType; start, father: SHARED Configuration):
+	boolean;
+
+FUNCTION Swap(x: PitNr): PitNr;
+
+END;

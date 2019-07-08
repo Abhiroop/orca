@@ -1,0 +1,18 @@
+MODULE SPECIFICATION matrixfunct;
+
+FROM IntMatrix IMPORT IntMatrix;
+FROM BoolVector IMPORT BoolVector, BoolMatrix;
+FROM CromoVector IMPORT population, individual;
+FROM GenTypes IMPORT configuration;
+
+FUNCTION test_symmetric (G: BoolMatrix; nb_nodes: integer): boolean;
+FUNCTION evaluation (A: IntMatrix; symmetric: boolean;
+		nb_nodes: integer; indiv: SHARED individual);
+FUNCTION heuristic(A: IntMatrix; nb_nodes: integer; cromo: SHARED BoolVector);
+ 
+END;
+
+
+
+
+

@@ -1,0 +1,18 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+GENERIC (TYPE T)
+OBJECT SPECIFICATION JobQueue;
+	OPERATION AddJob(job: T);  	# add a job to the tail of the queue
+	OPERATION GetJob(job: OUT T): boolean;
+		# Fetch a job from the TAIL of the queue. This operation
+		# fails if the queue is empty.
+	OPERATION TryGetJob(job: OUT T): boolean;
+		# Fetch a job from the HEAD of the queue. This operation
+		# fails if the queue is empty.
+
+	OPERATION Announce();		# To globally announce new work
+	OPERATION Idle();		# To globally announce an idle worker 
+	OPERATION AllDone() : boolean;	# Check whether everybody is ready
+END GENERIC;

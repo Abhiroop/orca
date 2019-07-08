@@ -1,0 +1,329 @@
+# ConnectFour
+# Opgave parallel programmeren
+# Authors : Fabian Breg    & Rob Buis
+#           fbreg@cs.vu.nl   rwlbuis@cs.vu.nl
+# File    : gameboard.imp
+
+MODULE IMPLEMENTATION gameboard;
+
+    FROM misc IMPORT Columns, Rows, MaximumAB, DeltaAB, Max, NrOfPlayers, OrderType;
+
+    FUNCTION SetSkill(GameBoard : SHARED BoardType; Skill : integer);
+
+    BEGIN
+	GameBoard.Skill := Skill;
+    END;
+
+    FUNCTION InitBoard(GameBoard : OUT BoardType; Map : OUT MapType);
+
+    count : integer;
+
+    BEGIN
+        FOR i IN 1..Columns DO
+    	    FOR j IN 1..Rows DO
+                GameBoard.Board[i, j] := 0; 
+		FOR k IN 1..NrOfPossibleWins DO
+		    Map[i, j][k] := false;
+                OD;
+            OD;
+        OD;
+	FOR i IN 1..NrOfPossibleWins DO
+	    GameBoard.Stats[1, i] := 1;
+	    GameBoard.Stats[2, i] := 1;
+        OD;
+
+	GameBoard.Score[1] := NrOfPossibleWins;
+	GameBoard.Score[2] := NrOfPossibleWins;
+
+	count := 1;
+
+	FOR i IN 1..Rows DO
+	    FOR j IN 1..(Columns - 4 + 1) DO
+		FOR k IN 0..3 DO
+		    Map[j + k, i][count] := true;    
+                OD;
+		count +:= 1;
+	    OD;
+        OD;
+
+	FOR i IN 1..Columns DO
+	    FOR j IN 1..(Rows - 4 + 1) DO
+		FOR k IN 0..3 DO
+		    Map[i , j + k][count] := true;    
+                OD;
+		count +:= 1;
+	    OD;
+        OD;
+
+	FOR i IN 1..(Rows - 4 + 1) DO
+	    FOR j IN 1..(Columns - 4 + 1) DO
+		FOR k IN 0..3 DO
+		    Map[j + k, i + k][count] := true;    
+                OD;
+		count +:= 1;
+	    OD;
+        OD;
+
+	FOR i IN 1..(Rows- 4 + 1) DO
+	    FOR j IN 4..Columns DO
+		FOR k IN 0..3 DO
+		    Map[(11 -j) - k, i + k][count] := true;    
+                OD;
+		count +:= 1;
+	    OD;
+        OD;
+	GameBoard.LastMove.Column := 1;
+	GameBoard.LastMove.Row := 1;
+	GameBoard.CurrentPlayer := 1;
+	GameBoard.Skill := 1;
+    END;
+
+
+    FUNCTION GetPlayer(GameBoard : BoardType; Column : integer; 
+		       Row : integer) : integer;
+
+    BEGIN
+	RETURN GameBoard.Board[Column, Row];
+    END;
+
+
+    FUNCTION DoSet(GameBoard : SHARED BoardType; Column : integer; Player : integer; Map : MapType);
+
+    BEGIN
+	 FOR i IN 1..Rows DO
+	     IF (GameBoard.Board[Column, i] = 0) THEN
+		 GameBoard.Board[Column, i] := Player; 
+		 GameBoard.CurrentPlayer    := Player;
+		 GameBoard.LastMove.Column  := Column;
+		 GameBoard.LastMove.Row     := i; 
+		 FOR j IN 1..NrOfPossibleWins DO
+		     IF Map[Column, i][j] = true THEN
+		         GameBoard.Score[Player] +:= (GameBoard.Stats[Player, j]);
+		         GameBoard.Stats[Player, j] *:= 2;
+		         GameBoard.Score[3 - Player] -:= GameBoard.Stats[3 - Player, j];
+		         GameBoard.Stats[3 - Player, j] := 0;
+		     FI;
+		 OD;
+		 RETURN;
+	     FI;	 
+	 OD;
+    END;
+
+
+    FUNCTION UnSet(GameBoard : SHARED BoardType);
+
+    BEGIN
+	GameBoard.Board[GameBoard.LastMove.Column, GameBoard.LastMove.Row] := 0;
+	GameBoard.CurrentPlayer := 3 - GameBoard.CurrentPlayer;
+
+    END;
+
+
+    FUNCTION AlphaBeta(GameBoard : BoardType; Level : integer ;Alpha, Beta : integer; 
+		       Player : integer; Move : OUT integer; NodeType : integer;
+		       ParLevel : integer; Map : MapType; Order : OrderType)
+		       : integer;
+
+        Alpha2, Beta2, Res, Mv : integer;
+	TempBoard              : BoardType;
+
+    BEGIN
+	IF Won(GameBoard) THEN
+	    IF GameBoard.CurrentPlayer = Player THEN
+	        RETURN   MaximumAB - ((ParLevel + Level - 1) * DeltaAB);
+	    ELSE
+	        RETURN -(MaximumAB - ((ParLevel + Level - 1) * DeltaAB));
+	    FI;
+	FI;
+
+	IF Level >= GameBoard.Skill THEN
+	    RETURN GameBoard.Score[Player];
+        FI;
+
+        Alpha2 := Alpha;
+	Beta2  := Beta;
+	IF NodeType = Max THEN
+	    FOR i IN 1..Columns DO
+		IF NOT ColumnFull(GameBoard, Order[i]) THEN
+		    TempBoard := GameBoard;
+		    DoSet(TempBoard, Order[i], Player, Map);
+		    Res := AlphaBeta(TempBoard, Level + 1, Alpha2, Beta2, Player, 
+				     Mv, 1 - NodeType, ParLevel, Map, Order);
+		    IF Res > Alpha2 THEN
+			Alpha2 := Res;
+			Move := Order[i];
+		    FI;
+		    IF Alpha2 >= Beta2 THEN
+			RETURN Beta2;
+		    FI;
+		FI;
+	    OD;
+	ELSE
+	    FOR i IN 1..Columns DO
+		IF NOT ColumnFull(GameBoard, Order[i]) THEN
+		    TempBoard := GameBoard;
+		    DoSet(TempBoard, Order[i], NrOfPlayers + 1 - Player, Map);
+		    Res := AlphaBeta(TempBoard, Level + 1, Alpha2, Beta2, Player, 
+				     Mv, 1 - NodeType, ParLevel, Map, Order);
+		    IF Res < Beta2 THEN
+			Beta2 := Res;
+			Move := Order[i];
+		    FI;
+		    IF Beta2 <= Alpha2 THEN
+			RETURN Alpha2;
+		    FI;
+		FI;
+	    OD;
+	FI;
+	IF NodeType = Max THEN
+	    RETURN Alpha2;
+	ELSE
+	    RETURN Beta2;
+	FI;
+    END;
+
+
+    FUNCTION CheckVertical(GameBoard : BoardType; Column : integer; 
+			   Row : integer) : boolean;	
+    
+        above, below : integer;
+
+    BEGIN
+	 above := 0;
+	 below := 0;
+
+	 WHILE(((Row + 1 + above) <= Rows) AND 
+		(GameBoard.Board[Column, Row + 1 + above] = GameBoard.CurrentPlayer)) DO
+             above +:= 1;
+	 OD;
+
+	 WHILE(((Row - 1 - below) >= 1) AND 
+		(GameBoard.Board[Column, Row - 1 - below] = GameBoard.CurrentPlayer)) DO
+             below +:= 1;
+	 OD;
+
+	 RETURN (above+below+1) > 3;
+    END;
+
+
+    FUNCTION CheckHorizontal(GameBoard : BoardType; Column : integer; 
+			     Row : integer): boolean;
+
+        left, right : integer;
+
+    BEGIN
+	left := 0;
+	right := 0;
+
+	WHILE(((Column + 1 + left) <= Columns) AND 
+	       (GameBoard.Board[Column + 1 + left, Row] = GameBoard.CurrentPlayer)) DO
+            left +:= 1;
+	OD;
+
+	WHILE(((Column  - 1 - right) >= 1) AND 
+	       (GameBoard.Board[Column - 1 - right, Row] = GameBoard.CurrentPlayer)) DO
+            right +:= 1;
+	OD;
+
+	RETURN (left+right+1) > 3;
+    END;
+
+
+    FUNCTION CheckDiagonal(GameBoard : BoardType; Column : integer; 
+			   Row : integer): boolean;
+
+        diagup, diagdown : integer;
+
+    BEGIN
+        diagup   := 0;
+	diagdown := 0;
+
+        WHILE(((Column + 1 + diagup) <= Columns) AND 
+	       ((Row + 1 + diagup) <= Rows) AND
+	       (GameBoard.Board[Column + 1 + diagup, Row + 1 + diagup] = 
+		    GameBoard.CurrentPlayer)) DO
+            diagup +:= 1;
+        OD;
+
+        WHILE(((Column - 1 - diagdown) >= 1) AND
+	       ((Row - 1 - diagdown) >= 1) AND
+	       (GameBoard.Board[Column - 1 - diagdown, Row - 1 - diagdown] = 
+		    GameBoard.CurrentPlayer)) DO
+            diagdown +:= 1;
+        OD;
+
+	IF (diagup + diagdown + 1) >3 THEN
+	    RETURN true;
+        FI;
+
+
+        diagup   := 0;
+	diagdown := 0;
+
+        WHILE(((Column - 1 - diagup) >= 1 ) AND
+	       ((Row + 1 + diagup) <= Rows) AND
+	       (GameBoard.Board[Column - 1 - diagup, Row + 1 + diagup] = 
+		    GameBoard.CurrentPlayer)) DO
+            diagup +:= 1;
+        OD;
+
+        WHILE(((Column + 1 + diagdown) <= Columns) AND 
+	       ((Row - 1 - diagdown) >= 1) AND
+	       (GameBoard.Board[Column + 1 + diagdown, Row - 1 - diagdown] = 
+		    GameBoard.CurrentPlayer)) DO
+            diagdown +:= 1;
+        OD;
+
+	RETURN (diagup + diagdown + 1) >3 ;
+    END;
+
+
+    FUNCTION Won(GameBoard : BoardType): boolean;
+
+    BEGIN
+        RETURN((CheckVertical(GameBoard, GameBoard.LastMove.Column, 
+			      GameBoard.LastMove.Row)) OR 
+	       (CheckHorizontal(GameBoard, GameBoard.LastMove.Column, 
+			      GameBoard.LastMove.Row)) OR
+	       (CheckDiagonal(GameBoard, GameBoard.LastMove.Column, 
+			      GameBoard.LastMove.Row)));
+    END;
+
+
+    FUNCTION GetCols(): integer;
+
+    BEGIN
+	RETURN Columns;
+    END;
+
+
+    FUNCTION GetRows(): integer;
+
+    BEGIN
+	RETURN Rows;
+    END;
+
+
+    FUNCTION ColumnFull(GameBoard : BoardType; Column : integer) : boolean;
+
+    BEGIN
+	RETURN  GameBoard.Board[Column, Rows] /= 0;
+    END;
+
+
+    FUNCTION FullBoard(GameBoard : BoardType) : boolean;
+
+        Res : boolean;
+	i : integer;
+
+    BEGIN
+	Res := true;
+	i := 1;
+	WHILE Res AND (i <= Columns) DO
+	    Res := Res AND (GameBoard.Board[i, Rows] /= 0);
+	    i +:= 1;
+	OD;
+	RETURN Res;
+    END;
+
+END;

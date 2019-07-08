@@ -1,0 +1,24 @@
+################################################################################
+######  OwnMath.spf                                                       ######
+###                                                                          ###
+
+
+MODULE SPECIFICATION OwnMath;
+
+ FUNCTION maxInt(
+     a: IN integer;
+     b: IN integer
+ ): integer;
+     # Gives the highest of the two values a and b.
+
+ FUNCTION minInt(
+     a: IN integer;
+     b: IN integer
+ ): integer;
+     # Gives the lowest of the two values a and b.
+
+END; # OwnMath
+ 
+###                                                                          ###
+######  OwnMath.spf                                                       ######
+################################################################################

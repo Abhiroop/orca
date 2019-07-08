@@ -1,0 +1,37 @@
+#-----------------------------------------------#
+# Author : E.J.J. de Waal			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+
+OBJECT SPECIFICATION SyncObject;
+
+
+OPERATION init(n_workers : integer);
+  # Initialises the SyncObject with the right number of workers involved
+
+OPERATION done();
+  # Tell SyncObject a worker is ready
+  
+OPERATION ack();
+  #
+  
+OPERATION TurnInc();
+  # Give turn to the next worker
+
+OPERATION AwaitTurn(value: integer);
+  # Wait until its "value" 's turn
+
+OPERATION AwaitAtLeast(v : integer);
+
+OPERATION WaitForWorkers();
+  # Wait until all workers are ready
+  
+OPERATION value(): integer;
+  #
+
+OPERATION WaitForUnattainable(value: integer);
+OPERATION SetUnattainable(value: integer);
+
+END; # SyncObject

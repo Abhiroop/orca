@@ -1,0 +1,24 @@
+OBJECT IMPLEMENTATION SharedIntVec;
+
+	a: vecint;
+
+	OPERATION GetElt(i: integer): integer;
+	BEGIN
+		RETURN a[i];
+	END;
+
+	OPERATION  PutElt(i: integer; x : integer);
+	BEGIN
+		a[i] := x;
+	END;
+
+	OPERATION get(): vecint;
+	BEGIN
+		RETURN a;
+	END;
+
+	OPERATION store(b: vecint);
+	BEGIN
+		a := b;
+	END;
+END;

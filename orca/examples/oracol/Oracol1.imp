@@ -1,0 +1,158 @@
+# The module Oracol1 contains the main function.
+
+MODULE IMPLEMENTATION Oracol1;
+
+FROM Board IMPORT LoadProblems,SetUp;
+FROM TreeSearch IMPORT Slave,Search;
+FROM Misc IMPORT ShowMove;
+FROM Keys IMPORT InitMatrix;
+FROM Eval IMPORT Analyse;
+FROM Time IMPORT GetTime;
+FROM Types IMPORT ProblemArray,DataRecord,EvalType,Path,MoveNode;
+FROM Problem IMPORT TTABLE,KTABLE,PROBLEM,ITDEEP,MATE_IN_N;
+FROM Const IMPORT ALL,WHITE,TACTWIN,MATE;
+FROM Board IMPORT PrintBoard;
+FROM Finish IMPORT Finish;
+
+IMPORT TransTable,KillerTable,Jobs,Stack;
+
+	FUNCTION SolveProblem(dr : SHARED DataRecord; transtable : SHARED 
+			      TransTable; killertable : SHARED KillerTable;
+			      jobs : SHARED Jobs; stack : SHARED Stack);
+	  value : EvalType;
+	  time,time0,time1,speed : integer;
+	  nullmove : integer;
+	  alpha,beta : integer;
+	  depth : integer;
+	  path : Path;
+	BEGIN
+		IF dr.player = WHITE THEN WriteLine("White At Move");
+		 ELSE WriteLine("Black At Move");
+		FI;
+		Analyse(dr);
+		PrintBoard(dr.b);
+		WriteLine();
+		time0 := GetTime();
+		nullmove := 0;
+		IF dr.mate THEN alpha := 0; beta := MATE;
+		 ELSE alpha := 0; beta := TACTWIN + 1;
+		FI;
+		IF ITDEEP THEN depth := 1;
+		 ELSE depth := 2 * MATE_IN_N - 1;
+		FI;
+		value := Search(dr,transtable,killertable,jobs,stack,dr.player,
+				0,alpha,beta,depth,nullmove,path);
+		time1 := GetTime();
+		WriteLine("Search done! Terminate Slaves.");
+		jobs$StopSlaves();	# Terminate Slaves
+		jobs$WaitAcks(NCPUS() - 1);
+		stack$PrintInfo();
+		jobs$PrintInfo();
+		time := time1 - time0;
+		IF time < 10 THEN time := 10; FI;
+		speed := dr.nodes / (time / 10);
+		WriteLine("nodes = ",dr.nodes);
+		WriteLine("transpositions = ",dr.transpos);
+		WriteLine("killermoves = ",dr.killers);
+		WriteLine("user time = ",time / 10," sec.");
+		WriteLine("speed = ",speed," nps");
+		WriteLine("splits = ",dr.signature);
+		WriteLine();
+		WriteLine("Combination :");
+		IF (dr.mate AND (value.realval >= MATE - 15)) OR
+		   (NOT(dr.mate) AND (value.realval > 0)) THEN
+		  PrintPath(path);
+		 ELSE WriteLine("Not Found");
+		FI;
+	END;
+ 
+	FUNCTION PrintPath(path : Path);
+	  node : MoveNode;
+	BEGIN
+		node := path.first;
+		WHILE node /= NIL DO
+		  ShowMove(path[node].move); WriteLine();
+		  node := path[node].next;
+		OD;
+	END;
+
+	# This is the main routine of the program.
+	PROCESS OrcaMain();
+	  jobs : Jobs;
+	  stack : Stack;
+	  reinfeld : ProblemArray;
+	  time0,time1 : integer;
+	  cpu : integer;
+	  dr : DataRecord;
+	  transtable : TransTable;
+	  killertable : KillerTable;
+	BEGIN
+		WriteLine("Oracol - Chess Problem Solver");
+		WriteLine("=============================");
+		time0 := GetTime();
+		LoadProblems(reinfeld);	# Load the chess problems
+		jobs$InitVar();
+		stack$InitVar();
+		IF PROBLEM /= ALL THEN
+		  WriteLine("Installing ",NCPUS() - 1," Slaves");
+		  cpu := 1;
+		  WHILE cpu < NCPUS() DO
+		    FORK Slave(PROBLEM,transtable,killertable,jobs,stack)
+			ON cpu;
+		    cpu +:= 1;
+		  OD;
+		  jobs$InitJobs();	# Init Job List
+		  stack$InitStack();	# Init Result Stack
+		  jobs$StartSlaves();	# Activate slaves
+		  
+		  IF TTABLE THEN
+		    transtable$InitTTable();	# Clear Transposition Table
+		    WriteLine("Transposition Table Active");
+		    InitMatrix(dr.matrix); dr.key := 1;
+		  FI;
+		  IF KTABLE THEN
+		    killertable$InitKTable();	# Clear Killer Table
+		    WriteLine("Killer Table Active");
+		  FI;
+		  SetUp(dr,reinfeld[PROBLEM]);
+		  WriteLine("Solving Problem ",PROBLEM,"...");
+		  SolveProblem(dr,transtable,killertable,jobs,stack);
+		ELSE
+		  FOR index IN LB(reinfeld) .. UB(reinfeld) DO
+		    IF (reinfeld[index].color /= -1) THEN
+		      WriteLine("Installing ",NCPUS() - 1," Slaves");
+		      cpu := 1;
+		      WHILE cpu < NCPUS() DO
+		        FORK Slave(index,transtable,killertable,jobs,stack)
+			  ON cpu;
+		        cpu +:= 1;
+		      OD;
+		      jobs$InitJobs();
+		      jobs$StartSlaves();	# Activate slaves
+		      stack$InitStack();	# Init Result Stack
+		      IF TTABLE THEN
+		        transtable$InitTTable();# Clear Transposition Table
+		        WriteLine("Transposition Table Active");
+		        InitMatrix(dr.matrix); dr.key := 1;
+		      FI;
+		      IF KTABLE THEN
+		        killertable$InitKTable();	# Clear Killer Table
+		        WriteLine("Killer Table Active");
+		      FI;
+		      SetUp(dr,reinfeld[index]);
+		      WriteLine("Solving Problem ",index,"...");
+		      SolveProblem(dr,transtable,killertable,jobs,stack);
+		      jobs$EmptyTree();
+		      jobs$InitVar();
+		      stack$InitVar();
+		      WriteLine();
+		    FI;
+		  OD;
+		FI;
+		time1 := GetTime();
+		WriteLine();
+		WriteLine("Elapsed time = ",(time1 - time0) / 10,".", (time1-time0)%10, " sec.");
+		Finish();
+	END;
+
+END;

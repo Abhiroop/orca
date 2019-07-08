@@ -1,0 +1,1618 @@
+.fp 5 H
+.tr ~
+.nr PS 12
+.nr VS 16
+.EQ
+delim @@
+.EN
+.LP
+.NH
+Introduction
+.sp
+.PP
+This paper describes the implementation of two parallel
+recognition algorithms
+for context-free grammars: The Static Partitioning and the Dynamic
+Partitioning algorithm.
+These algorithms are both based on the
+same sequential recognition algorithm, known as the Cocke,
+Younger and Kasami algorithm. A recognition algorithm answers
+the following question:
+.sp
+.IP
+\fIGiven a context-free grammar and a string, is the string
+syntactically correct with respect to the context-free grammar.\fR
+.sp
+.LP
+The output is a simple '\fIYes\fR' or '\fINo\fR'.
+.LP
+The main reason to parallelize an algorithm is to achieve
+higher execution speed. Therefore, the parallel algorithms 
+divide their
+workload over a number of processes. The main difference between
+the two algorithms is that the static partitioning algorithm
+divides its workload only once, whereas the dynamic partitioning
+algorithm does this repeatedly to improve efficiency.
+.LP
+To implement the parallel algorithms I have used Orca. Orca is a
+powerful programming language in which distributed applications
+can be implemented relatively easily[1,2]. 
+The parallel programs were run on top of Amoeba.
+Amoeba is a distributed operating system that
+looks like a traditional timesharing system to its users[8]. It provides
+a testbed for doing research on distributed and parallel programming.
+.LP
+The structure of the rest of this paper is as follows. In the next
+section some theory needed to understand the recognition algorithm
+is given. In section three the Cocke, Younger and Kasami algorithm
+and the two parallel algorithms are explained. The Orca
+language is discussed in section four. In section five, I describe the
+implementation of the two parallel algorithms in Orca.
+In section six I will give the results of measurements made
+and compare these to measurements done by Ibarra, Pong and Sohn[5]
+who have implemented
+the same algorithms but on different hardware and software platforms.
+In section seven some conclusions are drawn from the development
+of the partitioning algorithms.
+.bp
+.LP
+.NH
+Contextualizing the Recognition Algorithm
+.sp
+.PP
+The recognition algorithm implemented in this paper uses the
+dynamic programming (DP) paradigm to solve the recognition problem,
+which is a discrete optimization problem (DOP). Dynamic
+programming, however, is only one of several methods for solving DOPs.
+In section 2.1 I will briefly discuss DOPs and some
+other (other than DP)
+sequential algorithms to solve them. In section 2.2
+I will explain some basics of DP.
+.sp 2
+.LP
+.NH 2
+Discrete Optimization Problems
+.sp
+.PP
+Discrete optimization problems arise in various applications, such as
+planning, scheduling, computer aided design and constraint directed 
+reasoning. Formally, a DOP can be stated as follows [4]: 
+.sp
+.IP
+\fIGiven a finite discrete set X and a (cost) function @f(x)@ defined
+on the elements of X, find an optimal element @x sub opt@, such that
+@f({x sub opt})~=~ min "{"f(x)|x \(mo X"}"@.
+.sp
+.LP
+The set X is large in most problems of practical interest.
+Therefore, exhaustive enumeration of elements in X to determine 
+@x sub opt@ is normally impossible. Elements of X can often be viewed as
+paths in graphs or trees, the cost function can be defined in terms of
+the arcs and the DOP can be formulated in terms of finding a
+(minimum cost) solution path in the graph from an initial node to a goal
+node.
+The following algorithms use
+the structure of these graphs to solve DOPs without searching
+the set X exhaustively.
+.LP
+Simple Backtracking, Depth-First Branch-and-Bound (DFBB) and
+Iterative Deepening A* (IDA*)[4] are all elements of a class of
+search techniques called Depth-First Search (DFS). DFS
+begins its search by expanding the initial node, i.e. generating
+successors. At each step, one of the most recently generated
+nodes is expanded. If this most recently generated node does not have
+any successors (or if it can be determined that the node will not lead
+to any solutions), then backtracking is performed, and a most
+recently generated node from the remaining nodes is selected for
+expansion.
+.LP
+Simple backtracking is a DFS method that terminates on finding
+the first solution. This solution is not guaranteed to
+be the minimum cost solution, however.
+.LP
+DFBB is a DFS algorithm whose search continues even after
+finding a solution path. If a new solution path is found,
+the current best solution path is updated. Whenever an inferior
+partial solution path is generated, it is eliminated. Upon
+termination, the current best solution is the globally optimal
+solution.
+.LP
+IDA* performs repeated cost-bounded DFS over the search space.
+In each iteration it keeps on expanding nodes in a depth-first
+fashion until the total cost of the selected node reaches a
+given threshold, which is increased for each successive iteration.
+IDA* continues until a goal node is reached.
+.LP
+A*/Best-first branch-and-bound[4] is a best-first search technique.
+This technique uses heuristics to direct the search to spaces that are
+more likely to yield solutions. A* uses a heuristic evaluation
+function, \fIg\fR, defined over the nodes of the search space.
+For each node \fIn\fR, @g(n)@ gives an estimate of the cost of
+the optimal solution path passing through node \fIn\fR. Nodes
+that are generated but not yet expanded are sorted on the basis of
+the @~g~@ values of the nodes. The nodes with the lowest
+@~g~@ values are expanded first.
+.LP
+.sp 2
+.NH 2
+Dynamic Programming
+.sp
+.PP
+As discussed above, dynamic programming (DP) is a technique
+for solving DOPs. Many problems involving a sequence
+of interrelated decisions can effectively be solved by DP.
+Programming in this context refers to a tabular method, not
+to writing computer code. Many DP algorithms store the solution
+of the smallest subproblems in a table for usage in computing
+larger subproblems. Thus the solution to the original problem
+is constructed in a bottom-up fashion. 
+.LP
+Most DP problems can
+be represented graphically  as a multistage graph where each
+node represents a subproblem. A node \fIu\fR is connected to another
+node \fIv\fR with a directed arc if the subproblem \fIu\fR is used in
+solving the subproblem \fIv\fR.
+.LP
+Although DP is a powerful method for solving optimization problems,
+its applicability has been somewhat limited due to the large
+computational requirements[7]. A solution to this problem may be
+to parallelize the DP algorithms.
+.LP
+A DP formulation is expressed as a recursive functional equation
+whose right-hand side is an expression involving the maximization
+(or minimization) of values of some cost function.
+In [7] a classification of DP problems into monadic-serial,
+polyadic-serial, monadic-nonserial and polyadic-nonserial
+formulations is given, based on the form of the functional
+equations and the nature of the recursion.
+A DP formulation is called \fImonadic\fR if its cost function involves
+only one recursive term, otherwise it is called \fIpolyadic\fR. A DP
+formulation is \fIserial\fR if the subproblems can be grouped in levels
+and the solution to any subproblem in a certain level can be found
+using subproblems that belong only in the immediately preceding
+levels, otherwise it is \fInon-serial\fR.
+.LP
+As an example of this classification scheme, consider the problem
+of finding the optimal order of multiplying a string of \fIn\fR
+matrices @roman M sub 1 , roman M sub 2 ,..., roman M sub n .@
+This is called the matrix parenthesization problem.
+Each @roman M sub i@ is a matrix with @r sub i-1@ rows
+and @r sub i@ columns. Let @roman c (i,j)@ be the minimum
+cost of multiplying the matrices 
+@roman M sub i , roman M sub i+1 ,..., roman M sub j@ and be
+given by the following recurrence relation:
+.sp
+.EQ
+roman c (i,j) ~=~
+left {
+    lpile {{min "{" roman c (i,k)~+~roman c (k+1,j)~+~
+            r sub i-1  r sub k r sub j "}"} above 0}
+    ~~lpile { 1<=i<k<j<=n above j~=~i,0<=i<=n}
+.EN
+.sp
+The above recurrence relation has two recursive terms and is thus
+polyadic. The solution of a subproblem in any level can only be found
+using subproblems of all preceding levels. This means that the formulation
+is polyadic-nonserial. In figure 2.1 an example is given of a graphical
+representation of the matrix parenthesization problem involving a string
+of four matrices. In this figure the dependency of a subproblem in a 
+particular level on subproblems in all preceding levels is clearly
+demonstrated.
+.sp
+.KS
+.F+
+figure fig2.1.ps height 8.5c
+.F-
+.ps -2
+.vs -4
+.ce 2
+\fBFigure 2.1.\fR This is a multistage graph of the matrix parenthesization problem 
+of four matrices. Its subproblems are grouped into four levels.
+.vs +4
+.ps +2
+.KE
+.sp
+The recognition algorithm described in the next section also uses
+a polyadic-nonserial DP formulation. It has the same table structure
+and table entry dependencies as the matrix parenthesization problem[5].
+.LP
+The use of this classification scheme lies in the fact that serial
+(monadic and polyadic) formulations can easily be parallelized using
+systolic arrays[7]. Some nonserial DP problems can effectively be
+transformed into serial DP problems and thus can also be parallelized
+easily.
+.bp
+.LP
+.NH
+Parallelizing the Recognition Algorithm
+.sp
+.PP
+In this section I will discuss the two parallel recognition algorithms from
+[5] that I have implemented for this paper. These parallel algorithms are
+based on the sequential recognition algorithm from Cocke, Younger and Kasami
+(CYK). By definition, an algorithm is a finite set of well defined rules for
+the solution of a problem in a finite number of steps. This means that there
+must be a recognition problem where the CYK algorithm is a solution for. Both
+are discussed in the first section. Thereafter, in two seperate 
+sections, the parallel static and dynamic partitioning 
+algorithm will be described.
+.sp 2
+.NH 2
+Tools for Recognition
+.sp
+.PP
+Context-free grammars are a widely used formalism, with which the syntax
+of languages can be expressed. Their use is accepted in programming
+language theory, but also in natural language circles this kind of grammar
+is quite popular. A context-free grammar describes a (context-free) language.
+This language consists of a set of strings, that are considered
+syntactically correct. The recognition problem can now be stated as follows:
+Decide, given a context-free grammar and a string, whether the string is 
+syntactically correct with respect to the context-free grammar.
+.LP
+A Context-Free Grammar (CFG) is denoted by G=(N,T,P,S), where N and T are
+finite nonterminal and terminal alphabets, respectively. P is a finite set of
+productions and S is a special nonterminal called the start symbol. The
+language that the CFG G describes is denoted \fIL\fR(G).
+A special kind of CFG, a CFG in Chomsky normal form (CNF), has a restriction
+on the set of productions. The productions are of the form
+A\(->BC or A\(->a, where A,B,C \(mo N and a \(mo T.
+It is important to note that every language that can be described by a "normal"
+CFG can also be described by a CFG in CNF.
+.LP
+The CYK algorithm is shown in figure 3.1 (in pseudo Orca). It is able to 
+decide, given a string 
+@ roman x~=~roman a sub 1 roman a sub 2 ... roman a sub n@ 
+and a CFG G in CNF, whether the string is an element of \fIL\fR(G).  
+It builds a
+triangular table Q of which the entries @roman Q sub ij , 1 <= i <= j <= n@ are
+such that @roman Q sub ij@ = {A | A \(mo N and A \(=> 
+@roman a sub i roman a sub i+1 ... roman a sub j@}. 
+If S \(mo @roman Q sub 1n@ then x \(mo \fIL\fR(G).
+The table is constructed using the dynamic programming approach. 
+.KF
+.sp
+.DS
+\fBBEGIN\fR
+    \fBFOR\fR \f5i \fBIN\f5 1..n \fBDO\f5
+	@roman Q sub ii@ := {A | A\(->a is a production and the \fIi\fRth symbol of x is a}; 
+    \fBOD\fR;
+    \fBFOR\f5 h \fBIN\f5 1..n-1 \fBDO\fR
+        \fBFOR\f5 i \fBIN\f5 1..n-h \fBDO\fR
+	    \fBFOR\f5 j \fBIN\f5 h+1..n \fBDO\f5
+	        @roman Q sub ij@ := \(es;
+	        \fBFOR\f5 k \fBIN\f5 1..j-i \fBDO\f5
+		    @roman Q sub ij@ := @roman Q sub ij@ \(cu {A | A\(->BC is a production, B is in @roman Q sub i,i+k-1@ 
+                                                      and C is in @roman Q sub i+k,j@};
+	        \fBOD\fR;
+	    \fBOD\fR;
+        \fBOD\fR;
+    \fBOD\fR;
+\fBEND\fR;
+.DE
+.ce 1
+.ps -2
+\fBFigure 3.1\fR The Cocke, Younger and Kasami algorithm in pseudo Orca.
+.ps +2
+.sp
+.KE
+.sp
+.LP
+.NH 2
+The Static Partitioning Algorithm
+.sp
+.PP
+The static partitioning algorithm is a parallel version of the CYK algorithm
+described above. Just as in the sequential case the table
+Q has to be built in order to determine if a string is an element
+of the language. For the parallel version the table is built by one or more 
+processors. 
+.LP
+As a first step, the input string 
+@ roman x~=~roman a sub 1 roman a sub 2 ... roman a sub n@ is divided over the 
+available processors. I will assume that the algorithm uses \fIp\fR processors, 
+indexed \fI0,1,...,p-1\fR, and, without loss of generality, that \fIn\fR
+is a multiple of \fIp\fR.
+Processor \fIi\fR is assigned the characters 
+@roman a sub (in/p)+1 roman a sub (in/p)+2 ... roman a sub (i+1)n/p@. Each of
+the processors computes a vertical strip of the table Q, 
+which means that processor \fIi\fR will
+compute @roman Q sub k*@ for @in/p+1 <= k <= (i+1)n/p@
+(@roman Q sub k*@ denotes the entries @roman Q sub kk@, @roman Q sub kk+1@,...,
+@roman Q sub kn@). 
+This algorithm is called the static partitioning algorithm 
+since each processor is
+assigned a fixed part of the table.
+.LP
+Table Q of the CYK algorithm is thus partitioned in 
+vertical strips. 
+Furthermore, the table is also partitioned into diagonal strips.
+This is illustrated in figure 3.2 for the input string
+@x~=~abbaabba@ of length 8 and @p~=~4@ processors.
+.KF
+.sp
+.F+ C
+figure fig3.2.ps height 10c
+.F-
+.ce 1
+.ps -2
+\fBFigure 3.2.\fR The table Q for x=abbaabba is partitioned into vertical and diagonal strips.
+.ps +2
+.sp
+.KE
+This way triangular and diamond shaped blocks @roman D sub ij@
+are formed (see figure 3.3 which is
+based on figure 3.2). Processor i
+will compute \fIp - i\fR blocks in its vertical strip 
+because of the triangular shape
+of the table Q. 
+.LP
+Note that to compute the entries of a block (if it is not the
+top block of its vertical strip) a processor must have knowledge of the entries
+of the blocks higher in the vertical and diagonal strip. The blocks of the
+vertical strip are computed by the processor itself and thus are known, but the
+blocks of the diagonal strip were computed by processors with higher index
+numbers. Such blocks have to be transferred from those processors to the
+processor currently computing the block.
+To compute the top block all a processor needs to know are the characters
+which it just received. Thus each processor can start computing these blocks,
+using the CYK dynamic programming approach, without further knowledge.
+I will now describe how the blocks (and
+thus the table Q) are computed in parallel by the static partitioning algorithm.
+.LP
+.KF
+.sp
+.F+ C
+figure fig3.3.ps height 10c
+.F-
+.ce 1
+.ps -2
+\fBFigure 3.3.\fR The blocks are labeled @roman D sub ij@. Processor \fIi\fR will eventually compute the vertical strip @roman D sub (i+1)*@.
+.ps +2
+.sp
+.KE
+.LP
+The algorithm is divided up into \fIp\fR stages. 
+Each stage is composed of two phases.
+In the first phase of a stage the next block is computed in parallel by the
+processors. In the second phase processor \fIi\fR transfers 
+the block it just computed, 
+along with the blocks of the diagonal strip that were needed to
+compute this block, to processor \fIi-1\fR. 
+After stage \fIs\fR, @1 <= s <= p@ processor \fIp-s\fR is finished
+computing because its entire vertical strip has been calculated.
+At stage \fIp\fR processor 0 will contain @roman Q sub 1n@ and therefore
+the computation is completed. Thus the second phase is not needed here.
+.LP
+In general, the stages @s , 1 <= s <= p@ will consist of the following 
+two phases that are done on all active processors i in parallel:
+.KF
+.LP
+If \fIs=1\fR
+.DS
+\fBPhase 1\fR: Compute @roman D sub (i+1)1@
+\fBPhase 2\fR: Save @roman D sub (i+1)1@ at this processor. Transfer @roman D sub (i+1)1@ to processor \fIi-1\fR.
+               Receive @roman D sub (i+2)1@ from processor \fIi+1\fR.
+.DE
+.LP
+If @2 <= s <= p@
+.DS
+\fBPhase 1\fR: Compute @roman D sub (i+1)s@ using @roman D sub (i+1)j@ and @roman D sub (i+j+1)(s-j)@, @1 <= j <= s-1@.
+\fBPhase 2\fR: Save @roman D sub (i+1)s@ at this processor. Transfer @roman D sub (i+1)s@ and @roman D sub (i+j+1)(s-j)@ , @1<=j<=s-1@,
+               to processor \fIi-1\fR. Receive @roman D sub (i+j+1)(s-j+1)@, @1<=j<=s@, from processor \fIi+1\fR.
+.DE
+.KE
+.LP
+As an example, I will now discuss stage \fI2\fR of processor \fI1\fR
+(see figures 3.2 and 3.3) starting with phase \fIone\fR.
+The entries of @roman D sub 22@ depend on the entries in the blocks 
+@roman D sub 21@ and @roman D sub 31@, which
+have been previously computed. Block @roman D sub 21@ was computed and saved by
+processor \fI1\fR at stage \fI1\fR, while block @roman D sub 31@ 
+was computed and transferred
+from processor \fI2\fR during stage \fI1\fR. The entries
+of block @roman D sub 22@ can be computed starting at the upper right-hand
+entry, i.e. @roman Q sub 45@, and continuing from right to left along
+the leftmost diagonal column. The second column is computed similarly
+and the computation is completed. The last entry that has
+been computed is @roman Q sub 36@. 
+.LP
+At phase \fItwo\fR
+block @roman D sub 22@ is saved at processor \fI1\fR since it
+will be needed in the next stage by this processor.
+It will then transfer blocks @roman D sub 22@ and @roman D sub 31@,
+because these blocks are needed by processor \fI0\fR to compute
+@roman D sub 13@ at stage \fI3\fR. Processor \fI1\fR will receive blocks 
+@roman D sub 32@ and @roman D sub 41@ 
+from processor \fI2\fR to compute @roman D sub 23@
+and the stage is finished.
+Note that processor \fI1\fR can now discard 
+@roman D sub 31@.
+.sp 2
+.NH 2
+The Dynamic Partitioning Algorithm
+.sp
+.PP
+At each stage of the static partitioning algorithm one processor becomes idle,
+because its corresponding strip of the table Q has been filled. 
+To speed up the
+algorithm one can repartition the table among the processors when the number of
+idle processors exceeds some threshold \(*t. 
+When \(*t = \fI1\fR, repartitioning will occur at every stage, because after
+each stage a processor is finished computing.
+When \(*t = \fIp\fR, repartitioning never occurs and hence we have the static
+partitioning algorithm.
+If \(*t is small, repartitioning will occur too often, resulting in a
+high communication overhead. If \(*t is too large, however, the load
+imbalance will be high.
+In this section I use \(*t = \fIp/2\fR.
+.LP
+I will again impose some limitations on the string to be parsed.
+The number of
+characters in the string \fIn\fR has to be a power of two and 
+\fIn\fR has to be a multiple of \fIp\fR. A string of arbitrary size
+can always be enlarged to fit the previous conditions with the help
+of additional grammar rules and characters.
+The dynamic algorithm  is divided into @log (n/p)+1@ stages and those stages are
+composed of \fIp/2+1\fR substages. 
+Each substage is further composed of two phases.
+The substages and phases are analogous to 
+the stages and phases of the static algorithm, respectively.
+In between stages repartitioning will occur.
+The dynamic partitioning algorithm can best be explained by  
+giving an example. Let the input string size of
+this example be @n~=~16@ and the number of processors @p~=~4@.
+Partition the table Q into @log (n/p)+1@ horizontal strips
+numbered @1,2,...,log (n/p)+1@ from the top of Q such that strip
+\fIi\fR contains \fIn\fR/@{2 sup i}@ of Q for @1<=i<=log (n/p)@.
+The bottom most strip has \fIp\fR columns. The strips correspond to
+the stages of the algorithm. At stage \fIi\fR, @1<=i<=log (n/p)+1@ the
+\fIi\fRth strip will be filled using the static partitioning technique.
+This means that each of the horizontal strips is partitioned into
+vertical strips and these again into blocks. This is illustrated in
+figure 3.4 for our particular example. Then the previously computed
+entries are repartitioned among the \fIp\fR processors, of which \fIp/2\fR
+processors are currently idle, and stage \fIi+1\fR is begun.
+.KF
+.sp
+.F+
+figure fig3.4.ps height 9.5c
+.F-
+.ps -2
+.vs -4
+.ce 2
+\fBFigure 3.4.\fR Only the blocks of the first stage are labeled. The blocks computed by processor 1 are shaded.
+Here n=16 and p=4.
+.vs +4
+.ps +2
+.sp
+.KE
+.LP
+Denote by @roman D sub size 7 {ij} sup size 7 {(s)}@ 
+the block located in the \fIs\fRth
+horizontal strip. Processor \fIi\fR will compute the vertical strip
+@roman D sub size 7 {(i+1)j} sup size 7 {(s)}@ 
+for all @1<=s<=log (n/p)@ and 
+@1<=j<=p/2+1@. For the last stage where @s=log (n/p)+1@, processor
+\fIi\fR will compute the vertical strip 
+@roman D sub size 7{(i+1)j} sup size 7{(log(n/p)+1)}@ 
+for @1<=j<=p@. As can be seen
+in figure 3.4, in which the strip computed by processor \fI1\fR is
+shaded, vertical strips are, in general, 
+not composed of contiguous blocks as in
+the static partitioning algorithm. Also the width of the strips
+decreases by half at every stage from \fIn/p\fR at the top to width 1
+at the bottom. Another difference is that for a given stage \fIs\fR,
+@s<=log (n/p)@ the blocks @roman D sub size 7 {i1} sup size 7 {(s)}@ and
+@roman D sub size 7 {i(p/2+1)} sup size 7 {(s)}@ 
+are triangular rather than diamond shaped blocks.
+.LP
+Let us take a look at the first stage. The first \fIp/2\fR substages
+of this stage are the same as the first \fIp/2\fR stages in the static
+partitioning approach. At substage \fIp/2+1\fR the triangular regions
+@roman D sub size 7 {i(p/2+1)} sup size 7 {(1)}@ are computed 
+rather than the full diamond shaped blocks. 
+In our example where \fIp=4\fR, after substage
+\fIp/2+1\fR processors \fI2\fR and \fI3\fR are idle. 
+And since the number of
+inactive processors would exceed the threshold \fIp/2\fR, the table
+must be repartitioned. At this substage processor \fI0\fR will hold the
+blocks @roman D sub size 7 {11} sup size 7 {(1)}@, 
+@roman D sub size 7 {12} sup size 7 {(1)}@, 
+@roman D sub size 7 {13} sup size 7 {(1)}@, 
+@roman D sub size 7 {22} sup size 7 {(1)}@ and 
+@roman D sub size 7 {31} sup size 7 {(1)}@. 
+These blocks have to be equally
+partitioned and the required portions transferred to processors \fI0\fR
+and \fI1\fR. In general, processor \fIi\fR, @0<=i<=p/2-1@, will distribute
+its table entries to processors \fI2i\fR and \fI2i+1\fR. The way the blocks
+are partitioned is illustrated in figure 3.5. 
+.KF
+.sp
+.F+
+figure fig3.5.ps height 5c
+.F-
+.ps -2
+.vs -4
+.ce 3
+\fBFigure 3.5.\fR The blocks stored on processor \fIi\fR are partitioned into the illustrated regions R. Regions
+@roman R sub 1@, @roman R sub 3@ and @roman R sub 5@ are routed to processor \fI2i\fR. Regions @roman R sub 2@, @roman R sub 3@, @roman R sub 4@ and @roman R sub 6@ are 
+routed to processor \fI2i+1\fR
+.vs +4
+.ps +2
+.sp
+.KE
+.LP
+For example, at
+processor \fI0\fR the regions @roman R sub 1@, @roman R sub 3@ and 
+@roman R sub 5@ will remain there and regions
+@roman R sub 2@, @roman R sub 3@, @roman R sub 4@ and 
+@roman R sub 6@ are transferred to processor \fI1\fR. 
+@roman R sub 1@ consists of the left halves of blocks
+@roman D sub size 7 {11} sup size 7 {(1)}@, 
+@roman D sub size 7 {12} sup size 7 {(1)}@ and 
+@roman D sub size 7 {13} sup size 7 {(1)}@
+and @roman R sub 2@ consists of the right halves of 
+@roman D sub size 7 {11} sup size 7 {(1)}@ 
+and @roman D sub size 7 {12} sup size 7 {(1)}@ and so on.
+At stage \fI2\fR all processors take part of the dynamic algorithm
+again and blocks @roman D sub size 7 {**} sup size 7 {(s)}@ ,
+@2<=s<=log n/p@, 
+are computed in the
+same manner as in stage \fI1\fR. Stage @log (n/p)+1@ is special, here
+repartitioning is disabled because each processor is computing a
+vertical strip of width \fI1\fR. Thus stage @log (n/p)+1@ consists of
+\fIp\fR substages.
+.bp
+.LP
+.NH
+The Orca parallel programming language
+.sp
+.PP
+Orca is a programming language developed by 
+H.E. Bal, A.S. Tanenbaum and M.F. Kaashoek. The language is designed
+specifically for implementing parallel 
+applications on loosely-coupled distributed systems. Its sequential constructs 
+are alike Modula-2's, but its data structuring facilities are significantly 
+different.  Orca supports records, unions, dynamic arrays, sets, bags and 
+general graphs.  Pointers have intentionally been omitted for security. Also 
+the language lacks global variables.
+In the following sections I will discuss interprocess communication, 
+parallelism and process synchronization in Orca.
+.sp 2
+.NH 2
+Interprocess communication in Orca
+.sp
+.PP
+Although message passing is available on loosely-coupled systems this was
+not adopted as a communication paradigm in Orca. There are many examples of
+applications where several processes need to communicate by sharing global
+state information. Message passing, basically a form of communication
+between two parties, is not an appropriate way to support writing such
+applications. Instead a special kind of shared memory is used, namely logically
+shared data.   
+.LP
+Orca users can define abstract data types and create instances (objects) of 
+these types. Objects may be shared among an arbritary number of processes 
+(which are described below) and are the communication link between these
+processes. An object type definition consists of a specification part and 
+an implementation part. The specification part defines the operations on 
+objects of the given type. As an example the specification of an object type 
+\f5IntObject\fR is shown in figure 4.1.
+.sp
+.DS
+	\fBOBJECT SPECIFICATION\fR \f5IntObject\fR;
+	    \fBOPERATION\f5 value () : integer;\fR      # Returns current value.
+	    \fBOPERATION\f5 assign (val : integer);\fR  # Assigns a new value.
+	    \fBOPERATION\f5 min (val : integer);\fR     # Set to minimum of current value 
+                                                                         # and val.
+	\fBEND\fR;
+.DE
+.ce 1
+.ps -2
+\fBFigure 4.1.\fR An object specification in Orca.
+.ps +2
+.sp
+.LP
+The implementation part gives the implementation of the operations of the
+specification part, the data of the object and code to initialize the data.
+The implementation of object type \f5IntObject\fR is given in figure 4.2.
+.sp
+.KS
+.DS
+	\fBOBJECT IMPLEMENTATION\fR \f5IntObject;
+	    x : integer;\fR                       # Data of IntObject.
+
+	    \fBOPERATION\f5 value () : integer;
+	    \fBBEGIN\fR
+		\fBRETURN\f5 x;
+	    \fBEND\fR;
+
+	    \fBOPERATION\f5 assign (val : integer);
+	    \fBBEGIN\f5
+		x := val;
+	    \fBEND\fR;
+
+	    \fBOPERATION\f5 min (val : integer);
+	    \fBBEGIN\fR
+		\fBIF\f5 val < x \fBTHEN\f5 x := val; \fBFI\fR;
+	    \fBEND\fR;
+
+	\fBBEGIN\f5
+	    x := 0;\fR			       # Initialization of data.
+	\fBEND\fR;
+.DE
+.ce 1
+.ps -2
+\fBFigure 4.2\fR An object implementation in Orca.
+.ps +2
+.KE
+.sp
+.LP
+Objects can be created and operated on as follows:
+.sp
+.DS
+	\f5WorkersActive : IntObject;
+	...
+	WorkersActive$assign (MAXNRCPUS);
+	...
+	NrCpusActive := WorkersActive$value ()\fR;
+.DE
+.sp
+.LP
+In Orca data structures are treated similar to scalar variables.
+In particular, any data structure can be passed as a parameter to processes 
+and operations.
+Most other languages only allow scalar data, arrays or data structures
+converted into a transmittable form to be sent to another process.
+.sp 2
+.NH 2
+Parallelism in Orca
+.sp
+.PP
+Parallelism in Orca is obtained by the explicit creation of sequential
+processes. Explicit means that the creation is user-initiated. This is
+necessary because compilers are currently not effective at generating 
+parallelism automatically. Processes are similar to procedures. The difference 
+is that processes run in parallel with their creator and procedure invocations
+are serial.
+.LP
+An Orca program starts with one process (called \fBOrcaMain\fR) in which other 
+(child) processes can be generated and optionally assigned to processors through
+fork-statements:
+.sp
+.DS
+\fBFORK\fR processname (actual-parameters) [ \fBON\fR (\fIcpu-number\fR)]
+.DE
+.sp
+.LP
+Processors are numbered sequentially and \fIcpu-number\fR denotes one of the 
+processors available to the program. The standard function \f5NCPUS()\fR returns
+this total number of processors available. If the \fBON\fR part is omitted, the child
+process will be run on the same processor as its parent.
+.LP
+Like procedures processes also take parameters. There are two kinds of
+parameters for a process: input and shared. With the first kind of parameter
+a copy of the actual parameter is passed from the parent to the child. The 
+data structures are thereafter independent and alterations made to one copy
+do not affect the other copy. This kind of parameter cannot be used for
+communication between processes. 
+.LP
+A data-object can also be passed as a shared parameter. This means that the
+object will be shared between the parent and the child. The parameter thus is
+a communication channel between the two processes. There is no 
+restriction in sharing
+objects. A process can create different child processes and these can also
+create more children, each of which can share the same data object. If 
+any of these processes performs an operation on the object, they all observe 
+the same effect.
+.sp 2
+.NH 2
+Synchronization in Orca
+.sp
+.PP
+When resources are shared by processes, synchronization problems have to
+be solved. There are two types of synchronization: mutual exclusion 
+synchronization and condition synchronization. 
+.LP
+Orca executes all operations on objects indivisibly and provides mutual
+exclusion in an implicit manner. If two processes simultaneously try to 
+minimize their shared \f5IntObject\fR Minimum
+by executing Minimum$min(A) and Minimum$min(B),
+the result is indeed the minimum of A, B and the old value of Minimum.
+Thus serializability of operation invocations is provided. The order of
+invocation, however, is nondeterministic. Sequences of operations, on the other
+hand, are not indivisible. For example the following if-statement is not
+guaranteed to be executed as one atomic action: 
+.sp
+.DS
+	\fBIF\fR A < Minimum$value () \fBTHEN\fR Minimum$assign (A); \fBFI\fR;
+.DE
+.sp
+.LP
+Occasionally processes in parallel programs have to synchronize their actions.
+Orca provides a mechanism that allows operations to block until some predicate
+becomes \f5true\fR. If an operation that is invoked by a process blocks, the whole
+process also blocks. A blocking operation consists of one or more guarded 
+commands:
+.sp
+.DS
+	\fBOPERATION\fR name (parameters);
+	\fBBEGIN\fR
+	    \fBGUARD\fR @roman condition sub 1@ \fBDO\fR @roman statements sub 1@ \fBOD\fR;
+	    \fBGUARD\fR @roman condition sub 2@ \fBDO\fR @roman statements sub 2@ \fBOD\fR;
+	    ...
+	    \fBGUARD\fR @roman condition sub n@ \fBDO\fR @roman statements sub n@ \fBOD\fR;
+	\fBEND\fR;
+.DE
+.sp
+.LP
+The conditions are side-effect free \f5boolean\fR expressions. If none of the
+conditions evaluates to \f5true\fR the operation blocks and waits until one or
+more of its conditions become \f5true\fR. One \f5true\fR guard is chosen 
+nondeterministically and the corresponding statements are executed.
+.bp
+.LP
+.NH
+Implementation of the Parallel Algorithms
+.sp
+.PP
+In this section I will discuss the implementation of
+the static and dynamic partitioning algorithm in Orca.
+In the first section the most important data structures
+used in both implementations and the operations for them
+are described. After that I will, in two separate sections,
+discuss the programs. 
+I will start with describing the static partitioning implementation
+and then those parts of the dynamic implementation
+that are significantly different from the static one.
+.sp 2
+.NH 2
+The Data Structures
+.sp
+.PP
+\fBIntObject\fR is a standard object type of Orca. In the 
+previous section I have shown the internal data structure
+and three operations on it. In the programs that I have implemented
+I use two additional operations, namely \fBdec\fR()
+and \fBAwaitValue\fR(\f5value:integer\fR).
+The first operation decrements the value of the object of type
+\f5IntObject\fR by one. \f5AwaitValue\fR suspends the continuation of the
+process in which the operation is called, until the \f5IntObject\fR has
+the value \f5value\fR.
+.LP
+The types \fBProdSet, \%ColProdSet, \%PartOfStrip\fR and \fBStrip\fR
+are the basic types of the programs and can be found in the file
+\fICYKtypes.spf\fR. The type definitions are given below: 
+.KS
+.LP
+.sp
+.DS
+\fBTYPE\f5 ProdSet     = \fBSET OF \f5char;
+\fBTYPE \f5ColProdSet  = \fBARRAY \f5[integer] \fBOF \f5ProdSet;
+\fBTYPE \f5PartOfStrip = \fBRECORD
+                                            \f5size : integer;
+                                       elt  : ColProdSet;
+                                 \fBEND;
+TYPE \f5Strip       = \fBARRAY \f5[integer] \fBOF \f5PartOfStrip\fR;
+.DE
+.sp
+.LP
+.KE
+\f5Prodset\fR is a set of characters, i.e. leftsides of 
+productions, and the objects of this type are the elements of
+table Q from section 3. \f5\%ColProdSet\fR is an array of type \f5ProdSet\fR.
+The variables of this type are the columns of table Q and are useful in
+calculating other elements of the table Q (see object type \f5Grammar\fR
+below). 
+\f5\%PartOfStrip\fR is a record and has two fields 
+\fBelt\fR and \fBsize\fR. In \f5elt\fR
+a column of a strip is kept and \f5size\fR denotes the number of bytes \f5elt\fR
+occupies in marshalled form. In the next section I will explain why the field
+\f5size\fR is needed.
+The type \f5Strip\fR is an array of type
+\f5\%PartOfStrip\fR and it contains a vertical or diagonal strip.
+.LP
+The object type \fBGrammar\fR holds the context-free grammar in Chomsky
+normal form. The grammar is read in by the initialization part of the
+object type from the file \fIcyk.grammar\fR.
+The first line of this file contains a number which denotes the
+number of productions the grammar has. Each of the following lines 
+contains a production in the following formats: ABC denotes
+A\(->BC and Aa$ denotes A\(->a. 
+\f5Grammar\fR has two arrays, \fB\%ProdsOfTerm\fR of type \fB\%LeftOfLetter\fR
+and \fB\%ProdsOfNonterm\fR of type \fB\%LeftOfNonTerms\fR, 
+as internal data structures. 
+The type definitions of the two arrays are given below:
+.KS
+.LP
+.sp
+.DS
+\fBTYPE \f5NontermLefts   = \fBARRAY \f5[char 'A'..'Z'] \fBOF \f5ProdSet;
+\fBTYPE \f5LeftOfNonTerms = \fBARRAY \f5[char 'A'..'Z'] \fBOF \f5NontermLefts;
+\fBTYPE \f5LeftOfLetter   = \fBARRAY \f5[char 'a'..'z'] \fBOF \f5ProdSet;\fR
+.DE
+.sp
+.LP
+.KE
+\f5\%ProdsOfTerm\fR is a
+one-dimensional array indexed on the terminal alphabet 
+(a,b,...,z) of the grammar. Its elements contain the leftsides
+of productions whose rightsides are the index value of the array.
+\f5\%ProdsOfNonterm\fR is a two dimensional array where both indices are
+based on the nonterminal alphabet A,B,...,Z. The elements of this
+array are again leftsides of productions of which the rightsides
+are the index values. As an example consider the productions:
+.LP
+.DS
+A\(->BC                       \f5ProdsOfNonterm\fR[B][C] contains A and B
+A\(->CD     \fBTHEN\fR      \f5ProdsOfNonterm\fR[C][D] contains A
+B\(->BC                       \f5ProdsOfTerm\fR[a]             contains A
+A\(->a 
+.DE
+.LP
+There are two operations acting on objects of type
+\f5Grammar\fR: 
+.IP
+\fBProdsOfLetter\fR(\f5Letter:char\fR)
+.IP
+\fB\%ProdsOfStr\fR(\f5VertCol,DiagCol:ColProdSet; NrEltsInCol:integer\fR): \f5ProdSet\fR.
+.LP
+The first of these returns a set of leftsides of productions which
+derive \f5Letter\fR. In effect \f5\%ProdsOfLetter\fR computes the
+@roman Q sub ii@'s of figure 3.1. \f5\%ProdsOfStr\fR computes 
+the @roman Q sub ij@'s of figure 3.1 where
+\f5VertCol\fR and \f5DiagCol\fR are 
+@roman Q sub i,i+k-1@ and 
+@roman Q sub i+k,j@, respectively.
+.LP
+The last object type I will discuss in this section is \fBTransfer\fR.
+This type is created using a standard generic object type 
+.B GenericBin.
+A generic data type is an abstract data type that is 
+parameterized with other types. It is not an actual type itself,
+but it can be used to create several real types through a process
+called \fIinstantiation\fR:
+.sp
+.DS
+\fBOBJECT\fR \f5Transfer\fR = \fBNEW\fR \f5GenericBin(Strip)\fR;
+.DE
+.sp
+\f5Transfer\fR has two internal data structures:
+.B bin
+of type \f5Strip\fR and 
+.B empty
+of type \f5boolean\fR. There are two operations operating on
+these two data structures: \fBput\fR(\f5e:\%PartOfStrip\fR)
+and \fBget\fR(\f5e\fR: \fBOUT\fR \f5\%PartOfStrip\fR). \f5Put\fR
+waits until \f5empty\fR is \f5true\fR, puts \f5e\fR in \f5bin\fR
+and sets \f5empty\fR to \f5false\fR (all indivisibly). \f5Get\fR waits until
+\f5empty\fR is \f5false\fR, copies the value of \f5bin\fR in \f5e\fR and sets
+\f5empty\fR to \f5true\fR (also indivisibly). This way objects of type
+\f5Transfer\fR can be used to transfer objects of type \f5\%PartOfStrip\fR
+from one processor to another.
+.sp 2
+.LP
+.NH 2
+Implementation of the Static Partitioning Algorithm
+.sp
+.PP
+The static partitioning implementation closely follows 
+the static partitioning algorithm. 
+I will describe how the program executes. 
+Thus I will start with \f5OrcaMain\fR.
+.LP
+As a first step the static partitioning implementation reads in the
+string that has to be recognized (\fBInputString\fR). \fBReadStr()\fR does the 
+job. It reads this string from the file \fIcyk.string\fR.
+After this \fBDetNrCpus()\fR determines how many processors (\fBNrCpus\fR) take
+part in the algorithm. There cannot be more processors than
+characters in the input string (\fBSizeString\fR), since each processor 
+computes at least one column of the table Q. Also, the number of
+processors cannot be greater than the number of processors
+that are available (\fBNCPU()\fR) or the program
+can handle (\fBMAXCPU\fR). Finally the number of characters in the string
+must be a multiple of the number of processors pertaining in the
+implementation.
+.LP
+The object \fB\%WorkersActive\fR of type \f5IntObject\fR is first assigned \f5NrCpus\fR. This
+object is shared among all \fBWorkers\fR (i.e. processors). 
+Each \f5Worker\fR decrements
+the value of \f5\%WorkersActive\fR by one if it is finished. \f5OrcaMain\fR will
+wait for \f5\%WorkersActive\fR to become zero, because it then knows that
+all \f5Workers\fR have finished their work and the program can stop executing.
+Before leaving the program however, \fBFinish()\fR has to be called, because
+Orca currently does not support distributed termination detection.
+This procedure kills RTS processes on all the processors.
+.LP
+Another object of type \f5IntObject\fR, \fBCnt\fR, is used for time
+measurements. \f5Cnt\fR is also shared among the \f5Workers\fR, only now it is
+initially assigned the value zero. The first thing a \f5Worker\fR does is
+to increment the value of \f5Cnt\fR and then do an \f5Cnt$AwaitValue(NrCpus)\fR.
+The effect of this is that all the \f5Workers\fR will start running at the
+same time. This is the moment to start the timing in \f5OrcaMain\fR.
+The timing is stopped if all the \f5Workers\fR are done, 
+i.e. if the value of \f5WorkersActive\fR is zero. I will discuss time
+measurements in the next section.
+.LP
+To put the \f5Workers\fR to work and divide the workload the following
+statement is issued:
+.sp
+.DS
+\fBFOR\f5 CpuNr \fBIN\f5 0..NrCpus-1 \fBDO\fR
+    \fBFORK\f5 Worker (CpuNr, NrCpus, SizeString/NrCpus, InputString, 
+                   WorkersActive, Cnt, StageInfo[CpuNr], StageInfo[CpuNr+1],
+                   grammar)      \fBON\f5 CpuNr\fR;
+\fBOD\fR;
+.DE
+.sp
+All \f5Workers\fR, indexed \f50,1,...,NrCpus-1\fR, use \f5NrCpus, CpuNr,
+SizeString/NrCpus\fR and \f5InputString\fR to determine:
+.sp
+.DS
+- which vertical strip of Q they have to compute.
+- the width and length of the strip.
+- which part of the input string they must use to initiate the strip.
+.DE
+.sp
+.LP
+\fBStageInfo\fR is an array of type \f5Transfer\fR. Its elements are used for
+passing the diagonal strips from one \f5Worker\fR to another. The
+\f5Workers\fR are conceptually lined up such that each \f5Worker\fR has a
+left and right neighbour (except for the first and the last one).
+Each \f5Worker\fR has two objects of \f5Transfer\fR: one to pass a diagonal
+strip to its left neighbour (if appropriate) and one to receive
+a diagonal strip from its right neighbour (also if appropriate). In
+the \f5Workers\fR, the objects are therefore called ToLeft and FromRight. As an
+example, consider figure 5.1 where four \f5Workers\fR are lined up.
+\f5Worker\fR i puts a diagonal strip in \f5StageInfo[i]\fR and \f5Worker\fR i-1 extracts
+this strip from \f5StageInfo[i]\fR (depicted by arcs). Note that \f5StageInfo[0]\fR and
+\f5StageInfo[4]\fR are not used by \f5Workers\fR 0 and 3, because \f5Worker\fR 0
+has no left and \f5Worker\fR 3 has no right neighbour.
+.KF
+.sp
+.F+
+figure fig5.1.ps height 5.5c width 16c
+.F-
+.ce 2
+.ps -2
+.vs -4
+\fBFigure 5.1.\fR A row of four Workers. In between them the array elements of StageInfo they use for
+communication. The arrows give the direction of the communication.
+.vs +4
+.ps +2
+.sp
+.KE
+.LP
+Each \f5Worker\fR has two variables of type \f5Strip\fR: \fBVertStrip\fR and \fBDiagStrip\fR.
+Not surprisingly these variables contain the vertical and diagonal
+strips of the \f5Worker\fR. After determining the number of stages a
+\f5Worker\fR has to go through (\fBNrStages\fR), the first block (a triangular
+shaped one) is computed by \fBCompFirstBlock()\fR. First however,
+\f5CompFirstBlock\fR determines the sizes of the columns of \f5VertStrip\fR
+and \f5DiagStrip\fR. The columns of \f5VertStrip\fR must be large enough to
+contain the whole vertical strip a \f5Worker\fR must compute, while
+the columns of \f5DiagStrip\fR are set to contain only the first
+diamond shaped block to minimize communication overhead.
+.LP
+If a \f5Worker\fR has a left neighbour 
+(\fBleftok\fR) \fBSend\fR sends the block
+just computed to it. Now I can explain why a size field is added to
+the columns. The current Orca run-time system only allows data up to 
+32 Kbytes to be sent in one message. \f5Send\fR splits \f5DiagStrip\fR up into
+messages of 32 Kbytes (if needed) and sends them (\fBCpAndSend\fR)
+one after another to the left neighbour.
+This is done by creating a new variable of type \f5Strip\fR, 
+\fBLocalStrip\fR, where
+in the columns of \f5DiagStrip\fR are copied until the number of bytes in
+\f5LocalStrip\fR reaches the limit of \f5MAXMSG\fR. If needed, the remaining
+columns are sent likewise.
+.LP
+Currently Orca uses 4 bytes for a marshalled data structure of \f5ProdSet\fR for
+the empty set and 1 additional byte for each element in this set. 
+A data structure of \f5\%ColProdSet\fR occupies 16 bytes 
+for the
+descriptor of the array plus the total number of bytes occupied by
+the marshalled elements of the array. 
+The number of bytes the marshalled form of
+\f5\%PartOfStrip\fR consists of is the sum of its marshalled fields, where
+an integer costs 4 bytes
+.LP
+If a worker has another stage to go through it will receive a diagonal
+strip (\fBReceive\fR) from its right neighbour. It not only receives a
+diagonal strip but it also enlarges the \f5DiagStrip\fR 
+(\fBCpAndEnlarge\fR).
+This way \f5DiagStrip\fR can also contain the block that will be
+computed in the next stage.
+.LP
+If all \f5Workers\fR are done with their stages, \f5Worker\fR 0 has the answer
+to the question of section~1 :  Is the input string part of the
+language generated by \f5Grammar\fR? The following Orca statement gives 
+this answer.
+.sp
+.DS
+\fBIF\f5 CpuNr = 0 \fBTHEN\fR 
+    \fBIF\fR 'S' \fBIN\f5 VertStrip[1].elt[NrCpus*NrCols] \fBTHEN\f5 WriteLine ("Yes");
+                                                                           \fBELSE\f5 WriteLine ("No");
+    \fBFI\fR;
+\fBFI\fR;
+.DE
+.sp 2
+.LP
+.NH 2
+Implementation of the Dynamic Partitioning Algorithm
+.sp
+.PP
+The dynamic partitioning implementation
+deviates from the static one in the calculation of the number
+of \f5Workers\fR (i.e. processors) pertaining in the implementation.
+The number of \f5Workers\fR must be a power of two, but still at most the
+minimum of \f5NrCpus, SizeString\fR and \f5NCPUS\fR.
+\fBDetNrCpus\fR is responsible for this calculation.
+.LP
+Next, the threshold \fBTau\fR is determined. 
+If the number of idle \f5Workers\fR
+exceeds this threshold the table Q will be repartitioned among the 
+\f5Workers\fR. In this implementation the value of \f5Tau\fR will be
+\f5NrCpus/2\fR.
+.LP
+The \f5Workers\fR are put to work by the statement of figure 5.2.
+.KF
+.LP
+.sp
+.DS
+\fBFOR\f5 CpuNr \fBIN\f5 0..NrCpus-1 \fBDO\fR
+                       # Above NrCpus-1 there is no process to send to.
+    \f5receiver1 := (2*CpuNr)    %NrCpus; 
+    receiver2 := (2*CpuNr + 1)%NrCpus;\fR
+                                   # Avoid alias.
+    \fBIF\f5 CpuNr = 0 \fBTHEN\f5 receiver1 := MAXCPU - 1; \fBFI\fR;
+    \fBIF\f5 CpuNr = NrCpus-1 \fBTHEN\f5 receiver2 := MAXCPU; \fBFI\fR;
+
+    \fBFORK\f5 
+        Worker (CpuNr, NrCpus, Tau, SizeString, InputString,
+            WorkersActive, Cnt, 
+            SubStageInfo[CpuNr], SubStageInfo[CpuNr+1],
+            StageInfo[receiver1], StageInfo[receiver2], 
+            StageInfo[CpuNr], grammar)
+    \fBON\f5 CpuNr;
+\fBOD\fR;
+.DE
+.ce 1
+.ps -2
+\fBFigure 5.2\fR. An Orca statement forking of processes.
+.ps +2
+.sp
+.LP
+.KE
+.LP
+As explained in section 3 the stages of the dynamic partitioning
+algorithm consist of substages. In between stages as well as in 
+between substages information must be passed from one \f5Worker\fR to
+another. \fBStageInfo\fR and \fBSubStageInfo\fR are arrays of type
+\f5Transfer\fR and are used for passing the information. As the substages
+of the dynamic partitioning algorithm are the same as the stages of
+the static partitioning algorithm, \f5SubStageInfo\fR is used the same way
+as \f5StageInfo\fR is in the static partitioning implementation.
+.LP
+Each \f5Worker\fR gets three elements of the array \f5StageInfo\fR.
+Two of them are for sending information (if appropriate) and
+the third is for receiving information (also if appropriate).
+In the \f5Workers\fR they are called \fBTo2i\fR, 
+\fBTo2iPlus1\fR and \fBFromi\fR.
+\f5Worker\fR \f5CpuNr\fR shares an element with \f5Worker\fR \fBreceiver1\fR 
+and another element with \f5Worker\fR \fBreceiver2\fR. To restrict
+the use of elements of \f5StageInfo\fR \f5receiver1\fR and \f5receiver2\fR are
+computed using a modulo operation. \f5Workers\fR with \f5CpuNr >= Tau\fR
+have a passive role during the repartitioning phase. There is no
+harm done reusing elements of the array and giving them to these
+\f5Workers\fR. Note that special care
+had to be taken to avoid aliases. For example, if \f5CpuNr\fR is zero then
+\f5receiver1\fR will also be zero and \f5Worker\fR 0 will get \f5StageInfo[0]\fR as a
+parameter in two places. \f5Receiver1\fR is therefore set to \f5MAXCPU-1\fR.
+In figure 5.3, as an example, 4 \f5Workers\fR and
+the elements of \f5StageInfo\fR and \f5SubStageInfo\fR are given. Arcs depict the
+destination of the information that is  passed through the elements
+of the arrays.
+.KF
+.sp
+.F+
+figure fig5.3.ps width 16c height 8.5c
+.F-
+.ce 2
+.ps -2
+.vs -4
+\fBFigure 5.3.\fR A row of four Workers together with the array elements used for communication. 
+The arrows give the direction of the communication.
+.vs +4
+.ps +2
+.sp
+.KE
+.LP
+Again, as in the static partitioning implementation the \f5Workers\fR
+contain \f5VertStrip\fR and \f5DiagStrip\fR. \fBInitStrips()\fR determines the sizes
+of the columns of both Diagstrip and \f5VertStrip\fR for the first stage. 
+These sizes are optimal with respect to memory use and communication
+overhead, because no more memory is reserved other than needed in this
+first stage. The \f5Strip\fR directly resembles the top half of figure 3.4.
+InitStrips also computes the @roman Q sub ii@s, @1<=i<=n@.
+.LP
+Each \f5Worker\fR computes the number of stages (\fBNrStages\fR) and substages
+(\fBNrSubStages\fR) it must go through. \f5NrStages\fR is the same
+in every \f5Worker\fR. Note that the dynamic partitioning algorithm states that
+the number of stages is related to the width of the vertical strip.
+There is, however, one exception. If there is one \f5Worker\fR it must go
+through only one stage. NrSubStages is different for \f5Workers\fR with
+\f5CpuNr >= Tau\fR and \f5CpuNr < Tau\fR. \f5Workers\fR of the first kind have, as can be
+seen in figure 3.4, a tapering strip as in the static partitioning
+case and NrSubStages is set to \f5NrCpus-CpuNr\fR.
+\f5Workers\fR of the second kind all compute the same rectangular strips
+and need  a special kind of substage to fill their strip completely.
+Their \f5NrSubStages\fR is set to \f5Tau+1\fR. However, in the last stage NrSubStages
+is changed into \f5NrCpus-CpuNr\fR for all \f5Workers\fR, because then 
+there is no need for repartitioning.
+.LP
+\fBDoSubStages()\fR fills the strips the same way the static
+partitioning program does. 
+It computes a block of a strip and communicates it to its
+left neighbour.
+\fBCompFirstBlock()\fR and \fBComputeBlock()\fR
+compute all but the last blocks. They 
+are basically the same as their "static" counterparts. 
+\fBCompLastBlock()\fR deals with the last (triangular shaped) block
+of the strips. Note that at the \f5Tau+1st\fR substage no strips are sent,
+because after this stage repartitioning will occur. \fBRepartition()\fR
+handles this repartitioning phase. It first sends and receives parts
+of the vertical and diagonal strips, as indicated in figure 3.5.
+Then it copies these strips in strips large enough to also contain
+the elements computed in the next stage.
+.LP
+At the last stage  \f5Tau\fR is set to \f5NrCpus\fR because in this stage no more
+repartitioning is required. \f5VertStrip\fR of \f5Worker\fR 0 again contains
+the answer to the by now familiar question!
+.bp
+.LP
+.NH
+Performance Measurements and Analysis
+.sp
+.PP
+The parallel Orca programs were run on top of Amoeba. Amoeba is
+a design of the Vrije Universiteit in Amsterdam. It is a destributed
+operating system, transparent to the user. Users can log into the
+system as a whole, rather than into any specific machine. When a 
+program is run on the system, Amoeba decides where to place this
+program. Typical about Amoeba is its processor pool. A pool consists
+of multiple processors that are available to all users. Processors
+are allocated when needed to execute a program. The pool
+used to run the parallel partitioning programs contains 65 Sparc
+processors that are connected by a 10 Mbit/sec Ethernet. 
+These processors run at 50 Mhz and have 32 Mbytes of memory each.
+.LP
+For doing performance measurements and analysis, three timing values
+are recorded. One is the recording of the total time a program runs.
+Special care has been taken to record the total time fairly.
+Therefore the shared object \f5Cnt\fR, as described in the previous
+section, is used. Each \f5Worker\fR increments this object when it is
+ready to run. When \f5Cnt\fR has reached the value 
+\f5NrCpus\fR, all \f5Workers\fR are ready and the
+timing can begin. This way the time needed to load the Orca programs
+on the processors is eliminated. 
+The time on which the \f5Workers\fR start computing is recorded 
+using the standard function 
+\fBGetTime\fR. \f5GetTime\fR returns the current time in 
+deciseconds. If a \f5Worker\fR is finished computing, it decrements
+another shared object: \f5WorkersActive\fR. If \f5WorkersActive\fR
+reaches the value zero all \f5Workers\fR are finished. At this time
+\f5GetTime\fR is called again in order to calculate the elapsed total
+time.
+.LP
+The other two timing values,
+which are recorded per process, 
+are the two kinds of communication done between processes.
+These two kinds of communication are: static and
+dynamic communication. \fIStatic communication\fR is the sending and 
+receiving of the diagonal strips during the second phase of the stages
+of the static partitioning program or the substages of the dynamic
+partitioning program. \fIDynamic communication\fR is the sending and
+receiving of the vertical and diagonal strips during the repartitioning
+phase. Note that the static partitioning program has no
+dynamic communication.
+The \f5Workers\fR in the partitioning programs communicate their
+diagonal and vertical strips by passing them as parameters
+to the \f5put\fR and \f5get\fR operations on a shared object 
+of type \f5Transfer\fR.
+Both kinds of communication are timed around these operations. The
+timing value of each \f5put\fR or \f5get\fR operation is added to 
+the total static or dynamic communication time.
+.LP
+The speedup of the parallel programs is defined by the following
+formula:
+.sp
+.EQ
+Speedup~with~N~CPUS~=~ {time~taken~by~parallel~program~with~1~CPU} over
+{time~taken~by~parallel~program~with~N~CPUs}
+.EN
+.sp
+.LP
+In section 6.1 timing values and speedups of the static partitioning
+program are given. I will comment on these values and briefly 
+compare them with results from [5]. In section 6.2 the same actions
+are undertaken for the dynamic partitioning program.
+.sp 2
+.NH 2
+Measurements of the Static Partitioning Implementation
+.sp
+.PP
+In table 6.1 the timing values of the static partitioning program are
+given, together with the speedups calculated with the formula of the
+previous section. The strings were randomly generated and the timing
+values are the average results of three tests. The communication
+values were taken from \f5Worker\fR 0, since it is the last
+\f5Worker\fR to terminate. Note that the communication is timed
+around \f5put\fR or \f5get\fR operations. This means that also
+time for waiting on \f5empty\fR to become \f5false\fR or \f5true\fR
+is included.
+.nr PS 10
+.nr VS 12
+.LP
+.sp 2
+.TS
+center,box;
+c | c | c | c | c.
+Input	Number	Overall	Communication	Speedup
+Length	of CPUs.	Time(sec)	Time(sec)	
+=
+.T&
+n | n | n | n | n.
+64	1	3.0	0.0	1.0
+\^	_	_	_	_
+\^	2	2.7	0.2	1.1
+\^	_	_	_	_
+\^	4	1.9	0.2	1.6
+\^	_	_	_	_
+\^	8	1.5	0.3	2.0
+\^	_	_	_	_
+\^	16	1.3	0.7	2.3
+\^	_	_	_	_
+\^	32	1.8	1.1	1.7
+\^	_	_	_	_
+\^	64	1.8	1.2	1.7
+=
+128	1	31.7	0.0	1.0
+\^	_	_	_	_
+\^	2	27.3	0.2	1.2
+\^	_	_	_	_
+\^	4	18.5	0.6	1.7
+\^	_	_	_	_
+\^	8	11.8	2.3	2.7
+\^	_	_	_	_
+\^	16	8.2	3.6	3.9
+\^	_	_	_	_
+\^	32	7.7	4.6	4.1
+\^	_	_	_	_
+\^	64	7.8	6.2	4.1
+=
+256	1	232.8	0.0	1.0
+\^	_	_	_	_
+\^	2	202.0	1.5	1.2
+\^	_	_	_	_
+\^	4	135.2	6.3	1.7
+\^	_	_	_	_
+\^	8	78.6	7.8	3.0
+\^	_	_	_	_
+\^	16	48.2	11.0	4.8
+\^	_	_	_	_
+\^	32	30.2	12.4	7.7
+\^	_	_	_	_
+\^	64	25.4	13.8	9.2
+.TE
+.ce 2
+\fBTable 6.1.\fR Timing values and speedups for the static partitioning implementation
+with input string lengths 64, 128 and 256.
+.nr PS 12
+.nr VS 16
+.sp
+.LP
+In figure 6.1 the speedups of the static partitioning program
+are depicted. The x and y axis are logarithmic with base two.
+.KF
+.G1
+frame ht 2 width 2
+label left "Speedup" left .3
+label bot "#CPUs"
+coord x 1, 64 y 1, 64 log log
+ticks left out at 1 "1",2 "2",4 "4",8 "8",16 "16",32 "32",64 "64"
+ticks bot out at 1 "1",2 "2",4 "4",8 "8",16 "16",32 "32",64 "64"
+draw li solid
+draw chars64 dotted
+draw chars128 dashed
+draw chars256 solid
+copy "speedup.stat" thru X
+        next li at $1,$2
+        next chars64 at  $1,$3
+        next chars128 at $1,$4
+	next chars256 at $1,$5
+X
+copy thru % "$1" size -3 at $2,$3 % until "XXX"
+        linear 7        11
+        64chars    40       1.5
+        128chars   24        3.3
+        256chars   32        9.2
+XXX
+.G2
+.vs -4
+.ps -2
+.ce 2
+\fBFigure 6.1\fR A plot of the speedup of the static implementation
+for input string lengths 64, 128 and 256
+.ps +2
+.vs +4
+.sp
+.KE
+.LP
+Although the speedups are poor there are mitigating circumstances.
+For one, the workload is not balanced, 
+as can be seen in figure 3.2. Only
+in the first stage all \f5Workers\fR are participating in the program.
+Note that in this stage the smallest block of the vertical strip is
+computed. At each next stage another \f5Worker\fR stops computing.
+The load imbalance is further worsened  by the following observations:
+.IP -
+the number of communicated blocks increases by one at each stage.
+.IP -
+the number of referenced elements to compute element @roman Q sub ij@
+of table Q increases by two as \fIi\fR increases by one.
+.LP
+As an example of the second observation, consider the case
+where the number of processors @p~=~2@ and the input string length 
+@n~=~256@. It took \f5Worker\fR 0 25.9 seconds to
+compute the first block of its strip and 174.6 seconds to compute
+the second (and last) block. Although the second block is only
+about twice as big as the first block it took 6.7 times longer
+to compute this block.
+As it took \f5Worker\fR 1 26.8 seconds to compute its first
+and only block, its contribution to the total time is very
+small.
+This is an explanation for the small speedup of 1.2 (see table 6.1).
+.LP
+Another mitigating circumstance is the high percentage of
+communication in the overall time. This is an indication 
+that the problem size is  too small, since communication is more
+expensive than computation.
+However, due to memory limitations the programs could not 
+handle string lengths of 512 for a number of processors smaller than 8.
+.LP
+As an indication of the amount of communication done in the static 
+partitioning program, where @n~=~256@ and @p~=~64@ some numbers are
+given below. To communicate the diagonal strips a total number of 2016
+RPCs were done. The sizes of the RPC messages range from 0 to 4 Kbytes.
+However, most messages are in between 1 to 2 Kbytes big.
+Another 318 broadcast messages were issued to, amongst
+other things, keep count of the number of \f5Workers\fR still
+pertaining in the program. The broadcast messages are mostly 15 bytes
+big.
+.LP
+In [5] the static and dynamic programs were run on an MIMD hypercube
+of which the processors are connected via high-speed communication
+channels. They achieved better speedups (I will not repeat their
+timing values in this paper). This is, however, mainly due to better
+communication time values. If speedups are defined on the basis of
+computation time (i.e., Overall Time - Communication Time) 
+the speedups are more
+alike. As an example, consider the case of input string length 256
+and a number of 64 processors. 
+By the old definition of speedup, in [5] a speedup of 19.1 is
+achieved.
+By the new definition, however, they achieve
+a speedup of 21.8, whereas in this paper a
+speedup of 20.1 is achieved.
+.sp 2
+.LP
+.NH 2
+Measurements of the Dynamic Partitioning Implementation
+.sp
+.PP
+In table 6.2 the timing values and speedups of the dynamic partitioning
+program are given. The same strings as with the static partitioning
+program are used. Again the communication values are taken from
+\f5Worker\fR 0, since it is the last \f5Worker\fR to terminate.
+.LP
+In figure 6.2 the speedups of table 6.2 are depicted. Again the x an y
+axis are logarithmic with base two. The y axis (Speedup) has begin value
+0 instead of 1, because there are speedups lower than 1.
+.nr PS 10
+.nr VS 12
+.LP
+.KS
+.sp
+.TS
+center,box;
+c | c | c | c | c | c.
+Input	Number	Overall	Static Comm.	Repartitioning	Speedup
+Length	of CPUs	Time(sec)	Time(sec)	Time(sec)	
+=
+.T&
+n | n | n | n | n | n.
+64	1	2.8	0.0	0.0	1.0
+\^	_	_	_	_	_
+\^	2	3.1	0.4	0.6	0.9
+\^	_	_	_	_	_
+\^	4	3.8	0.8	1.6	0.7
+\^	_	_	_	_	_
+\^	8	2.9	0.9	1.7	1.0
+\^	_	_	_	_	_
+\^	16	2.7	1.1	1.3	1.0
+\^	_	_	_	_	_
+\^	32	2.6	1.3	1.0	1.1
+\^	_	_	_	_	_
+\^	64	2.0	1.5	0.0	1.4
+=
+128	1	29.4	0.0	0.0	1.0
+\^	_	_	_	_	_
+\^	2	24.0	1.0	1.8	1.2
+\^	_	_	_	_	_
+\^	4	18.3	2.6	5.2	1.6
+\^	_	_	_	_	_
+\^	8	15.2	2.8	6.3	1.9
+\^	_	_	_	_	_
+\^	16	10.2	2.9	3.7	2.9
+\^	_	_	_	_	_
+\^	32	10.5	5.4	3.0	2.8
+\^	_	_	_	_	_
+\^	64	9.7	6.6	1.5	3.0
+=
+256	1	217.1	0.0	0.0	1.0
+\^	_	_	_	_	_
+\^	2	161.2	5.7	7.9	1.3
+\^	_	_	_	_	_
+\^	4	92.5	8.4	12.0	2.3
+\^	_	_	_	_	_
+\^	8	58.0	9.0	11.0	3.7
+\^	_	_	_	_	_
+\^	16	44.5	13.2	10.3	4.9
+\^	_	_	_	_	_
+\^	32	34.8	14.8	9.7	6.2
+\^	_	_	_	_	_
+\^	64	33.5	17.9	5.4	6.5
+.TE
+.ce 2
+\fBTable 6.2.\fR Timing values and speedups for the dynamic partitioning implementation
+with input string lengths 64, 128 and 256.
+.sp 2
+.KE
+.nr PS 12
+.nr VS 16
+.LP
+The speedups of the dynamic program are in most cases worse than the
+ones of the static program. This was not expected, because the workload
+of this program is better balanced, as can be seen in figure 3.4. At
+each stage the elements of table Q are repartitioned among the
+processors. All processors will pertain in the program again.
+However, repartitioning is done at the expense of additional
+communication. Also the number of transfers of a diagonal strip during
+substages is greater than in the static implementation. As well as a
+better workload balance there are also greater communication costs.
+In small problem sizes this will result in poorer speedups.
+.LP
+As an example of the greater communication costs, consider the case
+where @n~=~256@ and @p~=~64@ again. The number of broadcast messages
+is the same as in the static program. However, the number of RPCs done,
+5182, is significantly larger, resulting in more communication overhead.
+.LP
+In some important cases the dynamic program achieves better speedups.
+As the input string length increases better speedups are achieved for
+an increasing number of processors. As an indication for this I have
+run the static and dynamic program on 32 processors  with an input
+string length of 512. The total time of the dynamic program was
+147.3 seconds whereas the static program took 210.0 seconds. Although
+the speedups cannot be determined there is a strong hint for a better
+speedup with a number of 32 processors. For string length 256 there
+was yet a worse speedup in comparison with the static speedups.
+.LP
+In [5] the speedups of the dynamic program are indeed better than the
+speedups of the static one, as was expected. Their program achieves a
+speedup of 33.1 for input string length 256. The speedups in [5]
+increase also as the problem size increases.
+.KS
+.LP
+.sp
+.G1
+frame ht 2 width 2
+label left "Speedup" left .3
+label bot "#CPUs"
+coord x 1, 64 y 0.5, 64 log log
+ticks left out at 0.5 "0.5",1 "1",2 "2",4 "4",8 "8",16 "16",32 "32",64 "64"
+ticks bot out at 1 "1",2 "2",4 "4",8 "8",16 "16",32 "32",64 "64"
+draw li solid
+draw chars64 dotted
+draw chars128 dashed
+draw chars256 solid
+copy "speedup.dyn" thru X
+        next li at $1,$2
+        next chars64 at  $1,$3
+        next chars128 at $1,$4
+        next chars256 at $1,$5
+X
+copy thru % "$1" size -3 at $2,$3 % until "XXX"
+        linear 7        11
+        64chars    16       0.8
+        128chars   24        2.2
+        256chars   32       8 
+XXX
+.G2
+.vs -4
+.ps -2
+.ce 2
+\fBFigure 6.2\fR A plot of the speedup of the dynamic implementation
+for input string lengths 64, 128 and 256
+.ps +2
+.vs +4
+.sp
+.KE
+.LP
+.bp
+.NH
+Conclusions
+.sp
+.PP
+The programming language Orca, in which I have implemented the static
+and dynamic partitioning algorithms, has shown to be very easy to learn
+and use. It was very easy to parallelize the sequential algorithm with
+the use of processes and shared objects as a communication channel.
+It is a pity, however, that the Orca runtime system currently does not
+support data to be sent in messages greater than 32 Kbytes.
+It puts the burden of breaking the data into pieces smaller than this
+limit on the programmer.
+.LP
+The speedups of the programs I have implemented are not impressive
+and worse than those of [5]. This can be explained by the load
+imbalance in the programs and by 
+the high communication costs, respectively.
+I expect the programs to be faster if faster networks are used,
+e.g. 100 Mbit/sec Ethernet.
+The load imbalance, however, is an integral part of the static and
+dynamic algorithm, since it is proven in [5] that these algorithms are
+time-wise optimal with respect to the sequential dynamic programming
+algorithm.
+.sp 2
+.SH
+Acknowledgements
+.sp
+.PP
+I would like to thank Henri Bal, my supervisor, for his support during
+this project. He was always willing to help and has given valuable
+advice. Furthermore Koen Langendoen needs to be thanked for I could
+always barge into his room with yet another question. As writing is 
+not my piece of cake (I have already trouble filling a postcard), 
+Titia always encouraged me to go on. Many thanks to her! Finally I
+would like to thank my mother for she almost never lost her patience
+with this very slow student.
+.bp
+.SH
+Literature
+.sp
+.IP [1]
+Bal, H.E., The Shared Data-Object Model as a Paradigm for Programming Distributed
+Systems, Vrije Universiteit, Ph.D. Thesis, Amsterdam, 1989.
+.IP [2]
+Bal, H.E., Kaashoek, M.F., and Tanenbaum A.S, "Orca: A Language for
+Parallel Programming of Distributed Systems", IEEE Transactions on
+Software Engineering, Vol. 18, No. 3, March 1992, pp. 190-205.
+.IP [3]
+Bertsekas, D.P., Tsitsiklis, J.N., Parallel and Distributed Computation: 
+Numerical Methods, Prentice Hall, 1989.
+.IP [4]
+Grama, A.Y., Parallel Processing of Discrete Optimization Problems: A Survey,
+University of Minnesota, Nov. 1992.
+.IP [5]
+Ibarra, O.H, Pong, T-C, Sohn, S.M., Parallel Recognition and Parsing on the
+Hypercube, IEEE Trans. Computers, Vol. 40, No. 6, June 1991.
+.IP [6]
+Karypis, G., Kumar, V., Efficient Parallel Formulations for Some Dynamic Programming 
+Algorithms, University of Minnesota, Oct. 1992.
+.IP [7]
+Li, G-j, Wah, B.W., Parallel Processing of Serial Dynamic Programming Problems,
+Computer Software and Applications Conference, 1985.
+.IP [8]
+Tanenbaum, A.S., Modern Operating Systems, Prentice-Hall, Inc., Englewood Cliffs,
+NJ (1992).

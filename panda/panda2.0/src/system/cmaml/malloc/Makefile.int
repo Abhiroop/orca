@@ -1,0 +1,81 @@
+#CFLAGS =	-O
+CC =	/usr/em/bin/int44 -.c
+
+RUN =		/home/dick/int/src/int#			# the run call, if not normal UNIX
+
+.SUFFIXES:	.k
+.c.k:
+	$(CC) -c $(CFLAGS) $<
+
+# the dickmalloc module
+CSRC =	mal.c log.c phys.c global.c
+COBJ =	mal.k log.k phys.k global.k
+
+# the test module
+TSRC =	maltest.c check.c
+TOBJ =	maltest.k check.k
+
+SRC =	$(CSRC) $(TSRC)
+OBJ =	$(COBJ) $(TOBJ)
+
+run:	tst
+	time $(RUN) tst -n200 -r5000022
+
+tst:	$(OBJ)
+	$(CC) $(CFLAGS) $(OBJ) -o tst
+
+drun:	dickmalloc
+	time $(RUN) dickmalloc -n200 -r5000022
+
+dickmalloc:	maltest.k malloc.k
+	$(CC) $(CFLAGS) maltest.k malloc.k -o dickmalloc -lm
+
+urun:	unixmalloc
+	time $(RUN) unixmalloc -n200 -r5000022
+
+unixmalloc:	maltest.k
+	$(CC) $(CFLAGS) maltest.k -o unixmalloc -lm
+
+maltest.k:	maltest.c param.h Makefile
+	$(CC) $(CFLAGS) -c maltest.c
+
+malloc.c:	READ_ME param.h impl.h check.h log.h phys.h \
+		mal.c log.c phys.c check.c Makefile add_file
+	cat READ_ME >malloc.c
+	add_file param.h >>malloc.c
+	add_file impl.h >>malloc.c
+	add_file check.h >>malloc.c
+	add_file log.h >>malloc.c
+	add_file phys.h >>malloc.c
+	add_file mal.c >>malloc.c
+	add_file log.c >>malloc.c
+	add_file phys.c >>malloc.c
+	add_file check.c >>malloc.c
+
+lint:
+	lint -DASSERT -DCHECKSUM -DPRINT_COUNT $(SRC)
+
+lxref:	$(OBJ)
+	@lxref $(OBJ)
+
+cchk:
+	cchk $(SRC)
+
+Files:	Makefile
+	ls READ_ME ChangeLog Makefile *.h $(SRC) >Files
+
+print:	Files
+	@print `cat Files`
+
+clean:
+	rm -f *.k core mal.out mon.out malloc.c tst \
+		malloc dickmalloc unixmalloc
+		
+#------------------------------------------------------------
+check.k: param.h check.h impl.h phys.h log.h
+global.k: param.h impl.h
+log.k: param.h impl.h check.h log.h
+mal.k: param.h impl.h check.h log.h phys.h
+maltest.k: param.h
+phys.k: param.h impl.h check.h phys.h
+tst.k: param.h

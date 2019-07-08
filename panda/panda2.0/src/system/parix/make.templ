@@ -1,0 +1,134 @@
+# To create various versions, redefine on the command line:
+#
+# Compilation:
+#       EXT_FLAGS    : extra flags for the C compiler
+#       DEFINES      : extra flags for the C preprocessor
+#
+# Installation:
+# Use this file as a template for a Makefile for a specific architecture.
+# This generated Makefile resides in the INSTALL directory.
+#	INSTALL      : the directory where the lib*.a file is maintained
+#       CONFMAKEFILE : the path name of the generated file that contains
+#                      the dependencies
+#
+# General:
+#	PANDA        : the root of the panda tree
+#	PARIX        : the root of the parix tree
+
+.PRECIOUS:	$(TARGET)
+
+
+PANDA		= /home/rutger/panda_distr/panda2.0
+
+					# Standard programs
+AR		= px ar
+ARFLAGS		= r
+CHMOD		= chmod
+CHMODFLAGS	= u+rw
+RANLIB		= px ranlib
+TAGS		= etags
+RM		= rm
+MAKEDEPEND	= makedepend
+EX		= ex
+
+CC		= px ancc
+
+INCLUDES	= \
+		-I$(PANDA)/include
+
+ARCH_INCLUDES	= \
+		-I$(PARIX)/include
+
+CPPFLAGS	= \
+		$(INCLUDES) $(DEFINES)
+
+CFLAGS		= \
+		$(EXT_FLAGS)
+
+
+					# This module <-------------
+MODULE		= system/parix
+
+PWD		= $(PANDA)/src/$(MODULE)
+INSTALL		= .			# Must choose some default...
+
+CONFMAKEFILE	= $(INSTALL)/Makefile.$(MODULE)
+
+TARGETLIB	= lib$(MODULE).a
+TARGET		= $(INSTALL)/$(TARGETLIB)
+LIB_TARGET	= $(TARGET)
+
+OBJ_DIR		= objects/$(MODULE)
+
+
+
+					# The source files <------
+SRC		= \
+		pan_bcst_fwd.c \
+		pan_bcst_hst.c \
+		pan_bcst_seq.c \
+		pan_bcst_snd.c \
+		pan_buffer.c \
+		pan_comm.c \
+		pan_comm_inf.c \
+		pan_deadlock.c \
+		pan_error.c \
+		pan_fragment.c \
+		pan_free_lnk.c \
+		pan_glocal.c \
+		pan_malloc.c \
+		pan_message.c \
+		pan_msg_cntr.c \
+		pan_nsap.c \
+		pan_pset.c \
+		pan_sync.c \
+		pan_sys_pool.c \
+		pan_system.c \
+		pan_threads.c \
+		pan_time.c \
+		pan_timer.c \
+		pan_ucast.c
+
+PWD_SRC		= $(SRC:%.c=$(PWD)/%.c)
+
+OBJECTS		= $(SRC:%.c=$(OBJ_DIR)/%.o)
+
+O_FILES		= $(SRC:%.c=%.o)
+
+$(OBJ_DIR)/%.o:	$(PWD)/%.c
+		$(CC) $(CFLAGS) $(CPPFLAGS) -c $(PWD)/$*.c
+		@mv $*.o $(OBJ_DIR)/$*.o
+
+
+default:	$(OBJ_DIR) $(TARGET)
+
+$(TARGET): 	$(OBJECTS)
+		@-$(AR) $(ARFLAGS) $(TARGET) $(OBJECTS)
+		$(RANLIB) $(TARGET)
+
+$(OBJ_DIR)::
+		@if test \! -d $@ ; \
+		then \
+			mkdir -p $@ ; \
+		fi
+
+depend:		
+		@cp $(PWD)/make.templ $(CONFMAKEFILE)
+		$(MAKEDEPEND)	-f$(CONFMAKEFILE) \
+				$(CPPFLAGS) \
+				$(ARCH_INCLUDES) \
+				$(PWD_SRC)
+		@-(echo '%s/^[A-Za-z_][A-Za-z_0-9]*\.o:/$$(OBJ_DIR)\/&'; \
+		   echo wq) | $(EX) - $(CONFMAKEFILE)
+		@-$(RM) $(CONFMAKEFILE).bak
+
+
+clean:		
+		-$(RM) -rf $(OBJECTS) *.bak
+		@-$(AR) d $(TARGET) $(O_FILES)
+
+tags:	
+		$(TAGS) -t $(SRC)
+
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.

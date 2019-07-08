@@ -1,0 +1,266 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/* BB buffer implementation as an array of num_bufs.
+ * Suggested use: each platform maintains one buffer (in itself an array)
+ * for each other host. Messages are indexed by (sender,messid).
+ *
+ * This is a space-consuming implementation, especially for systems with a large
+ * number of platforms. An implementation that uses a more sophisticated form
+ * of hashing would be preferable.
+ *
+ * Each slot is in one of three states:
+ *  - unused (initially)
+ *  - written
+ *  - read.
+ * If a bbb_put() is done on an unused slot, it goes to state written.
+ * If a bbb_get() is done on a written slot, it goes to state read.
+ * All other actions are forbidden.
+ *
+ * bb_buf[sender]->buf.last indicates the first slot that is not in state
+ *   read.
+ * bb_buf[sender]->buf.next is not used.
+ */
+
+
+#ifndef _GROUP_GRP_BB_CI_
+#define _GROUP_GRP_BB_CI_
+
+
+#include <stdlib.h>
+
+#include "pan_sys.h"
+
+#include "grp_num_buf.h"
+#include "grp_bb.h"
+
+
+struct BB_BUF_T {
+    int		size;
+    num_buf_p	buf;
+};
+
+
+static pan_fragment_p read_frag = (pan_fragment_p)0x123;
+				/* Odd address to ensure it is unique */
+
+#ifdef NEVER
+
+static void
+bb_buf_assert(num_buf_p buf)
+{
+    int i;
+
+    assert(buf->last >= 0);
+    for (i = buf->last; i < buf->last + buf->next; i++) {
+	assert(NUM_BUFBUF(buf, i) != read_frag);
+	if (NUM_BUFBUF(buf, i) != NULL) {
+	    break;
+	}
+    }
+}
+
+#endif
+
+
+/* Implementation as an array of num_buf's */
+
+
+STATIC_CI boolean
+bbb_acceptable(bb_buf_p bb_buf, int sender, int messid)
+{
+    num_buf_p buf;
+
+    assert(sender < bb_buf->size);
+
+    buf = &bb_buf->buf[sender];
+
+    return (messid >= buf->last && messid < buf->last + buf->size);
+}
+
+
+
+STATIC_CI boolean
+bbb_is_unused(bb_buf_p bb_buf, int sender, int messid)
+{
+    num_buf_p buf;
+
+    assert(sender < bb_buf->size);
+
+    buf = &bb_buf->buf[sender];
+
+    return (messid >= buf->last + buf->size ||
+		(messid >= buf->last && NUM_BUFBUF(buf, messid) == NULL));
+}
+
+
+
+STATIC_CI boolean
+bbb_is_read(bb_buf_p bb_buf, int sender, int messid)
+{
+    num_buf_p buf;
+
+    assert(sender < bb_buf->size);
+
+    buf = &bb_buf->buf[sender];
+
+    return (messid < buf->last || NUM_BUFBUF(buf, messid) == read_frag);
+}
+
+
+
+STATIC_CI boolean
+bbb_is_written(bb_buf_p bb_buf, int sender, int messid)
+{
+    num_buf_p buf;
+
+    assert(sender < bb_buf->size);
+
+    buf = &bb_buf->buf[sender];
+
+    return (messid < buf->last + buf->size &&
+	    messid >= buf->last && NUM_BUFBUF(buf, messid) != NULL &&
+	    NUM_BUFBUF(buf, messid) != read_frag);
+}
+
+
+
+STATIC_CI pan_fragment_p
+bbb_get(bb_buf_p bb_buf, int sender, int messid)
+{
+    num_buf_p buf;
+    pan_fragment_p frag;
+
+    assert(sender < bb_buf->size);
+    assert(bbb_is_written(bb_buf, sender, messid));
+
+    buf = &bb_buf->buf[sender];
+    frag = NUM_BUFBUF(buf, messid);
+
+    if (buf->last == messid) {		/* Optimize common case */
+	NUM_BUFBUF(buf, messid) = NULL;
+	++buf->last;
+    } else {
+	NUM_BUFBUF(buf, messid) = read_frag;
+    }
+
+				/* restore invariant: last indicates first
+				 * non-read buffer slot */
+    while (NUM_BUFBUF(buf, buf->last) == read_frag) {
+	NUM_BUFBUF(buf, buf->last) = NULL;	/* Set to "unused" for circular
+						 * use */
+	++buf->last;
+    }
+
+    return frag;
+}
+
+
+STATIC_CI boolean
+bbb_put(bb_buf_p bb_buf, int sender, int messid, pan_fragment_p frag)
+{
+    num_buf_p buf;
+
+    assert(sender < bb_buf->size);
+
+    buf = &bb_buf->buf[sender];
+
+    if (messid < buf->last || messid >= buf->last + buf->size ||
+	NUM_BUFBUF(buf, messid) != NULL) {
+	return FALSE;
+    }
+
+    NUM_BUFBUF(buf, messid) = frag;
+
+    return TRUE;
+}
+
+
+
+STATIC_CI void
+bbb_advance(bb_buf_p bb_buf, int sender, int messid)
+{
+    num_buf_p buf;
+
+    assert(sender < bb_buf->size);
+
+    assert(bbb_is_unused(bb_buf, sender, messid));
+
+    buf = &bb_buf->buf[sender];
+
+    assert(messid < buf->last + buf->size);
+    assert(messid >= buf->last);
+
+				/* Optimize common case */
+    if (messid == buf->last) {
+	++buf->last;
+    } else {
+	NUM_BUFBUF(buf, messid) = read_frag;
+    }
+
+				/* restore invariant: last indicates first
+				 * non-read buffer slot */
+    while (NUM_BUFBUF(buf, buf->last) == read_frag) {
+					/* Set to "unused" for circular use */
+	NUM_BUFBUF(buf, buf->last) = NULL;
+	++buf->last;
+    }
+}
+
+
+STATIC_CI void
+bbb_start(bb_buf_p bb_buf, int sender, int messid)
+{
+    bb_buf->buf[sender].last = messid;
+}
+
+
+STATIC_CI bb_buf_p
+bbb_create(int bb_buf_size, int n_members)
+{
+    bb_buf_p bb_buf;
+    int      i;
+
+    bb_buf      = pan_malloc(sizeof(bb_buf_t));
+    bb_buf->buf = pan_malloc(n_members * sizeof(num_buf_t));
+
+    for (i = 0; i < n_members; i++) {
+	pan_num_buf_init(&bb_buf->buf[i], bb_buf_size);
+	bb_buf->buf[i].last = 0;
+    }
+    bb_buf->size = n_members;
+
+    return bb_buf;
+}
+
+
+STATIC_CI int
+bbb_clear(bb_buf_p bb_buf)
+{
+    int        i;
+    int        j;
+    int        n;
+    num_buf_p  buf;
+
+    n = 0;
+    for (i = 0; i < bb_buf->size; i++) {
+	buf = &bb_buf->buf[i];
+	for (j = 0; j < buf->size; j++) {
+	    if (buf->buf[j] == read_frag) {
+		buf->buf[j] = NULL;
+	    }
+	}
+	n += pan_num_buf_clear(buf);
+    }
+
+    pan_free(bb_buf->buf);
+    pan_free(bb_buf);
+
+    return n;
+}
+
+
+#endif

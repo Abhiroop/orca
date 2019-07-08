@@ -1,0 +1,256 @@
+MODULE IMPLEMENTATION TruthTable;
+
+        FROM AtpgTypes IMPORT GateType, Logic_Value,
+                              BUFF_G,NOT_G,FO_BR,INPT,AND_G,OR_G,XOR_G,
+                              NAND_G,NOR_G,XNOR_G;
+
+        FROM iscas IMPORT MAX_FANIN;
+
+
+	FUNCTION LOG(message: string);
+
+	# Write the LOG-message on the standard output
+
+	BEGIN
+		WriteLine();
+		Write("MODULE TruthTable...");
+		Write(message);
+	END; # FUNCTION LOG
+
+
+# ============================================================================
+#  PART 1 -- FUNCTIONS FOR INITIALIZING TABLES
+#=============================================================================
+
+	FUNCTION Init_PDC_Table(table:SHARED Truth_Table);
+
+	# Initialize the table, it contains the propagation D-Cubes for
+	# the AND, OR and XOR gates
+
+	pdctable: PDC_Table;
+
+	BEGIN
+		pdctable[AND_G]:= PDC_Table_2:[
+					Row_3:[ZERO,      ZERO,      ZERO],
+					Row_3:[ZERO,      ONE,       ZERO],
+					Row_3:[ZERO,      D,         ZERO],
+					Row_3:[ZERO,      NOT_D,     ZERO],
+					Row_3:[ZERO,      DONT_CARE, ZERO],
+					Row_3:[ONE,       ZERO,      ZERO],
+					Row_3:[ONE,       ONE,       ONE],
+					Row_3:[ONE,       D,         D],
+					Row_3:[ONE,       NOT_D,     NOT_D],
+					Row_3:[ONE,       DONT_CARE, DONT_CARE],
+					Row_3:[D,         ZERO,      ZERO],
+					Row_3:[D,         ONE,       D],
+					Row_3:[D,         D,         D],
+					Row_3:[D,         NOT_D,     ZERO],
+					Row_3:[D,         DONT_CARE, DONT_CARE],
+					Row_3:[NOT_D,     ZERO,      ZERO],
+					Row_3:[NOT_D,     ONE,       NOT_D],
+					Row_3:[NOT_D,     D,         ZERO],
+					Row_3:[NOT_D,     NOT_D,     NOT_D],
+					Row_3:[NOT_D,     DONT_CARE, DONT_CARE],
+					Row_3:[DONT_CARE, ZERO,      ZERO],
+					Row_3:[DONT_CARE, ONE,       DONT_CARE],
+					Row_3:[DONT_CARE, D,         DONT_CARE],
+					Row_3:[DONT_CARE, NOT_D,     DONT_CARE],
+					Row_3:[DONT_CARE, DONT_CARE, DONT_CARE]
+					];
+		pdctable[OR_G]:= PDC_Table_2:[
+					Row_3:[ZERO,      ZERO,      ZERO],
+					Row_3:[ZERO,      ONE,       ONE],
+					Row_3:[ZERO,      D,         D],
+					Row_3:[ZERO,      NOT_D,     NOT_D],
+					Row_3:[ZERO,      DONT_CARE, DONT_CARE],
+					Row_3:[ONE,       ZERO,      ONE],
+					Row_3:[ONE,       ONE,       ONE],
+					Row_3:[ONE,       D,         ONE],
+					Row_3:[ONE,       NOT_D,     ONE],
+					Row_3:[ONE,       DONT_CARE, ONE],
+					Row_3:[D,         ZERO,      D],
+					Row_3:[D,         ONE,       ONE],
+					Row_3:[D,         D,         D],
+					Row_3:[D,         NOT_D,     ONE],
+					Row_3:[D,         DONT_CARE, DONT_CARE],
+					Row_3:[NOT_D,     ZERO,      NOT_D],
+					Row_3:[NOT_D,     ONE,       ONE],
+					Row_3:[NOT_D,     D,         ONE],
+					Row_3:[NOT_D,     NOT_D,     NOT_D],
+					Row_3:[NOT_D,     DONT_CARE, DONT_CARE],
+					Row_3:[DONT_CARE, ZERO,      DONT_CARE],
+					Row_3:[DONT_CARE, ONE,       ONE],
+					Row_3:[DONT_CARE, D,         DONT_CARE],
+					Row_3:[DONT_CARE, NOT_D,     DONT_CARE],
+					Row_3:[DONT_CARE, DONT_CARE, DONT_CARE]
+				      ];
+		pdctable[XOR_G]:= PDC_Table_2:[
+					Row_3:[ZERO,      ZERO,      ZERO],
+					Row_3:[ZERO,      ONE,       ONE],
+					Row_3:[ZERO,      D,         D],
+					Row_3:[ZERO,      NOT_D,     NOT_D],
+					Row_3:[ZERO,      DONT_CARE, DONT_CARE],
+					Row_3:[ONE,       ZERO,      ONE],
+					Row_3:[ONE,       ONE,       ZERO],
+					Row_3:[ONE,       D,         NOT_D],
+					Row_3:[ONE,       NOT_D,     D],
+					Row_3:[ONE,       DONT_CARE, DONT_CARE],
+					Row_3:[D,         ZERO,      D],
+					Row_3:[D,         ONE,       NOT_D],
+					Row_3:[D,         D,         ZERO],
+					Row_3:[D,         NOT_D,     ONE],
+					Row_3:[D,         DONT_CARE, DONT_CARE],
+					Row_3:[NOT_D,     ZERO,      NOT_D],
+					Row_3:[NOT_D,     ONE,       D],
+					Row_3:[NOT_D,     D,         ONE],
+					Row_3:[NOT_D,     NOT_D,     ZERO],
+					Row_3:[NOT_D,     DONT_CARE, DONT_CARE],
+					Row_3:[DONT_CARE, ZERO,      DONT_CARE],
+					Row_3:[DONT_CARE, ONE,       DONT_CARE],
+					Row_3:[DONT_CARE, D,         DONT_CARE],
+					Row_3:[DONT_CARE, NOT_D,     DONT_CARE],
+					Row_3:[DONT_CARE, DONT_CARE, DONT_CARE]
+				      ];
+		table.pdctable:=pdctable;
+	END; # FUNCTION Init_PDC_Table
+
+# ============================================================================
+#  PART 2 -- FUNCTIONS THAT RETURN PDC-DATA
+#=============================================================================
+
+	FUNCTION Init_Input_Values(input_value:SHARED Input_Values);
+
+	# Assign DONT_CARE to all the elements from input_values
+
+	BEGIN
+		FOR i IN 1..MAX_FANIN DO
+			input_value[i]:=DONT_CARE;
+		OD;
+	END; # FUNCTION Init_Input_Values
+
+
+	FUNCTION Invert(value:Logic_Value;output:OUT Logic_Value);
+
+        # invert value and return the result in output
+
+	BEGIN
+		CASE value OF
+			ZERO		=> output:=ONE;
+		      |	ONE		=> output:=ZERO;
+		      |	D		=> output:=NOT_D;
+		      |	NOT_D		=> output:=D;
+		      |	DONT_CARE	=> output:=DONT_CARE;
+		ESAC;
+	END; # FUNCTION Invert
+
+	FUNCTION Scan_PDCTable(table:PDC_Table_2;input1,input2:Logic_Value;
+				output:OUT Logic_Value);
+		k: integer;
+	BEGIN
+		k := 0;
+		FOR i IN 1..PDCTABLESIZE DO
+			IF (table[i][1]=input1) AND (table[i][2]=input2) THEN
+				k := i;
+				output:=table[i][3];
+			FI;
+		OD;
+		ASSERT(k > 0);
+	END; # FUNCTION Scan_PDCTable     
+
+
+	FUNCTION Get_PDC_Value_From_Table(table:PDC_Table_2;
+					input_value:Input_Values;
+					fanin:integer;output:OUT Logic_Value);
+
+	# The appropriate table is scanned until the row with the specified
+	# input values is encountered. The corresponding output is returned.
+	# The output for a gate with a fanin > 2 is calculated using the
+	# truthtable for a two-input gate by using an equivalent circuit
+	# consisting solely of two-input gates.
+
+	prev_output: Logic_Value;
+
+	BEGIN 
+		Scan_PDCTable(table,input_value[1],input_value[2],output);
+		FOR i IN 3..fanin DO
+			prev_output:=output;
+			Scan_PDCTable(table,prev_output,input_value[i],output);
+		OD;
+	END; # FUNCTION Get_PDC_Value_From_Table
+
+
+	FUNCTION Get_PDC_Value(gatetype:GateType; table:Truth_Table;
+				input_value:Input_Values;
+				fanin:integer;output:OUT Logic_Value):boolean;
+
+	# This function determines the output of a gate given its input values
+	# gatetype = the kind of function the gate performs
+	# table    = the PDC-table to be used
+	# input_value = the current input assignment
+	# fanin    = the number of inputs driving the gate
+	# output   = the output value of the named gate
+	# When the output value cannot be determined (this is indicated by
+	# a value of DONT_CARE on the output the function returns false
+	# else the return value becomes true.
+
+	temp_output: Logic_Value;
+
+	BEGIN
+		CASE gatetype OF
+			BUFF_G	=>  output:=input_value[1];
+		      | NOT_G   =>  Invert(input_value[1],output);
+		      | FO_BR   =>  output:=input_value[1];
+		      | INPT    =>  output:=input_value[1];
+		      | AND_G	=>  Get_PDC_Value_From_Table(
+					table.pdctable[AND_G],
+					input_value,fanin,output);
+		      | OR_G	=>  Get_PDC_Value_From_Table(
+					table.pdctable[OR_G],
+					input_value,fanin,output);
+		      | XOR_G	=>  Get_PDC_Value_From_Table(
+					table.pdctable[XOR_G],
+					input_value,fanin,output);
+		      | NAND_G	=>  Get_PDC_Value_From_Table(
+					table.pdctable[AND_G],
+					input_value,fanin,temp_output);
+		      		    Invert(temp_output,output);
+		      | NOR_G	=>  Get_PDC_Value_From_Table(
+					table.pdctable[OR_G],
+					input_value,fanin,temp_output);
+		      		    Invert(temp_output,output);
+		      | XNOR_G	=>  Get_PDC_Value_From_Table(
+					table.pdctable[XOR_G],
+					input_value,fanin,temp_output);
+		      		    Invert(temp_output,output);
+		      ELSE
+			 LOG("ERROR...unknown gatetype encountered");
+		ESAC;
+		# Check the output of this gate to determine the value
+		# of the other parameters
+		IF output/=DONT_CARE THEN
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	END; # FUNCTION Get_PDC_Value
+
+# ============================================================================
+#  PART 3 -- FUNCTIONS THAT ARE A HELP FOR DEBUGGING
+#=============================================================================
+
+	FUNCTION Print_Values(input_value:Input_Values;fanin:integer);
+
+	BEGIN
+		FOR i IN 1..fanin DO
+			CASE input_value[i] OF
+				ZERO 		=> Write("ZERO      ");	
+			      | ONE 		=> Write("ONE       ");	
+			      | D 		=> Write("D         ");	
+			      | NOT_D 		=> Write("NOT_D     ");	
+			      | DONT_CARE 	=> Write("DONT_CARE ");	
+			ESAC;
+		OD;
+		WriteLine();
+	END; # FUNCTION Print_Values
+
+END;

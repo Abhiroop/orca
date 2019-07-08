@@ -1,0 +1,292 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/*
+ *  This module implements the receiving functionality of the group protocol
+ *  in so far as it is shared between sequencer and member.
+ *
+ *  Demultiplexing between various groups and then between member and sequence
+ *  is done by the system level upcall.
+ *  In one case, messages must be delivered to _both_ daemons: BB requests.
+ *  Then, a copy is made.
+ *
+ *  This module exports the following user level functions:
+ *      - <none>
+ *  It exports functionality shared between sequencer and members:
+ *	- pan_grp_start_daemons()  start orderer, possibly sequencer daemon.
+ *	- pan_grp_join_daemons()   The daemons are joined.
+ *  It exports communication with the sender module:
+ *	- some types
+ *
+ * If you are unfamiliar with the protocol, please read one of the group
+ * communication papers and the documentation in the Panda tree.
+ */
+
+
+#ifndef __PAN_GRP_RCVE_CI__
+#define __PAN_GRP_RCVE_CI__
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+
+#include "pan_sys.h"
+
+#include "pan_trace.h"
+
+#include "grp_header.h"
+#include "grp_ns.h"
+#include "grp_global.h"
+#include "grp_tab.ci"
+#include "grp_stats.h"
+
+#include "grp_send.h"
+#include "grp_mem.ci"
+#include "grp_seq.ci"
+#include "grp_rcve.h"
+
+
+
+
+
+#ifdef RANDOM_DISCARD
+extern long random(void);
+extern int  srandom(int seed);
+#endif
+
+
+/*
+ *	Global variables.
+ */
+
+#ifndef NSAP_GRP_0
+#  define NSAP_GRP_0
+#endif
+#ifndef NSAP_GRP_1
+#  define NSAP_GRP_1
+#endif
+
+
+
+/*
+ * Local types
+ */
+
+
+
+/* Data path upcall routine for the group.
+ *
+ * Deliver:
+ *
+ * To members:
+ *   data messages:
+ *	- PB accepts from sequencer: GRP_PB_ACPT
+ *	- BB requests from members: GRP_BB_REQ
+ *	  except from ourselves (then the message is discarded).
+ *
+ * To the sequencer:
+ *   data request messages: GRP_PB_REQ, GRP_BB_REQ
+ *   mixed bag request messages, i.e. candidates for sequencing:
+ *	- join & leave requests: GRP_JOINREQ, GRP_LEAVEREQ
+ */
+static void
+pan_grp_data_upcall(pan_fragment_p frag)
+{
+    pan_group_p  g;
+    grp_hdr_p    hdr;
+
+
+    pan_mutex_lock(pan_grp_upcall_lock);
+
+    hdr = pan_fragment_header(frag);
+    g = pan_gtab_locate(hdr->gid);
+
+#ifdef RANDOM_DISCARD
+    if (random() % 100 < RANDOM_DISCARD) {
+					if (g != NULL) {
+					    STATDISCARD(g, DX_RANDOM, 1);
+					}
+	pan_mutex_unlock(pan_grp_upcall_lock);
+	return;
+    }
+#endif
+
+    if (g == NULL) {
+					STATDISCARD(g, DX_INTPT_B, 1);
+	/* return */
+
+    } else if (g->seq == pan_grp_me) {
+						/* This is the sequencer */
+	if (hdr->type == GRP_PB_ACPT ||
+	    hdr->type == GRP_JOIN || hdr->type == GRP_LEAVE) {
+						/* Member already serviced
+						 * directly by the sequencer */
+					STATDISCARD(g, DX_SELF, 1);
+	} else {
+	    assert(hdr->type == GRP_PB_REQ  || hdr->type == GRP_BB_REQ ||
+		   hdr->type == GRP_JOINREQ || hdr->type == GRP_LEAVEREQ);
+	    pan_grp_sequence_data_upcall(g, frag, hdr);
+	}
+
+						/* This is a member */
+    } else if (hdr->sender == pan_grp_me && hdr->type == GRP_BB_REQ) {
+						/* Do not want home BB
+						 * copy */
+					STATDISCARD(g, DX_SELF, 1);
+
+    } else {
+	assert(hdr->type == GRP_PB_ACPT   || hdr->type == GRP_BB_REQ   ||
+	       hdr->type == GRP_JOIN      || hdr->type == GRP_LEAVE    ||
+	       (hdr->type == GRP_BB_ACPT && (hdr->flags & HDR_is_rexmit)));
+						/* PB accepts from sequencer;
+						 * BB requests from members */
+	if (g->is_ordr_done) {		/* Member no longer alive */
+					STATDISCARD(g, DX_PREMATURE, 1);
+	} else {
+	    pan_grp_orderer_data_upcall(g, frag, hdr);
+	}
+    }
+
+    pan_mutex_unlock(pan_grp_upcall_lock);
+}
+
+
+
+/* Control path upcall routine for the group.
+ *
+ * Deliver:
+ *
+ * To members:
+ *   pure control messages:
+ *       - GRP_SYNC
+ *   mixed bag control messages, i.e. stamped with sequence number:
+ *	- join & leave accepts: GRP_JOIN, GRP_LEAVE
+ *	- bb accepts: GRP_BB_ACPT
+ *
+ * To the sequencer:
+ *   pure control messages
+ *	- GRP_STATUS
+ *	- GRP_RETRANSmit requests
+ *   mixed bag control messages, i.e. candidates for sequencing:
+ */
+static void
+pan_grp_cntrl_upcall(void *data)
+{
+    pan_group_p  g;
+    grp_hdr_p    hdr = (grp_hdr_p)data;
+
+    pan_mutex_lock(pan_grp_upcall_lock);
+
+#ifdef RANDOM_DISCARD
+    if (random() % 100 < RANDOM_DISCARD) {
+					if (g != NULL) {
+					    STATDISCARD(g, DX_RANDOM, 1);
+					}
+	pan_mutex_unlock(pan_grp_upcall_lock);
+	return;
+    }
+#endif
+
+    g = pan_gtab_locate(hdr->gid);
+    if (g == NULL) {
+
+	/* no-op since group already cleared */
+
+    } else if (hdr->type == GRP_SUICIDE) {
+
+	assert(g->is_ordr_done);
+	assert(hdr->sender == pan_grp_me);
+
+	pan_gtab_delete(g, g->gid);
+
+	g->is_cleared = TRUE;
+	pan_cond_signal(g->group_cleared);
+
+    } else if (g->seq == pan_grp_me) {
+						/* This is the sequencer */
+	if (hdr->type == GRP_SYNC || hdr->type == GRP_BB_ACPT) {
+						/* Discard home copy */
+	    pan_mutex_unlock(pan_grp_upcall_lock);
+	    return;
+	}
+
+	assert(hdr->type == GRP_STATUS || hdr->type == GRP_RETRANS);
+	pan_grp_sequence_cntrl_upcall(g, hdr);
+
+    } else {
+	assert(hdr->type == GRP_BB_ACPT || hdr->type == GRP_SYNC);
+	if (! g->is_ordr_done) {
+	    pan_grp_orderer_cntrl_upcall(g, hdr);
+	}
+    }
+
+    pan_mutex_unlock(pan_grp_upcall_lock);
+}
+
+
+STATIC_CI void
+pan_grp_init_rcve(pan_group_p g, void (*rcve)(pan_msg_p msg))
+{
+    if (g->seq == pan_grp_me) {
+	pan_grp_init_sequencer(g);
+    }
+    pan_grp_init_orderer(g, rcve);
+}
+
+
+STATIC_CI void
+pan_grp_clear_rcve(pan_group_p g)
+{
+    pan_grp_clear_orderer(g);
+    if (g->seq == pan_grp_me) {
+	pan_grp_clear_sequencer(g);
+    }
+}
+
+
+				/* Group receive initialisation */
+STATIC_CI void
+pan_grp_rcve_start(void)
+{
+#ifdef RANDOM_DISCARD
+    pan_time_p   t = pan_time_create();
+#endif
+
+    pan_grp_data_nsap = pan_nsap_create(NSAP_GRP_0);
+    pan_nsap_fragment(pan_grp_data_nsap, pan_grp_data_upcall, sizeof(grp_hdr_t),
+			(PAN_NSAP_UNICAST | PAN_NSAP_MULTICAST));
+    pan_grp_cntrl_nsap = pan_nsap_create(NSAP_GRP_1);
+    pan_nsap_small(pan_grp_cntrl_nsap, pan_grp_cntrl_upcall, sizeof(grp_hdr_t),
+			(PAN_NSAP_UNICAST | PAN_NSAP_MULTICAST));
+
+				/* Start the dependent modules */
+    pan_grp_ordr_start();
+    pan_grp_seq_start();
+
+#ifdef RANDOM_DISCARD
+    pan_time_get(t);
+    srandom((int)pan_time_t2d(t));
+    pan_time_clear(t);
+#endif
+}
+
+
+
+STATIC_CI void
+pan_grp_rcve_end(void)
+{
+				/* Stop the dependent modules */
+    pan_grp_ordr_end();
+    pan_grp_seq_end();
+
+    pan_nsap_clear(pan_grp_data_nsap);
+    pan_nsap_clear(pan_grp_cntrl_nsap);
+}
+
+
+
+#endif

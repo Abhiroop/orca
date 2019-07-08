@@ -1,0 +1,31 @@
+OBJECT SPECIFICATION SpecificationObject;
+
+
+	FROM TspTypes IMPORT
+		Node,
+		NodeSubset,
+		NodeIndex,
+		NodeArray;
+	
+
+	# Inspectors
+	OPERATION DebugMode () : boolean;
+	OPERATION Nodes () : NodeArray;
+	OPERATION NodesSet () : NodeSubset;
+	OPERATION Dimension () : integer;
+	OPERATION SearchDepth () : integer;
+	OPERATION PursuePaths () : real;
+	OPERATION SequentialBadPathsAllowed () : integer;
+	OPERATION DeliveryBoys () : integer;
+	OPERATION GetNode (n : NodeIndex) : Node;
+
+	# Functions
+	OPERATION Distance (i : NodeIndex; j : NodeIndex) : integer;
+
+	# Printing
+	OPERATION Print ();
+
+	# Initializer
+	OPERATION FromFile (filename : string);
+
+END;

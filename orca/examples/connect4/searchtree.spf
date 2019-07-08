@@ -1,0 +1,47 @@
+# ConnectFour
+# Opgave parallel programmeren
+# Authors : Fabian Breg    & Rob Buis
+#           fbreg@cs.vu.nl   rwlbuis@cs.vu.nl
+# File    : searchtree.spf
+
+OBJECT SPECIFICATION searchtree;
+
+FROM misc IMPORT PosType, OrderType;
+FROM gameboard IMPORT BoardType;
+
+OPERATION CreateTree(Depth : integer);
+# Create a tree of depth Depth.
+
+OPERATION Init();
+# Initialize nodes of the tree.
+
+OPERATION Delete();
+# Deletes all nodes of the tree
+
+OPERATION SetResult(Pos : PosType; AlphaBeta : integer; Depth : integer; Job : integer);
+# Return result in a node of searchtree
+
+OPERATION NoMoreJobs();
+# Tree is full, no more jobs.
+
+OPERATION GetJob(Board : OUT BoardType; Pos : OUT PosType; Player : OUT integer;
+		 Alpha : OUT integer; Beta : OUT integer) : boolean;
+# Get a job
+
+OPERATION AddJob(Board : BoardType; Pos : PosType; Player : integer; 
+		 Alpha : integer; Beta : integer);
+# Add a job
+
+OPERATION WaitForJobs();
+# Wait for all jobs to be created and finished.
+
+OPERATION CalculateResult(Order : OrderType): integer;
+# Calculate best move.
+
+OPERATION GameOver(): boolean;
+# See whether game has ended.
+
+OPERATION SetGameOver();
+# Indicate game has ended.
+
+END;

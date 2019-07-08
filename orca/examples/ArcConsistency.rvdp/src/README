@@ -1,0 +1,5 @@
+
+Compile with something like:
+
+$ oc_panda -2 --O -sparc -amoeba -CHK -LIN Constrl.imp
+

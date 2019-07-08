@@ -1,0 +1,71 @@
+# ========================================================================
+# == File:      EdgeQueue.spf  						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Queue of pending edges					==
+# ========================================================================
+MODULE SPECIFICATION EdgeQueue;
+
+FROM EdgeCollection IMPORT edge_t, edge_p;
+
+TYPE Edge_queue_elt_p = NODENAME OF Edgequeue_t;
+
+TYPE Edgequeue_t =
+	GRAPH
+		head, tail: Edge_queue_elt_p;	# head and tail of the queue
+		num_elts : integer;		# nr of elements in the queue
+        NODES
+                next: Edge_queue_elt_p;		# pointer to next element
+                data: edge_p;	# data stored per node
+        END;
+
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+FUNCTION create_queue(
+	Q : SHARED Edgequeue_t		
+) : boolean;					# succeeded?
+
+
+FUNCTION delete_queue(
+	Q : SHARED Edgequeue_t
+);
+
+
+
+# 
+# add_edge_queue()-post : edge is in the queue.
+#
+
+FUNCTION add_edge_queue(					
+	Q : SHARED Edgequeue_t;
+#	e_coll : edge_t;			# collection of edges
+	edge: edge_p				# the edge ptr to add
+) : boolean;					# succeded or not?
+
+
+
+FUNCTION num_elts_queue(		
+	Q : Edgequeue_t			
+) : integer;		
+
+
+
+FUNCTION get_edge_queue(
+	Q : SHARED Edgequeue_t;
+	edge : OUT edge_p 			# first element of queue
+) : boolean;					# true if queue is non-empty. false else
+
+
+FUNCTION is_in_queue(
+	Q : Edgequeue_t;
+	e_collection : edge_t;			# collection of edges
+	edge : edge_p				# is this edge in the queue
+) : boolean;					# yes or no?
+
+
+
+END;
+

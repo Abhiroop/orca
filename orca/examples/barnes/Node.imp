@@ -1,0 +1,1000 @@
+OBJECT IMPLEMENTATION Node;
+ #
+ # BODY and CELL data structures are used to represent the tree:
+ #
+ #         +-----------------------------------------------------------+
+ # root--> | CELL: mass, pos, cost, quad, /, o, /, /, /, /, o, /       |
+ #         +---------------------------------|--------------|----------+
+ #                                           |              |
+ #    +--------------------------------------+              |
+ #    |                                                     |
+ #    |    +--------------------------------------+         |
+ #    +--> | BODY: mass, pos, cost, vel, acc, phi |         |
+ #         +--------------------------------------+         |
+ #                                                          |
+ #    +-----------------------------------------------------+
+ #    |
+ #    |    +-----------------------------------------------------------+
+ #    +--> | CELL: mass, pos, cost, quad, o, /, /, o, /, /, o, /       |
+ #         +------------------------------|--------|--------|----------+
+ #                                       etc      etc      etc
+ #
+
+
+
+ # NODE: data common to BODY and CELL structures.
+
+.ifdef QUADPOLE
+FROM vectmath IMPORT	CLRM, ADDMSame, SETM, SUBV, OUTVPSame, DOTVPSame,
+			SETMI, MULMSSame, MULMS, SUBMSame;
+.endif
+FROM vectmath IMPORT	Vectmath, CLRV, matrix, DOTVP, ADDM, ADDVSame, Addv,
+			NDIM, ADDV, MULVS, MULVSSame,  SETVS, DOTVPSame,
+			DIVVSSame, NSUB, OUTVP, CROSSVP, SUBVSame;
+FROM LocalMemory IMPORT LocalMemoryType, tree_t, mybody_t, IntArray;
+FROM Types IMPORT	NULL, IMAX, MAX_BODIES_PER_LEAF, PI;
+FROM GlobalVars	IMPORT	nbody, dthf, dtime,
+			maxcell, maxleaf, maxmycell, maxmyleaf, maxmybody,
+			Child_Sequence, Direction_Sequence;
+FROM Math IMPORT	sqrt, pow;
+FROM Util IMPORT	xrand;
+
+TYPE IntPos =	ARRAY[integer 0 .. NDIM - 1] OF integer;
+
+CONST MFRAC = 0.999;
+
+# readers : integer;
+# locked : boolean;
+
+body: NodeTypeArray;
+n_bodies: integer;
+
+g_root: integer;		# id of root tree node
+
+turn: integer;
+
+count: integer;
+
+token: integer;
+
+OPERATION await_token(ProcessId: integer);
+BEGIN
+.ifdef SEQUENTIAL_UPDATE
+    GUARD ProcessId = token DO
+    OD;
+.endif
+END;
+OPERATION G_root() : integer;
+BEGIN
+    RETURN g_root;
+END;
+
+
+OPERATION Pos(p: integer;pos : OUT Vectmath);
+BEGIN
+    pos := body[p].pos;
+END;
+
+
+OPERATION Cost(p: integer) : integer;
+BEGIN
+    RETURN body[p].cost;
+END;
+
+
+OPERATION Vel(p: integer;vel : OUT Vectmath);
+BEGIN
+    vel := body[p].n.b.vel;
+END;
+
+
+OPERATION PosVeli(p: integer; i : integer; pos : OUT real; vel : OUT real);
+BEGIN
+    pos := body[p].pos[i];
+    vel := body[p].n.b.vel[i];
+END;
+
+
+OPERATION PosVel(p: integer; pos, vel : OUT Vectmath);
+BEGIN
+    pos := body[p].pos;
+    vel := body[p].n.b.vel;
+END;
+
+
+OPERATION Body(r: OUT NodeTypeArray);
+BEGIN
+    r := body;
+END;
+
+
+OPERATION SetPosVeli(p: integer; i : integer; val : real; Val : real);
+BEGIN
+    body[p].pos[i] := val;
+    body[p].n.b.vel[i] := Val;
+END;
+
+
+OPERATION SetPos(p: integer;v : Vectmath);
+BEGIN
+    body[p].pos := v;
+END;
+
+
+OPERATION SetVel(p: integer; v : Vectmath);
+BEGIN
+    body[p].n.b.vel := v;
+END;
+
+
+OPERATION start_test(p: integer);
+    v: Vectmath;
+BEGIN
+    FOR i IN 0..NDIM-1 DO v[i] := 0.0; OD;
+    body[p].n := treenode:{BODY, ubody:{v, v, 0.0}};
+    body[p].mass  := 1.0 / FLOAT(nbody);
+    body[p].cost  := 1;
+END;
+
+
+OPERATION opdiag(p: integer; Localin: LocalMemoryType; Localout : OUT LocalMemoryType);
+    velsq : real;            
+    tmpv :  Vectmath;
+    tmpt :  matrix;
+BEGIN
+    Localout := Localin;
+    Localout.mymtot +:= body[p].mass;
+
+    velsq := DOTVP(body[p].n.b.vel, body[p].n.b.vel);
+
+    Localout.myetot[1] +:= 0.5 * body[p].mass * velsq;
+    Localout.myetot[2] +:= 0.5 * body[p].mass * body[p].n.b.phi;
+
+    MULVS(tmpv,body[p].n.b.vel, 0.5 * body[p].mass);
+    OUTVP(tmpt, tmpv, body[p].n.b.vel);
+    ADDM(Localout.myketen, Localin.myketen, tmpt);
+    MULVS(tmpv, body[p].pos, body[p].mass);
+    OUTVP(tmpt, tmpv, body[p].n.b.acc);
+    ADDM(Localout.mypeten, Localin.mypeten, tmpt);
+    MULVS(tmpv, body[p].pos, body[p].mass);
+    ADDV(Localout.mycmphase[0], Localin.mycmphase[0], tmpv);
+    MULVS(tmpv, body[p].n.b.vel, body[p].mass);
+    ADDV(Localout.mycmphase[1], Localin.mycmphase[1], tmpv);
+    CROSSVP(tmpv, body[p].pos, body[p].n.b.vel);
+    MULVSSame( tmpv, body[p].mass);
+    ADDV(Localout.myamvec, Localin.myamvec, tmpv);
+END;
+
+
+FUNCTION start_root(body: SHARED NodeTypeArray; g_root: integer);
+    subp: vect1;
+BEGIN
+    body[g_root].level := IMAX >> 1;
+
+    FOR i IN 0..NSUB-1 DO
+        subp[i] := NULL;
+    OD;
+    body[g_root].n := treenode: {CELL, ucell: { subp }};
+END;
+
+
+OPERATION Subpv(cmr : Vectmath; cmv : Vectmath);
+BEGIN
+  FOR p IN 0..nbody-1 DO
+    SUBVSame( body[p].pos, cmr);
+    SUBVSame( body[p].n.b.vel, cmv);
+  OD;
+END;
+
+
+# MODULE IMPLEMENTATION Load;
+
+# FROM LocalMemory IMPORT LocalMemoryType;
+# FROM Node IMPORT Node;
+# FROM Types IMPORT NULL,IMAX, MAX_BODIES_PER_LEAF;
+# FROM Node IMPORT vect1, vect2, CELL, LEAF, BODY;
+# IMPORT Reducer;
+# FROM Reducer IMPORT sync;
+# FROM vectmath IMPORT NSUB, Vectmath, matrix, NDIM,
+		     # OUTVPSame, SUBV, DOTVPSame;
+		     # #, SETMI, MULMSSame;
+		     # # SUBMSame, ADDMSame;
+# FROM GlobalVars	IMPORT nbody, fleaves, fcells;
+
+
+
+
+
+
+# allocate new leaf (returns leaf with write operation in progress)
+
+
+FUNCTION makeleaf(ProcessId: integer;
+		  body: SHARED NodeTypeArray;
+		  tree: SHARED tree_t) : integer;
+    le : integer;
+    bodyp: vect2;
+BEGIN
+
+    IF tree.mynumleaf = maxmyleaf THEN
+	IF MYCPU() = 0 THEN
+	    WriteLine(" In makeleaf: ");
+	    WriteLine("Process ",ProcessId," needs more than ",maxmyleaf);
+	    WriteLine("Increase fleaves !");
+	FI;
+	ASSERT(false); 
+    FI;
+
+    le := nbody + maxcell + ProcessId * maxmyleaf + tree.mynumleaf;
+    tree.mynumleaf +:= 1;
+    tree.myleaftab[tree.mynleaf] := le;
+    tree.mynleaf +:= 1;
+
+    body[le].mass := 0.0;
+    FOR i IN 0.. MAX_BODIES_PER_LEAF - 1 DO
+	bodyp[i] := NULL;
+    OD;
+    body[le].n := treenode:{LEAF, uleaf:{bodyp, 0}};
+    RETURN le;
+END;
+
+
+# allocate and initialize a new leaf (returns leaf with write
+# operation in progress)
+# (parent is either NULL or a mapped region with a read operation in
+# progress)
+
+FUNCTION InitLeaf( parent, ProcessId: integer; body: SHARED NodeTypeArray;
+		   tree: SHARED tree_t) : integer;
+    l : integer;
+BEGIN
+    l := makeleaf( ProcessId, body, tree); # Local, # allnodes,
+
+    body[l].child_num := 0;
+    IF parent = NULL THEN
+	body[l].level := IMAX >> 1;
+	body[l].parent := NULL;
+    ELSE
+	body[l].level := body[parent].level;
+	body[l].parent := parent;
+    FI;
+    RETURN l;
+END;
+
+
+#  allocate new cell (returns cell with write operation in progress)
+
+FUNCTION makecell( ProcessId: integer;
+		   body: SHARED NodeTypeArray;
+		   tree: SHARED tree_t) : integer;
+    c : integer;
+    subp: vect1;
+BEGIN
+    IF tree.mynumcell = maxmycell THEN
+	IF MYCPU() = 0 THEN
+	    WriteLine(" In makecell :");
+	    WriteLine("Process ",ProcessId," needs more than ",maxmycell);
+	    WriteLine("Increase fcells !");
+	FI;
+	ASSERT(false);
+    FI;
+
+    c := nbody + ProcessId * maxmycell + tree.mynumcell;
+    tree.mynumcell +:= 1;
+    tree.mycelltab[tree.myncell] := c;
+    tree.myncell +:= 1;
+
+    body[c].mass := 0.0;
+    FOR i IN 0 .. NSUB-1 DO
+	subp[i] := NULL;
+    OD;
+    body[c].n := treenode: {CELL, ucell: { subp }};
+
+    RETURN c;
+END;
+
+
+# allocate and initialize a new cell (returns cell with write
+#  operation in progress) 
+# (parent is either NULL or a mapped region with a read operation in
+#  progress)
+
+FUNCTION InitCell( parent, ProcessId: integer;
+		   body: SHARED NodeTypeArray;
+		   tree: SHARED tree_t) : integer;
+    c : integer;
+BEGIN
+
+    c := makecell(ProcessId, body, tree); # Local, # allnodes,
+
+    body[c].child_num := 0;
+    IF parent = NULL THEN
+	body[c].level := IMAX >> 1;
+	body[c].parent := NULL;
+    ELSE
+	body[c].level := body[parent].level;
+	body[c].parent := parent;
+    FI;
+    RETURN c;
+END;
+
+
+
+# compute integerized coordinates
+# returns: TRUE unless rp was out of bounds
+
+FUNCTION intcoord(xp: SHARED IntPos; rp, rmin: Vectmath; 
+		  rsize: real);
+   xsc : real;
+BEGIN
+    FOR k IN 0..NDIM-1 DO
+        xsc := (rp[k] - rmin[k]) / rsize; 
+        IF ((0.0 <= xsc) AND (xsc < 1.0)) THEN
+            xp[k] := TRUNC(FLOAT( IMAX) * xsc);
+        FI;
+    OD;
+END;
+
+
+
+# determine which subcell to select
+
+
+FUNCTION subindex( x: IntPos; l: integer) : integer;
+     i : integer;
+     yes: boolean;
+BEGIN
+    i   := 0;
+    yes := false;
+
+    IF  (x[0]&l) /= 0 THEN
+        i  +:= NSUB >> 1;
+        yes := true;
+    FI;
+
+    FOR k IN 1..NDIM-1 DO
+	IF ((x[k] & l) /= 0) /= yes THEN
+            i  +:= NSUB >> (k + 1);
+            yes := true;
+        ELSE
+            yes := false;
+        FI;
+    OD;
+    RETURN i;
+END;
+
+
+# le and parent are mapped regions with write operations in progress
+# (before returning, end write operation on le and unmap it)
+
+FUNCTION SubdivideLeaf( le, parent, level, ProcessId : integer;
+			 body: SHARED NodeTypeArray;
+			 tree: SHARED tree_t;
+		         rmin : Vectmath; rsize: real) : integer;
+    nb, p, cn, index, num_bodies, c : integer;
+    bodyx: vect2;
+    xp : IntPos;
+    subpi : integer;
+    Posx : Vectmath;
+BEGIN   
+    num_bodies := body[le].n.l.num_bodies;
+    bodyx := body[le].n.l.bodyp;
+    FOR i IN 0..num_bodies-1 DO
+	body[le].n.l.bodyp[i]:= NULL;
+    OD;
+    body[le].n.l.num_bodies := 0;
+    cn := body[le].child_num;
+
+  # create the parent cell for this subtree
+    c := InitCell(parent, ProcessId, body, tree);
+    body[c].child_num := cn;
+
+  # do first particle separately, so we can reuse le
+
+    p := bodyx[0];
+    Posx := body[p].pos;
+    intcoord(xp, Posx, rmin, rsize);
+    index := subindex(xp, level);
+    body[c].n.c.subp[index] := le;
+    body[le].child_num := index;
+    body[le].parent := c;
+    body[le].level := level >> 1;
+
+    body[p].parent := le;
+    body[p].level := level >> 1;
+    nb := body[le].n.l.num_bodies;
+    body[p].child_num := nb;
+
+  # insert the body
+    body[le].n.l.bodyp[nb] := p;
+    body[le].n.l.num_bodies +:= 1;
+  # now handle the rest
+    FOR i IN 1..num_bodies-1 DO
+        p := bodyx[i];
+	Posx := body[p].pos;
+        intcoord(xp, Posx,rmin,rsize);
+        index := subindex(xp, level);
+	subpi := body[c].n.c.subp[index];
+	IF subpi = NULL THEN
+            le := InitLeaf(c, ProcessId, body, tree); # allnodes, # Local,
+	    body[le].child_num := index;
+	    body[c].n.c.subp[index] := le;
+        ELSE
+            le := subpi;
+        FI;
+	body[p].parent := le;
+	body[p].level := level >> 1;
+	nb := body[le].n.l.num_bodies;
+	body[p].child_num := nb;
+        body[le].n.l.bodyp[nb] := p;
+        body[le].n.l.num_bodies +:= 1;
+    OD;
+    RETURN c;
+END;
+
+
+# descend tree and insert particle
+# (p is a mapped region with a write operation in progress)
+
+FUNCTION loadtree( p, ProcessId: integer;
+                   body: SHARED NodeTypeArray;
+		   tree: SHARED tree_t;
+		   g_root: integer;
+		   rmin: Vectmath; rsize: real);
+
+    nb, level, flag, kidIndex, curr, next, new, le : integer;
+    xp : IntPos;
+    Pos : Vectmath;
+
+BEGIN
+    IF (body[p].mass = 0.0) THEN
+	WriteLine("Process ", ProcessId," found body ",p ," to have zero mass");
+    FI;
+
+    Pos := body[p].pos;
+    intcoord( xp, Pos, rmin, rsize);
+   # the SPLASH-2 version of barnes goes through a bunch of
+   # machinations at this point that look like an attempt to verify
+   # that p could plausibly be a member of a tree rooted at the root
+   # node that used to get passed in, or something like that. since
+   # this code does nothing except complain if an inappropriate node
+   # is found (and none ever seems to be), i leave it out in this
+   # version.
+    curr := g_root;
+    level    := body[curr].level;
+    kidIndex := subindex(xp, level);
+    level  >>:= 1;
+    flag := 1;
+
+    WHILE (flag = 1) DO
+
+	IF level = 0 THEN
+	      WriteLine("not enough levels in tree");
+	      ASSERT(false); 
+	FI;
+
+	IF body[curr].n.c.subp[kidIndex] = NULL THEN
+		# no child for the desired kidIndex, so go ahead and
+		# insert new node
+
+	    le := InitLeaf(curr, ProcessId, body, tree); # allnodes, # Local,
+	    nb := body[le].n.l.num_bodies;
+
+	    body[p].parent := le;
+	    body[p].level := level;
+	    body[p].child_num := nb;
+
+	    body[le].child_num := kidIndex;
+	    body[le].n.l.bodyp[nb] := p;
+	    body[le].n.l.num_bodies +:= 1;
+
+	    body[curr].n.c.subp[kidIndex] := le;
+	    flag := 0;
+	FI;
+
+	# INVARIANT: exactly one of:
+	#  flag is FALSE, nothing mapped
+	#  flag is TRUE, curr is mapped with a read in progress
+
+	IF flag = 1 THEN
+	    next := body[curr].n.c.subp[kidIndex];
+	    IF body[next].n.type = LEAF THEN
+		    # reached a leaf so we can try to insert the new node
+
+		le := next;
+		nb := body[le].n.l.num_bodies;
+		IF nb = MAX_BODIES_PER_LEAF THEN
+			# ack, leaf is full, so subdivide it (and go around the
+			# big while loop again)
+		    new := SubdivideLeaf( le, curr, level, ProcessId,
+					  body,
+					  tree,
+					  rmin, rsize);
+
+		    body[curr].n.c.subp[kidIndex] := new;
+			# takes care of ending write operation on
+			# next and unmapping it
+
+		    next := new;
+		ELSE
+			# insert body into leaf
+		    body[p].parent := le;
+		    body[p].level := level;
+		    body[p].child_num := nb;
+
+		    body[le].n.l.bodyp[nb] := p;
+		    body[le].n.l.num_bodies +:= 1;
+		    flag := 0;
+		FI;
+	    FI;
+	FI;
+
+	# INVARIANT: exactly one of:
+	#  flag is FALSE, nothing mapped
+	#  flag is TRUE, curr is mapped, next is mapped with read in progress
+
+	IF flag = 1 THEN
+		# move one level down the tree
+             curr     := next;
+             kidIndex := subindex(xp, level);
+             level    := level >> 1;
+	FI;
+
+    OD;
+
+END;
+
+
+# descend tree finding center-of-mass coordinates
+
+OPERATION hackcofm( p: integer);
+.ifdef QUADPOLE
+    dr : Vectmath;
+    drsq :	real;
+    drdr :	matrix;
+    Idrsq:	matrix;
+    tmpm:	matrix;
+.endif
+    tmpv:	Vectmath;
+    r:		integer;
+    b:		integer;
+BEGIN  
+
+# RFHH: Descend the tree top-down, calculate cofm on the way back.
+
+    ASSERT(body[p].n.type /= BODY);
+    body[p].mass := 0.0;
+    body[p].cost := 0;
+    CLRV(body[p].pos);
+
+    IF body[p].n.type = CELL THEN
+	FOR i IN 0 .. NSUB - 1 DO
+	    r := body[p].n.c.subp[i];
+	    IF r /= NULL THEN
+		SELF$hackcofm(r);		# Descend the tree
+		body[p].mass +:= body[r].mass;
+		body[p].cost +:= body[r].cost;
+		MULVS(tmpv, body[r].pos, body[r].mass);
+		ADDVSame(body[p].pos, tmpv);
+	    FI;
+	OD;
+	DIVVSSame(body[p].pos, body[p].mass);
+
+.ifdef QUADPOLE
+	    CLRM(body[p].quad);
+	    FOR i IN 0 .. NSUB - 1 DO
+		r := body[p].n.c.subp[i];
+		IF r /= NULL THEN
+		    SUBV(dr, body[r].pos, body[p].pos);
+		    OUTVPSame(drdr, dr);
+		    drsq := DOTVPSame(dr);
+		    SETMI(Idrsq);
+		    MULMSSame(Idrsq, drsq);
+		    MULMS(tmpm, drdr, 3.0);
+		    SUBMSame(tmpm, Idrsq);
+		    MULMSSame(tmpm, body[r].mass);
+		    ADDMSame(tmpm, body[r].quad);
+		    ADDMSame(body[p].quad, tmpm);
+		FI;
+	    OD;
+.endif
+
+    ELSE
+	ASSERT(body[p].n.type = LEAF);
+	FOR i IN 0 .. body[p].n.l.num_bodies - 1 DO
+	    b := body[p].n.l.bodyp[i];
+	    body[p].mass +:= body[b].mass;
+	    body[p].cost +:= body[b].cost;
+	    MULVS(tmpv, body[b].pos, body[b].mass);
+	    ADDVSame(body[p].pos, tmpv);
+	OD;
+	DIVVSSame(body[p].pos, body[p].mass);
+
+.ifdef QUADPOLE
+	    CLRM(body[p].quad);
+	    FOR i IN 0 .. body[p].n.l.num_bodies - 1 DO
+		b := body[p].n.l.bodyp[i];
+		SUBV(dr, body[b].pos, body[p].pos);
+		OUTVPSame(drdr, dr);
+		drsq := DOTVPSame(dr);
+		SETMI(Idrsq);
+		MULMSSame(Idrsq, drsq);
+		MULMS(tmpm, drdr, 3.0);
+		SUBMSame(tmpm, Idrsq);
+		MULMSSame(tmpm, body[b].mass);
+		ADDMSame(body[p].quad, tmpm);
+	    OD;
+.endif
+    FI;
+
+END;
+
+
+OPERATION PrintTree( p: integer
+		    #; allnodes: SHARED Node
+		    );
+    b:	integer;
+    c:	integer;
+BEGIN
+    IF body[p].n.type = CELL THEN
+	Write("Tree at C.", p - nbody, ":");
+	Write(body[p].mass, ", [", body[p].pos[0], ",", body[p].pos[1], ",",
+	      body[p].pos[2], "] : ");
+	FOR i IN 0 .. NSUB - 1 DO
+	    c := body[p].n.c.subp[i];
+	    IF c /= NULL THEN
+		IF body[c].n.type = CELL THEN
+		    Write(" C.");
+		    Write(c - nbody);
+		ELSIF body[c].n.type = LEAF THEN
+		    Write(" L.");
+		    Write(c - (nbody + maxcell));
+		ELSE
+		    Write(" B.");
+		    Write(c);
+		FI;
+	    ELSE
+		Write(" -");
+	    FI;
+	OD;
+	WriteLine();
+	FOR i IN 0 .. NSUB - 1 DO
+	    c := body[p].n.c.subp[i];
+	    IF c /= NULL THEN
+		SELF$PrintTree(c);
+	    FI;
+	    WriteLine();		# body printf
+	OD;
+    ELSIF body[p].n.type = LEAF THEN
+	Write("Tree at L.", p - (nbody + maxcell), ":");
+	Write(body[p].mass, ", [", body[p].pos[0], ",", body[p].pos[1], ",",
+	      body[p].pos[2], "] : ");
+	FOR i IN 0 .. body[p].n.l.num_bodies - 1 DO
+	    b := body[p].n.l.bodyp[i];
+	    ASSERT(body[b].n.type = BODY);
+	    Write(" B.");
+	    Write(b);
+	OD;
+	WriteLine();
+	FOR i IN 0 .. body[p].n.l.num_bodies - 1 DO
+	    SELF$PrintTree(body[p].n.l.bodyp[i]);
+	OD;
+    ELSE
+	Write("B.", p, ":");
+	Write(body[p].mass, ", [", body[p].pos[0], ",", body[p].pos[1], ",",
+	      body[p].pos[2], "], ");
+    FI;
+END;
+
+
+
+# END;		# MODULE Load
+
+
+# FROM MODULE Functions
+
+
+# initialize tree structure for hack force calculation.
+
+OPERATION maketree( ProcessId: integer;
+		    mybody: mybody_t;
+                    tree: OUT tree_t;
+		    rmin: Vectmath;
+		    rsize: real);
+BEGIN
+    IF count = 0 THEN
+	start_root(body, g_root);
+    FI;
+    count +:= 1;
+    tree.mynleaf := 0;
+    tree.mynumleaf := 0;
+    alloc_vect(maxmycell, tree.mycelltab);
+    alloc_vect(maxmyleaf, tree.myleaftab);
+
+    IF ProcessId = 0 THEN	# g_root has been added already
+	tree.mynumcell := 1;
+        tree.mycelltab[0] := g_root;
+	tree.myncell := 1;
+    ELSE
+	tree.myncell := 0;
+	tree.mynumcell := 0;
+    FI;
+
+    FOR pidx IN 0 .. mybody.mynbody-1 DO
+	loadtree( mybody.mybodytab[pidx], ProcessId,
+		  body, tree, g_root,
+		  rmin, rsize); # Local,
+    OD;
+
+    IF count = NCPUS() THEN
+	SELF$hackcofm(SELF$G_root());
+	count := 0;
+    FI;
+# .ifdef SEQUENTIAL_MAKETREE
+.ifdef SEQUENTIAL_UPDATE
+    IF ProcessId = NCPUS() - 1 THEN
+	token := 0;
+    ELSE
+	token +:= 1;
+    FI;
+.endif
+# .endif
+END;
+
+
+
+
+# (mycell is assumed to be the address of a mapped region with a read
+# operation in progress)
+
+FUNCTION find_my_bodies_rec(mycell : integer;
+			     work : integer;
+			     direction: integer;
+			     ProcessId: integer;
+			     body: NodeTypeArray;
+			     my_body: SHARED mybody_t);
+     q_tmp : integer;
+     bodyp : integer;
+     Cost : integer;
+BEGIN
+    IF body[mycell].n.type = LEAF THEN
+	FOR i IN 0..body[mycell].n.l.num_bodies-1 DO 
+	    bodyp := body[mycell].n.l.bodyp[i];
+	    IF FLOAT( work) >= (FLOAT(my_body.workMin) - 0.1) THEN
+		IF (my_body.mynbody+2) > maxmybody THEN
+		    WriteLine("find_my_bodies: Process " ,ProcessId);
+		    WriteLine(" needs more than ",maxmybody);
+		    WriteLine(" bodies; Increase fleaves !");
+		    ASSERT(false);
+		FI;
+
+		my_body.mybodytab[my_body.mynbody] := bodyp; 
+		my_body.mynbody +:= 1;
+	    FI;
+	    work +:= body[bodyp].cost;
+	    IF FLOAT( work) >= FLOAT(my_body.workMax) - 0.1 THEN
+		EXIT;
+	    FI;
+	OD;
+    ELSE
+	FOR i IN 0..NSUB-1 DO
+	    IF FLOAT( work) >= FLOAT(my_body.workMax) - 0.1 THEN
+		EXIT;
+	    FI;
+	    q_tmp := body[mycell].n.c.subp[Child_Sequence[ direction, i]];
+	    IF q_tmp /= NULL THEN
+		Cost := body[q_tmp].cost;
+		IF FLOAT(work + Cost) >= FLOAT(my_body.workMin) - 0.1 THEN
+		    find_my_bodies_rec(q_tmp, work,
+					    Direction_Sequence[direction,i],
+					    ProcessId,
+					    body,
+					    my_body);
+		FI;
+		work +:= Cost;
+	    FI;
+	OD;
+    FI;
+END;
+
+
+
+# Wrapper for the recursive operation.
+# This one does initialisation then calls the recursive op to locate all
+# bodies.
+
+OPERATION find_my_bodies(direction: integer;
+			 ProcessId: integer; my_body: OUT mybody_t);
+    Cavg: real;
+BEGIN
+    Cavg := FLOAT(SELF$Cost(g_root)) / FLOAT(NCPUS());
+    my_body.workMin := TRUNC( Cavg * FLOAT( ProcessId));
+    IF ProcessId = NCPUS() - 1 THEN
+        my_body.workMax := TRUNC( Cavg * FLOAT(ProcessId + 1)) + 1;
+    ELSE
+        my_body.workMax := TRUNC(Cavg * FLOAT(ProcessId + 1));
+    FI;
+    my_body.mynbody := 0;
+    alloc_vect(maxmybody, my_body.mybodytab);
+
+    find_my_bodies_rec(g_root, 0, direction, ProcessId, body, my_body);
+END;
+
+
+OPERATION advance(mybody: mybody_t; min, max: OUT Vectmath; nstep: integer; copy: ChangeSummaryArray; ProcessId: integer);
+    p:	integer;
+    Posi: real;
+    dvel: real;
+BEGIN
+    SETVS(min,  1.0E+99);
+    SETVS(max, -1.0E+99);
+
+  # advance my bodies
+    FOR pidx IN 0 .. mybody.mynbody - 1 DO
+        p := mybody.mybodytab[pidx];
+	body[p].cost := copy[pidx].cost;
+	body[p].n.b.phi := copy[pidx].phi;
+	IF nstep > 0 THEN
+	    # use change in acc to make 2nd order correction to vel
+	    FOR i IN 0..NDIM-1 DO
+		body[p].n.b.vel[i] := body[p].n.b.vel[i] +
+			dthf * (copy[pidx].acc[i] - body[p].n.b.acc[i]);
+	    OD;
+	FI;
+	body[p].n.b.acc := copy[pidx].acc;
+.ifdef QUADPOLE
+	body[p].quad := copy[pidx].quad;
+.endif
+        FOR i IN 0..NDIM-1 DO
+            dvel := body[p].n.b.acc[i] * dthf;
+            body[p].pos[i] +:= (dvel + body[p].n.b.vel[i]) * dtime;
+            body[p].n.b.vel[i] +:= 2.0 * dvel;
+        OD;
+
+        FOR i IN 0 .. NDIM - 1 DO
+	    Posi := body[p].pos[i];
+            IF Posi < min[i] THEN
+                min[i] := Posi;
+            ELSIF Posi > max[i] THEN
+                max[i] := Posi;
+            FI;
+        OD;
+    OD;
+.ifdef SEQUENTIAL_UPDATE
+    IF ProcessId = NCPUS() - 1 THEN
+	token := 0;
+    ELSE
+	token +:= 1;
+    FI;
+.endif
+END;
+
+
+# END FROM MODULE Functions
+
+
+
+
+FUNCTION alloc_vect( n : integer; r: OUT IntArray[0..n-1]);
+BEGIN
+    FOR i IN 0..n - 1 DO
+	r[i] := 0;
+    OD;
+END;
+
+
+FUNCTION alloc_node( n : integer; r: OUT NodeTypeArray[0..n-1]);
+BEGIN
+END;
+
+
+OPERATION Init();
+BEGIN
+    alloc_node(nbody + maxcell + maxleaf, body);
+
+    turn := NCPUS() - 1;
+
+		# allocate space for personal lists of body, cell, and leaf
+		# pointers
+
+    g_root := nbody;
+
+    FOR p IN 0 .. nbody + maxcell + maxleaf - 1 DO
+	body[p].mass := 0.0;
+	body[p].cost := 0;
+	body[p].level := 0;
+	CLRV(body[p].pos);
+	body[p].parent := 0;
+	body[p].child_num := 0;
+.ifdef QUADPOLE
+	CLRM(body[p].quad);
+.endif
+    OD;
+    count := 0;
+    token := 0;
+END;
+
+
+# pick a random point on a sphere of specified radius
+
+FUNCTION pickshell(vec: SHARED Vectmath; rad: real; 
+                   A, B : integer; randx: SHARED integer);
+    rsq, rsc : real;
+BEGIN
+    rsq := 2.0;
+    WHILE rsq > 1.0 DO 
+      FOR k IN 0..NDIM-1 DO
+          vec[k] := xrand( -1.0, 1.0, A, B, randx); 
+      OD;
+      rsq := DOTVPSame( vec);
+    OD;
+    rsc := rad / sqrt(rsq);
+    MULVSSame( vec, rsc);
+END;
+
+
+OPERATION testdata(A,B,randx: integer);
+    halfnbody : integer;
+    rsc,vsc : real;
+    cmr,cmv : Vectmath;
+    offset : real;
+    Pos, Vel : Vectmath;
+    x1,x2: Vectmath;
+    r,x,y,v : real;
+    valpidxh : integer;
+    pos, vel : real;
+BEGIN 
+
+    rsc     := 9.0 * PI / 16.0;
+    vsc     := sqrt(1.0 / rsc);
+
+    CLRV(cmr);
+    CLRV(cmv);
+
+    halfnbody := nbody / 2;
+    IF nbody % 2 /= 0 THEN
+      halfnbody +:= 1;
+    FI;
+    FOR pidx IN 0..halfnbody-1 DO
+        SELF$start_test(pidx);
+
+	r := 1.0 / sqrt(pow( xrand( 0.0, MFRAC, A, B, randx), 
+                            -2.0/3.0) -1.0);
+        WHILE r > 9.0 DO
+	    r := 1.0 / sqrt(pow(xrand( 0.0, MFRAC, A, B, randx), 
+                                -2.0/3.0) -1.0);
+        OD;
+	pickshell( x1, rsc * r, A, B, randx); 
+
+	SELF$SetPos(pidx, x1);
+	ADDVSame(cmr, x1); 
+	REPEAT
+	    x:=xrand( 0.0, 1.0, A, B, randx);
+	    y:=xrand( 0.0, 0.1, A, B, randx);
+        UNTIL y <= x*x * pow( 1.0 - x*x, 3.5) ;
+        v := sqrt(2.0) * x / pow(1.0 + r*r, 0.25);
+        pickshell( x2, vsc * v, A, B, randx);
+	SELF$SetVel(pidx, x2);
+        ADDVSame( cmv, x2); 
+    OD;
+    offset := 4.0;
+
+    FOR pidx IN halfnbody..nbody-1 DO
+	valpidxh := pidx-halfnbody;
+        SELF$start_test(pidx);
+        FOR i IN 0..NDIM-1 DO
+	    SELF$PosVeli(valpidxh, i, pos, vel);
+            SELF$SetPosVeli(pidx, i,pos + offset, vel);
+	    SELF$PosVel(pidx, Pos, Vel);
+	    Addv( cmv, cmr, Vel, Pos);
+        OD;
+    OD;
+
+    DIVVSSame( cmr, FLOAT( nbody));
+    DIVVSSame( cmv, FLOAT( nbody));
+
+    SELF$Subpv(cmr, cmv);
+END;
+
+
+END;

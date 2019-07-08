@@ -1,0 +1,505 @@
+MODULE IMPLEMENTATION MainProc;
+
+   IMPORT IntObject; 
+   IMPORT TableObj;
+   FROM Matrix IMPORT SeqMatrix, Vertex, Partition, Result, 
+                      InitMatrix, ComputeScoreMatrix, FindBestLalign, 
+                      ShowResult;
+   FROM Time   IMPORT SysMilli, PrintTime;
+   FROM Math   IMPORT ceil, sqrt, LongRealToInt;
+  
+   
+   TYPE Job   =   RECORD
+                    CPU     : integer;
+                    SERIENR : integer;
+                    PARTNR  : integer;
+                    MAT     : SeqMatrix;
+                    MAX     : Vertex;
+                    PART    : Partition;
+                    MAXI    : integer;
+                    MAXJ    : integer;
+                  END;
+
+
+   OBJECT JobQ = NEW GenericJobQueue(Job);
+
+   TYPE JobArray = ARRAY[integer] OF JobQ;
+
+   TYPE Part = RECORD 
+                     PARTNR     : integer;
+                     WORK       : boolean;
+               END;
+ 
+   TYPE PartsTable = ARRAY[integer] OF Part; 
+   TYPE BitMapTable = ARRAY[integer] OF integer;
+  
+
+
+
+
+   FUNCTION ComputePartitionMatrix( len1, len2, cpus : integer;
+                                    nr_vertex : OUT integer):integer;
+        temp  : real;
+        p_len : integer;
+   BEGIN
+        temp := sqrt((FLOAT(len1)*FLOAT(len2))/(FLOAT(cpus)*FLOAT(cpus)));
+                 
+        p_len := LongRealToInt(ceil(temp));
+        nr_vertex := p_len * p_len;
+
+        RETURN p_len;
+   END;
+
+
+  FUNCTION CreatePartition( p_nr, i, j, p_len, 
+                            l_seq1, l_seq2 :integer):Partition;
+       temp : Partition;
+  BEGIN
+       temp.I1 := i;               temp.J1 := j;
+       temp.I2 := i;               temp.J2 := j + p_len - 1;
+       temp.I3 := i + p_len - 1;   temp.J3 := j;
+       temp.I4 := temp.I3;         temp.J4 := temp.J2;  
+       temp.NR := p_nr;
+ 					# Check Borders
+       IF (temp.J2 > l_seq2) THEN 
+           temp.J2 := l_seq2;
+           temp.J4 := l_seq2;
+       FI;
+
+       IF (temp.I4 > l_seq1) THEN 
+           temp.I4 := l_seq1;
+           temp.I3 := l_seq1;
+       FI;
+       RETURN temp;
+  END;
+
+
+  FUNCTION GetStartPartitionNrLeft( len, p_nr : integer ):integer;
+       temp : integer;
+  BEGIN 
+       temp   := len;
+
+       WHILE ( p_nr > temp ) DO
+              temp +:= len;
+       OD;
+       RETURN (temp - len) + 1;
+  END;
+
+
+  FUNCTION GetStartPartitionNrUp( len, p_nr : integer ):integer;
+       temp : integer;
+  BEGIN 
+       temp   := p_nr;
+
+       WHILE ( temp > len ) DO
+              temp -:= len;
+       OD;
+       RETURN temp;
+  END;
+
+  
+  FUNCTION ComputePartitionNeeded( diag_len, p_nr : integer;
+                                   Left, Up, Diag : OUT integer);
+  BEGIN
+       Left := GetStartPartitionNrLeft(diag_len,p_nr);
+       Up   := GetStartPartitionNrUp(diag_len,p_nr);
+
+       IF ( Left = p_nr ) OR ( Up = p_nr ) THEN
+                   Diag := 0;
+       ELSE 
+                   Diag := p_nr - diag_len - 1;
+       FI;
+  END;
+
+
+  FUNCTION GetStartPoint( diag_len, p_len, p_nr : integer; 
+                          starti, startj : OUT integer );
+       temp : integer;
+  BEGIN 
+       temp   := LongRealToInt(ceil(FLOAT(p_nr)/FLOAT(diag_len)));
+       starti := ((temp - 1) * p_len) + 1;
+       startj := ((p_nr - GetStartPartitionNrLeft(diag_len,p_nr)) * p_len) 
+                   + 1;
+  END;
+
+
+
+  FUNCTION CopyPartMatrix( r1, r2, c1, c2 :integer; 
+                           InMat : SeqMatrix;
+                           OutMat: OUT SeqMatrix[r1..r2][c1..c2] );
+  BEGIN
+               FOR i IN r1..r2 DO
+                  FOR j IN c1..c2 DO
+                    OutMat[i][j] := InMat[i][j];
+                  OD;
+               OD;
+  END;
+
+
+  
+  FUNCTION SendFirstPartition( seq1_len, seq2_len,
+                               diag_len, p_len, p_nr  : integer;
+                               InMat      : SeqMatrix;
+                               jobs       : SHARED JobArray);
+
+    startI,startJ : integer;
+    job: Job;
+  BEGIN
+         #WriteLine("In SendFirstPartition...");
+         FOR i IN 1..diag_len DO
+              GetStartPoint(diag_len,p_len,p_nr,startI,startJ); 
+              job.PART := CreatePartition(p_nr,startI,startJ,
+                                          p_len,seq1_len,seq2_len);
+              CopyPartMatrix(job.PART.I1,job.PART.I3,job.PART.J1,
+                             job.PART.J2,InMat,job.MAT);  
+              jobs[i]$AddJob(job);
+         OD;
+  END;
+
+
+FUNCTION CheckJobsToDo(  diag_len, p_nr  : integer;
+                         BitMap : BitMapTable ): boolean;
+
+    Left,Up,Diag,index : integer;
+ BEGIN
+    ComputePartitionNeeded(diag_len,p_nr,Left,Up,Diag);
+    index := Left;
+    WHILE index < p_nr DO
+       IF BitMap[index] = 0 THEN
+              RETURN false;
+       FI;
+       index +:= 1;
+    OD;
+
+    index := Up;
+    WHILE index < p_nr DO
+       IF BitMap[index] = 0 THEN
+             RETURN false;
+       FI; 
+       index +:= diag_len;
+    OD; 
+
+    index := Diag;
+    IF Diag /= 0 THEN
+       IF BitMap[index] = 0 THEN
+            RETURN false;
+       FI;
+    FI;
+    RETURN true; 
+ END;
+
+
+
+  FUNCTION IsNewPartitionIn( TaskQ : SHARED JobQ;
+                             BitMap : SHARED BitMapTable;
+                             tempMat : SHARED SeqMatrix ):boolean;
+      node : Job;
+      temp : Partition;
+      SeqNr, mypart : integer;
+     
+  BEGIN
+       SeqNr := 1;
+
+       WHILE TaskQ$GetJob(node) DO
+            temp := node.PART;  
+            mypart := temp.NR;
+            BitMap[mypart] := 1;
+            FOR i IN temp.I1..temp.I3 DO
+                FOR j IN temp.J1..temp.J2 DO
+                     tempMat[i][j] := node.MAT[i][j]; 
+                OD;
+            OD;
+            
+           SeqNr -:= 1;
+           IF SeqNr = 0 THEN
+               RETURN true;
+           FI; 
+       OD;
+       IF SeqNr = 1 THEN
+          RETURN false;
+       FI;
+  END;
+              
+              
+
+  FUNCTION AddToStartMatrix( InMat      : SHARED SeqMatrix;
+                             loc_max    : Vertex;
+                             TaskNr     : SHARED integer;
+                             queue      : SHARED JobQ;
+                             jobs       : SHARED JobArray;
+                             NrOfCpus   : integer;
+                             NrOfMesgOut : SHARED integer;
+                             new_max    : OUT Vertex;
+                             Imax, Jmax : OUT integer );
+       node : Job;
+       temp : Partition;
+       cpu : integer;
+  BEGIN
+       new_max := loc_max;
+       Imax    := 0;
+       Jmax    := 0;
+       WHILE (TaskNr > 0) AND queue$GetJob(node) DO
+
+             TaskNr -:= 1;
+             temp := node.PART;
+             cpu := node.CPU;
+             
+             FOR i IN 1..NrOfCpus DO
+                  IF (i /= cpu) AND (i /= cpu+1) THEN
+                    jobs[i]$AddJob(node);
+                    NrOfMesgOut +:= 1;
+                  FI;
+             OD;
+             NrOfMesgOut +:= 1;
+             FOR i IN temp.I1..temp.I3 DO
+                FOR j IN temp.J1..temp.J2 DO
+                     InMat[i][j] := node.MAT[i][j];
+                OD;
+             OD;
+             
+             IF new_max.VALUE <= node.MAX.VALUE THEN
+                    new_max := node.MAX;
+                    Imax    := node.MAXI;
+                    Jmax    := node.MAXJ;
+             FI;
+       OD; 
+   END;
+
+  
+  FUNCTION InitCpuQ( i, j : integer; cpuQ: OUT JobArray[i..j] );
+  BEGIN
+        
+  END;
+
+
+  FUNCTION StopCpuQ( i, j : integer; cpuQ: SHARED JobArray );
+  BEGIN
+         FOR k IN i..j DO
+           cpuQ[k]$NoMoreJobs();
+         OD;
+  END;
+  
+
+  FUNCTION InitBitMapTable( Low, Up : integer; 
+                            Tab: OUT BitMapTable[Low..Up] );
+  BEGIN
+          FOR k IN Low..Up DO
+              Tab[k] := 0;
+          OD;
+  END;
+
+
+  FUNCTION InitPartsTable( cpu, G_diag : integer; 
+                           Tab: OUT PartsTable[1..G_diag] );
+    p_nr : integer;
+  BEGIN
+          IF cpu = 1 THEN 
+             p_nr := 2;
+          ELSE 
+             p_nr := (G_diag * (cpu-1)) + 1;
+          FI;
+
+          FOR k IN 1..G_diag DO
+              IF (cpu /= 1) AND (cpu /= G_diag) THEN
+                 Tab[k].WORK := false; 
+              ELSE
+                  IF k = G_diag THEN 
+                   Tab[k].WORK := true;
+                  ELSE
+                   Tab[k].WORK := false;
+                  FI;     
+              FI; 
+              Tab[k].PARTNR := p_nr;
+              p_nr +:= 1;
+          OD;
+  END;
+
+
+  FUNCTION PrintCpuTimes( G_diag : integer; Task: TableObj );
+  BEGIN
+        WriteLine("Worker    RunTime    WaitingTime     Difference    ");
+        WriteLine("------------------------------------------------");
+        FOR i IN 1..G_diag DO
+            WriteLine(i,"         ",Task$GetCpuTime(i),
+                      "         ",Task$GetIdleTime(i),
+                      "              ",Task$GetCpuTime(i)-Task$GetIdleTime(i));
+        OD;
+        WriteLine("------------------------------------------------"); 
+  END;
+
+
+
+PROCESS OneWorker(    seq1, seq2     : string;
+                      Greatdiag      : integer;
+                      P_len          : integer; 
+                      jobs           : SHARED JobArray;
+                      Task           : SHARED TableObj; 
+                      queue          : SHARED JobQ;
+                      WorkersActive  : SHARED IntObject);
+        job    : Job;
+        tempMat : SeqMatrix;
+        startI, startJ, cpu, len1, len2: integer;
+        startT, endT, idleTime :integer;
+        idleT, IsAnyWork, AllPartsPresent : boolean;
+        bitMap : BitMapTable;
+        MyWork : PartsTable;
+  BEGIN 
+       startT := SysMilli();
+       idleT  := true;
+       cpu    := MYCPU();
+       len1   := SIZE(seq1);
+       len2   := SIZE(seq2); 
+       InitMatrix(len1,len2,tempMat); 
+       InitBitMapTable(1,Greatdiag*Greatdiag,bitMap);
+       InitPartsTable(cpu,Greatdiag,MyWork);
+       DO
+          IsAnyWork := IsNewPartitionIn(jobs[cpu],bitMap,tempMat);
+           IF IsAnyWork THEN
+
+               IF idleT = true THEN
+                  endT   := SysMilli();
+                  idleTime := endT - startT;
+                  idleT := false;  
+               FI;
+               FOR i IN 1..Greatdiag DO
+             
+                  IF MyWork[i].WORK = false THEN 
+                     AllPartsPresent := CheckJobsToDo(Greatdiag,
+                                                     MyWork[i].PARTNR,bitMap); 
+                    
+                      IF AllPartsPresent THEN
+                           GetStartPoint(Greatdiag,P_len,MyWork[i].PARTNR,
+                                         startI,startJ); 
+                           job.CPU := cpu;
+                           job.PART:= CreatePartition(MyWork[i].PARTNR,
+                                                      startI, startJ, 
+                                                      P_len,len1,len2);   
+                           job.MAX  := ComputeScoreMatrix(seq1,seq2,job.PART,
+                                                   tempMat,job.MAXI,job.MAXJ);
+                           CopyPartMatrix(job.PART.I1,job.PART.I3,
+                                          job.PART.J1,job.PART.J2,
+                                          tempMat,job.MAT);
+                           MyWork[i].WORK := true;   
+                           bitMap[MyWork[i].PARTNR] := 1;
+                           IF cpu /= Greatdiag THEN
+                                jobs[cpu+1]$AddJob(job);
+			   FI;
+                           queue$AddJob(job);
+                      FI;
+                  FI;
+              OD;
+
+          ELSE 
+             EXIT;
+          FI;   
+      OD; 
+       endT := SysMilli();
+       Task$PutIdleTime(cpu,idleTime);
+       Task$PutCpuTime(cpu,endT - startT);
+       Task$DecPrinter(1);
+  END;
+ 
+  
+ 
+PROCESS OrcaMain();
+
+        row, col, Loc_Imax, Loc_Jmax, Imax, Jmax, v_nr :integer;
+        startI, startJ, p_len  : integer;
+        LastI, LastJ :integer;
+        loc_max, new_max, Lastmax : Vertex;
+        InMat : SeqMatrix;
+        WorkersActive : IntObject;
+        Task : TableObj;
+        jobs : JobArray;
+        queue : JobQ;
+        start_t, end_t, G_diag, cpu : integer;
+        result : Result;
+        part : Partition;
+        NrOfJob, NrOfMesgIn, NrOfMesgOut : integer;
+
+BEGIN
+
+        WriteLine();
+        WriteLine();
+        cpu  := NCPUS(); 
+        WriteLine(" Nr of CPUs allocated : ",cpu);
+        WriteLine();
+        WriteLine("            ...Timing is begun...");
+        WriteLine();
+        WriteLine();
+ 
+        start_t := SysMilli();
+        row  := SIZE(seq1);
+        col  := SIZE(seq2);
+        G_diag := (cpu-1)  ;
+
+        InitMatrix(row,col,InMat); 
+        InitCpuQ(1,G_diag,jobs);
+        Task$InitTable(G_diag); 
+  
+        p_len          := ComputePartitionMatrix(row,col,G_diag,v_nr);
+        GetStartPoint(G_diag,p_len,1,startI,startJ);
+        part := CreatePartition(1,startI,startJ,p_len,row,col);
+        loc_max  := ComputeScoreMatrix(seq1,seq2,part,
+                                       InMat,Imax,Jmax);
+        Task$SetPrinter(G_diag);
+
+        FOR i IN 1..G_diag DO
+            FORK OneWorker(seq1,seq2,G_diag,p_len,jobs,
+                           Task,queue,WorkersActive) ON (i);
+        OD;
+
+        SendFirstPartition(row,col,G_diag,p_len,1,InMat,jobs);
+        NrOfJob := (G_diag * G_diag) - 2;
+	IF NrOfJob <= 0 THEN
+		NrOfJob := 0;
+	FI;
+        NrOfMesgIn := NrOfJob;
+        NrOfMesgOut := G_diag;
+        AddToStartMatrix(InMat,loc_max,NrOfJob,queue,jobs,G_diag,
+                         NrOfMesgOut,new_max,Loc_Imax,Loc_Jmax);
+        StopCpuQ(1,G_diag,jobs);
+  
+        IF ( Loc_Imax /= 0 ) AND ( Loc_Jmax /= 0 ) THEN
+                  loc_max := new_max; 
+                  Imax := Loc_Imax;
+                  Jmax := Loc_Jmax;
+        FI;
+
+        GetStartPoint(G_diag,p_len,G_diag*G_diag,startI,startJ);
+        part := CreatePartition(G_diag*G_diag,startI,startJ,p_len,row,col); 
+        Lastmax  := ComputeScoreMatrix(seq1,seq2,part,
+                                       InMat,LastI,LastJ);
+
+        IF loc_max.VALUE <= Lastmax.VALUE THEN
+                        loc_max := Lastmax; 
+                        Imax := LastI;
+                        Jmax := LastJ;
+        FI;
+            
+        result  := FindBestLalign(Imax,Jmax,loc_max,seq1,seq2,InMat);
+
+        end_t := SysMilli();
+        WriteLine();
+        WriteLine("------------------------------------------------------");  
+        WriteLine("Nr of vertexes in each Partition: ",v_nr);
+        WriteLine("Nr of RPC's In: ",NrOfMesgIn);
+        WriteLine("Nr of RPC's Out: ",NrOfMesgOut);
+        WriteLine("Total Data Com. : ",
+                   (NrOfMesgOut+NrOfMesgIn) * ((v_nr*16) + 64));   
+        
+        WriteLine("Seq1_len:  ",row,"    Seq2_len:  ",col);
+        WriteLine("------------------------------------------------------"); 
+
+	PrintTime("SequenceComparison", end_t - start_t);
+          
+        ShowResult(result);
+        WriteLine("seq1_S: ",seq1[result.STARTI]," seq2_S: ",
+                   seq2[result.STARTJ]," seq1_E: ",seq1[result.ENDI],
+                  " seq2_E: ",seq2[result.ENDJ]);
+        WriteLine();
+        Task$PrintAwaitValue(0);
+        PrintCpuTimes(G_diag,Task);
+END;
+
+END;

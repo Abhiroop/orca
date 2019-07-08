@@ -1,0 +1,6 @@
+data = myData;
+for (i = 0; i < log2(P); i++) {
+    send data to processor (id + 2**i) mod P;
+    receive newdata;
+    data = combine(data, newdata);
+}

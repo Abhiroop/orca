@@ -1,0 +1,274 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION WaterWorker;
+
+IMPORT	barrier;	FROM	barrier		IMPORT sync;
+IMPORT	DirArrayObject;
+IMPORT	LongRealObject;
+
+FROM	GlobalType	IMPORT	GlobalObject;
+FROM	Consts		IMPORT	TEMP, OMAS, HMAS, UNITT, UNITL, UNITM, BOLTZ;
+FROM	Common		IMPORT	OrderType, DirectionType, AtomTableType,
+				AtomType, DirTableType, InputArrayType,
+				PCC_Type, TLC_Type;
+FROM	PredCor		IMPORT	Predict, CorrectBoundary;
+FROM	ForceEnergy	IMPORT	IntraForces, InterForces, PotEnergy;
+FROM	InOut		IMPORT	WriteInt, WriteLongReal, WriteString, WriteLn;
+FROM	Math		IMPORT	IntToLongReal, sqrt;
+FROM	Time		IMPORT	SysMilli, PrintTime;
+FROM	Finish		IMPORT	Finish;
+
+
+FUNCTION InitData(Data         : SHARED GlobalObject;
+		  Barrier      : SHARED barrier;
+		  Min, Sum     : SHARED DirArrayObject;
+		  RandomArray  : InputArrayType;
+		  NrMols       : integer);
+
+	min, sum : DirTableType;
+BEGIN
+
+    ### Initialize displacements and momenta 
+    ### and determine minima and sums for each direction
+
+	Data[MYCPU()]$Init(NrMols, RandomArray[MYCPU()], min, sum);
+	Min$MinAllVal(min);
+	Sum$IncAllVal(sum);
+
+    ### Wait until everybody has updated minima and sums
+
+	sync(Barrier);
+END;
+
+
+FUNCTION square( r : longreal) : longreal;
+BEGIN
+	RETURN r*r;
+END;
+
+
+FUNCTION AdjustData(Data          : SHARED GlobalObject;
+		    Barrier       : SHARED barrier;
+		    Min, Sum, Su  : SHARED DirArrayObject;
+		    NrMols, NATMO : integer;
+		    TSTEP         : longreal);
+
+	TmpMin, TmpSum, TmpSu : DirTableType;
+	Xmas                  : AtomTableType;
+BEGIN
+	Xmas[H1] := HMAS;
+	Xmas[O]  := OMAS;
+	Xmas[H2] := HMAS;
+
+
+    ### Subtract the minima from every atom's displacements;
+    ### This shifts the origin of the system to a corner of the box
+
+	TmpMin := Min$GetAllVal();
+	Data[MYCPU()]$Shift(NrMols,TmpMin);
+
+
+    ### Find average momenta per atom
+
+	IF MYCPU() = 0 THEN
+	    TmpSum := Sum$GetAllVal();
+
+	    FOR dir IN XDIR .. ZDIR DO
+		TmpSum[dir] /:= IntToLongReal(NATMO);
+	    OD;
+
+	    Sum$SetAllVal(TmpSum);
+	FI;
+
+	sync(Barrier);
+
+
+    ### Find normalization factor so that <k.e.>=KT/2
+
+	TmpSum := Sum$GetAllVal();
+	Data[MYCPU()]$Factor(NrMols, TmpSum, HMAS, OMAS, TmpSu);
+
+	Su$IncAllVal(TmpSu);
+	sync(Barrier);
+
+	IF MYCPU() = 0 THEN
+	    TmpSu := Su$GetAllVal();
+
+	    FOR dir IN XDIR .. ZDIR DO
+		TmpSu[dir] := 
+			  sqrt((BOLTZ * TEMP * IntToLongReal(NATMO) /
+			  UNITM * square(UNITT * TSTEP / UNITL)) /
+			  TmpSu[dir]);
+	    OD;
+
+	    Su$SetAllVal(TmpSu);
+	FI;
+
+	sync(Barrier);
+
+
+    ### Normalize individual velocities so there are no bulk momenta
+
+	TmpSu := Su$GetAllVal();
+	Data[MYCPU()]$Normalize(NrMols, TmpSum, TmpSu, Xmas);
+
+	sync(Barrier);
+END;
+
+
+
+FUNCTION PrintResults(TVIR, TKIN, Total,
+		      POTA, POTR, POTRF : SHARED LongRealObject;
+		      FPOT, FKIN, TTMV  : longreal;
+		      TimeStep : integer);
+
+	LPOTA, LPOTR, LPOTRF, XVIR, AVGT, TEN, XTT : longreal;
+BEGIN
+	LPOTA  := POTA$GetVal() * FPOT;
+	LPOTR  := POTR$GetVal() * FPOT;
+	LPOTRF := POTRF$GetVal() * FPOT;
+	XVIR   := TVIR$GetVal() * FPOT * 0.5D / TTMV;
+	AVGT   := TKIN$GetVal() * FKIN * TEMP * 2.0D / (3.0D * TTMV);
+	TEN    := Total$GetVal() * FKIN;
+	XTT    := LPOTA + LPOTR + LPOTRF + TEN;
+
+	WriteInt(TimeStep);
+	WriteString(": ");
+	WriteLongReal(TEN);
+	WriteString("  ");
+	WriteLongReal(LPOTA);
+	WriteString("  ");
+	WriteLongReal(LPOTR);
+	WriteString("   ");
+	WriteLongReal(LPOTRF);
+	WriteString("  ");
+	WriteLongReal(XTT);
+	WriteString("  ");
+	WriteLongReal(AVGT);
+	WriteString("  ");
+	WriteLongReal(XVIR);
+	WriteLn();
+	WriteLn();
+END;
+
+
+
+FUNCTION PrintTimes(LoopNr, NPRINT, NSTEP,
+		    LoopTime, RelevantTime, TotalTime: integer);
+BEGIN
+	IF (LoopNr % NPRINT = 0) OR (LoopNr = NSTEP) THEN 
+	    WriteString("Relevant execution time = ");
+	    WriteInt(RelevantTime - LoopTime);
+	    WriteString(" ms.");
+	    WriteLn();
+
+	    WriteString("Execution time including pot.eng. = ");
+	    WriteInt(TotalTime - LoopTime);
+	    WriteString(" ms.");
+	    WriteLn();
+	    WriteLn();
+	FI;
+END;
+
+
+
+PROCESS WaterWorker(Data                  : SHARED GlobalObject;
+		    Barrier               : SHARED barrier;
+		    Min, Sum, Su          : SHARED DirArrayObject;
+		    TVIR, TKIN, Total,
+		    POTA, POTR, POTRF     : SHARED LongRealObject;
+		    RandomArray		  : InputArrayType;
+		    TLC                   : TLC_Type;
+		    PCC                   : PCC_Type;
+		    StartMol, NrMols, NMOL, NrParts,
+		    NATMO, NSTEP, NORDER, NPRINT   : integer;
+		    TSTEP, BOXH, BOXL, REF1, CUTOFF,
+		    CUT2, FHM, FOM, FPOT, FKIN     : longreal);
+
+	TTMV, TmpVir : longreal;
+	StartTime, LoopTime, RelevantTime, TotalTime : integer;
+BEGIN
+	### Initialize 'Data' with values read from the input-file
+
+	InitData(Data,
+		 Barrier, Min, Sum, RandomArray, NrMols);
+
+
+	### Adjust the positions and velocities
+
+	AdjustData(Data, Barrier, Min, Sum, Su, NrMols, NATMO, TSTEP);
+
+
+	### Some pre-loop calculations
+
+	IntraForces(Data, TmpVir, NrMols);
+
+	InterForces(Data, TVIR, TmpVir, StartMol, NrMols, NMOL,
+		    NrParts, BOXH, BOXL, REF1, CUT2, FHM, FOM, ACC);
+
+	IF MYCPU() = 0 THEN
+	    TTMV := 0.0D;	
+	    TVIR$SetVal(0.0D);
+	    TKIN$SetVal(0.0D);
+	    StartTime := SysMilli();
+	FI;
+
+
+### --------- MOLECULAR DYNAMICS LOOP OVER ALL TIME STEPS --------- ###
+
+	FOR i IN 1 .. NSTEP DO
+
+	    LoopTime := SysMilli();
+	    IF MYCPU() = 0 THEN
+		TTMV +:= 1.0D;
+		Total$SetVal(0.0D);
+	    FI;
+
+	    Predict(Data, NORDER, NrMols, TLC);
+
+	    IntraForces(Data, TmpVir, NrMols);
+
+	    InterForces(Data, TVIR, TmpVir, StartMol, NrMols, NMOL, NrParts,
+			BOXH, BOXL, REF1, CUT2, FHM, FOM, FORCES);
+
+	    CorrectBoundary(Data,
+			    TKIN, Total, NORDER, NrMols, PCC, BOXL);
+
+	    IF MYCPU() = 0 THEN
+		RelevantTime := SysMilli();
+	    FI;
+
+	    IF (i % NPRINT = 0) OR (i = NSTEP) THEN
+		PotEnergy(Data, Barrier,
+			  POTA, POTR, POTRF, StartMol, NrMols, NMOL,
+			  NrParts, CUTOFF, CUT2, REF1, BOXH, BOXL);
+
+		IF MYCPU() = 0 THEN
+		    TotalTime := SysMilli();
+		    PrintResults(TVIR, TKIN, Total, POTA,
+				 POTR, POTRF, FPOT, FKIN, TTMV, i);
+		FI;
+	    FI;
+
+	    IF MYCPU() = 0 THEN
+		PrintTimes(i, NPRINT, NSTEP,
+			   LoopTime, RelevantTime, TotalTime);
+	    FI;
+	OD;
+
+	IF MYCPU() = 0 THEN
+	    PrintTime("water", SysMilli() - StartTime);
+	    # WriteString("Total execution time = ");
+	    # WriteInt(SysMilli() - StartTime);
+	    # WriteString(" ms.");
+	    # WriteLn();
+	    # WriteLn();
+	    Finish();
+	FI;
+
+END;
+
+
+END;

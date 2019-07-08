@@ -1,0 +1,7 @@
+# Main.spf
+
+MODULE SPECIFICATION Main;
+
+ PROCESS OrcaMain();
+
+END; # Main

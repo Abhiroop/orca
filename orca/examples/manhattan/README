@@ -1,0 +1,54 @@
+Delivery-Date: Wed, 05 Mar 1997 16:16:15 +0100
+Return-Path: cs.vu.nl!forsberg
+Return-Path: <forsberg@cs.vu.nl>
+Date: Wed, 5 Mar 1997 16:16:13 +0100 (MET)
+From: "Forsberg, Mattias" <forsberg@cs.vu.nl>
+Reply-To: "Forsberg, Mattias" <forsberg@cs.vu.nl>
+To: Henri Bal <bal@cs.vu.nl>
+Subject: Parallel programming project
+MIME-Version: 1.0
+Content-Type: MULTIPART/MIXED; BOUNDARY="-559023410-1804928587-857574394=:8166"
+Content-ID: <Pine.GSO.3.94.970305161032.8166F@sloep66.cs.vu.nl>
+Content-Length: 109501
+Status: O
+ 
+  This message is in MIME format.  The first part should be readable text,
+  while the remaining parts are likely unreadable without MIME-aware tools.
+  Send mail to mime@docserver.cac.washington.edu for more info.
+ 
+---559023410-1804928587-857574394=:8166
+Content-Type: TEXT/PLAIN; CHARSET=US-ASCII
+Content-ID: <Pine.GSO.3.94.970305161032.8166G@sloep66.cs.vu.nl>
+ 
+Hi,
+ 
+I have now finished my project in your Parallel Programming course. The
+project source code, Makefile, a final report and files required to run
+the program are included in the attached zip file. 
+ 
+To use the program do the following:  
+ 1. Execute the command 'unzip Delivery.zip' in a directory somewhere 
+ 2. Execute 'make amoeba' in order to compile and get an executable
+installed on your amoeba account.
+ 3. Copy the files InitialDistribution and problem.tsp to your home
+directory on the Amoeba system (or where you intend to run the program).
+ 4. Now you can run the program like any other with 
+        gax mankrank N
+                               
+The report included is in postscript format and is called report.ps. 
+                               
+                               
+I hope you will find everything in order.
+                               
+Best regards                   
+                               
+Mattias                        
+                               
+________________________________________________________
+Mattias Forsberg              phone: +31 (0)20 444 92 74   
+Laan van Kronenburg 9-433A       mail: forsberg@cs.vu.nl       
+1183 AS Amstelveen             
+The Netherlands                
+________________________________________________________
+ 
+

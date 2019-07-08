@@ -1,0 +1,446 @@
+#  June, 1995
+#  R. van der Pol
+#
+
+MODULE IMPLEMENTATION Constrl;
+
+FROM Graph IMPORT GenerateRelations, GenerateProcessor;
+FROM Work IMPORT Work;
+FROM InOut IMPORT ReadInt, ReadString, WriteString, WriteInt,
+                    WriteLn, OpenOutputFile, CloseOutput;
+FROM Line IMPORT Line;
+FROM Finish IMPORT Finish;
+FROM Types IMPORT  Vali, BoolArray, ConMatrix, BoolMatrix,
+    RelationType, RelationIndex, MAX_RELATIONS;
+FROM Time IMPORT SysMilli, PrintTime;
+FROM MatObject IMPORT LineVal, MatObject;
+FROM BoolObject IMPORT BoolObject;
+FROM IntObject IMPORT IntObject;
+#FROM trace IMPORT flush, set_level;
+FROM Random IMPORT Random;
+FROM barrier IMPORT barrier, sync;
+
+
+#
+# Check the connection between i and j. k loops through all possible
+# values of i. If k is a valid value of i, l loops through all possible
+# values of j. If there exists a valid l value for j, k is accepted
+# as a valid value of i. Otherwise, k is deleted as valid value of i.
+#
+FUNCTION sprevise(nr_values, i, j : integer; local  : SHARED LineVal;
+	  pos_change : SHARED integer; list_change : SHARED Vali;
+	  con_check : SHARED integer; no_solution : SHARED BoolObject;
+	  relation: SHARED BoolMatrix): boolean;
+support, modif, solution : boolean;
+
+BEGIN
+    modif := false;        # change is not necessary
+    solution := false;        # there is nothing left
+    # k loops through all values of i
+    FOR k IN  0 .. nr_values - 1
+    DO
+        IF local[i][k]     # k is a valid value of i
+        THEN
+            support := false;
+	    # l loops through all values of j
+	    FOR l IN 0 .. nr_values - 1
+            DO
+                IF local[j][l]  # l is a valid value of j
+                THEN
+                    # WriteLine(MYCPU(), ": test for ", i, "/ ",
+		    # 		    k, " and ", j, "/",l);
+                    con_check +:= 1;
+		    IF con_check = 0
+		    THEN
+			WriteLine("***** con_check overflow!");
+		    FI;
+		    # See if (i,k) - (j,l) is a relation
+                    IF i < j
+                    THEN
+                        IF relation[k][l]
+                        THEN
+                            support := true;
+			    EXIT;
+                        FI;
+                    ELSE
+                        IF relation[l][k]
+                        THEN
+                            support := true;
+			    EXIT;
+                        FI;
+                    FI;
+                FI;
+            OD;
+            IF NOT support     # no lj in Dj, Rij(li,lj)
+	    THEN
+                local[i][k] := false;
+                pos_change +:= 1;
+                list_change[pos_change] := k;
+                modif := true;     # lk value not supported for var i 
+            ELSE
+                solution := true;    # something was left here
+            FI;
+        FI; 
+    OD;
+    IF NOT solution
+    THEN
+        no_solution$assign(true);
+    FI;
+    RETURN (modif);
+END;
+         
+
+FUNCTION spac_loop(N, a : integer; con_checks, nr_modif, nr_change_ops:
+    SHARED  integer; no_solution : SHARED BoolObject; domain:
+    SHARED MatObject; processor: Vali; work : SHARED Work; relation:
+    SHARED RelationType; constraint: SHARED ConMatrix; time_run: OUT integer);
+
+modif : integer;
+i_change, local_change: boolean;
+pos_change, cpu : integer;
+list_change : Vali[1 .. a];    # INDEX SHOULD BE CHANGED !!
+local : LineVal;
+el1 : boolean;
+work_list : BoolArray[0..N];  
+start: integer;
+
+BEGIN
+    cpu := MYCPU();
+    nr_change_ops := 0;
+    WriteLine("Spac_loop started for ", cpu);
+    con_checks := 0;
+    nr_modif := 0; 
+    start := SysMilli();
+    REPEAT
+	# WriteLine(MYCPU(), ": outer loop of spac_loop");
+	modif := 0;
+	REPEAT 
+	    local_change := false;
+	    work_list := work$lista_work(N, cpu, processor);
+	    local := domain$getvalue();
+	    FOR i IN 0 .. N - 1
+	    DO
+		IF work_list[i]
+		THEN    
+		    i_change := false;
+		    pos_change := 0; 
+		    IF work$Test(i) THEN
+			work$Vote(i, false); # HACK <-------------------
+		    FI;
+		    FOR j IN 0 .. N - 1
+		    DO
+			IF i /= j
+			THEN 
+			    IF  constraint[i][j] /= NOCONSTRAINT
+			    THEN # is there an edge ?
+				# local := domain$getvalue();
+				el1 := sprevise(a, i, j, local,
+                                      pos_change, list_change,
+                                     con_checks, no_solution,
+                                     relation[constraint[i][j]]);
+				i_change :=  el1 OR i_change;                
+			    FI;
+			FI;    
+		    OD;
+		    IF i_change
+		    THEN
+			local_change := true;
+			modif +:= pos_change;
+			domain$change(list_change,pos_change, i); 
+			nr_change_ops +:= 1;
+			work$Announce(i, N);
+		    FI;
+		FI;
+		#flush();
+	    OD;
+	UNTIL NOT local_change OR no_solution$test();      
+	time_run := SysMilli() - start;
+	nr_modif +:= modif;
+
+	#WriteLine("cpu = ", MYCPU(), ": loop inn exit, con_checks = ", 
+	#          con_checks," ", " #modif = ", modif, " ", cpu);    
+     
+        work$Ready();      # Can't be done as part of Work_for :-(
+  UNTIL NOT work$Work_for(N, cpu, processor);
+  WriteLine("end, con_checks = ", con_checks, " ",  cpu);
+END;
+
+#############################################################
+
+###############################################################
+#Description of worker processes
+
+PROCESS worker(domain : SHARED MatObject; no_solution : SHARED BoolObject;
+  turn: SHARED IntObject; con_checks, nr_modif, nr_ops : SHARED Line;
+  nr_workers : integer; work : SHARED Work; time: SHARED Line; nr_vars,
+  nr_values: integer; max_rel: RelationIndex; nr_connections, rel_pairs,
+  seed: integer; bar: SHARED barrier);
+
+modif, con: integer;
+relation: RelationType[r1 .. max_rel]
+    [0 .. nr_values - 1][0 .. nr_values - 1];
+constraint: ConMatrix;
+random: Random;
+processor: Vali;
+time_run: integer;
+nr_change_ops: integer;
+#level: integer;
+
+BEGIN
+    random$init(seed);
+    GenerateRelations(nr_values, max_rel, rel_pairs, relation, seed);
+    GenerateProcessor(processor, nr_vars, nr_workers);
+    sync(bar);
+    IF MYCPU() = 0
+    THEN
+	WriteLine("Initializing...");
+	work$init_const(max_rel, nr_connections, nr_vars, seed);
+	WriteLine("initializing finished");
+    FI;
+    constraint := work$get_const();	# get a local copy for performace
+    sync(bar);
+    #level := set_level(0);
+    # start := SysMilli();
+    # WriteLine("cpu ", MYCPU(), ": start time = ", start);
+    spac_loop(nr_vars, nr_values, con, modif, nr_change_ops, no_solution,
+	    domain, processor, work, relation, constraint, time_run);
+    # stop := SysMilli();
+    # WriteLine("cpu ", MYCPU(), ": end time = ", stop);
+    # time$Assign(MYCPU(), stop - start);
+    time$Assign(MYCPU(), time_run);
+    con_checks$Assign(MYCPU(), con);
+    nr_modif$Assign(MYCPU(), modif);
+    nr_ops$Assign(MYCPU(), nr_change_ops);
+    WriteLine("Slave ", MYCPU(), " finishes con = ", con, " modif = ", modif);
+    turn$inc();
+END;  
+
+
+#Description of master process
+
+PROCESS OrcaMain();
+
+domain :  MatObject;
+work : Work;
+no_solution : BoolObject;
+time, con, modif: Line;
+nr_ops: Line;
+rtime_start, rtime_end: integer;
+turn: IntObject;
+max : integer;
+min: integer;
+nr_workers : integer; # number of workers
+nr_vars, nr_values : integer;
+nr_connections: integer;
+rel_pairs: integer;
+diff_rel: integer;
+max_rel: RelationIndex;
+nr_processors: integer;
+nr_ch : integer;
+gasit : boolean;
+val: integer;
+outfile: string;
+#level: integer;
+seed: integer;
+constraint: ConMatrix;
+WriteData: string;
+bar: barrier;
+ops: integer;
+
+BEGIN
+#Strategy(work, 1, 0);
+Strategy(domain, 1, 0);
+    #level := set_level(9999);
+    #WriteLine("level was ", level);
+    rtime_start := SysMilli();
+    WriteString("output file: ");
+    ReadString(outfile);
+    WriteString("number of variables: ");
+    ReadInt(nr_vars);
+    WriteString("number of values: ");
+    ReadInt(nr_values);
+    WriteString("number of connections per variable: ");
+    ReadInt(nr_connections);
+    WriteString("number of different relations: ");
+    ReadInt(diff_rel);
+    IF diff_rel > MAX_RELATIONS
+    THEN
+	WriteLine("Sorry, the maximum number of relations is ",
+	    MAX_RELATIONS, ".");
+	Finish();
+    FI;
+    max_rel := VAL(RelationIndex, diff_rel);
+    WriteString("number of relation pairs per constraint: ");
+    ReadInt(rel_pairs);
+    WriteString("Write input data to file (y/n): ");
+    ReadString(WriteData);
+    WriteString("Random seed: ");
+    ReadInt(seed);
+    # seed := SysMilli();
+    WriteLine("Seed (SysMilli) is ", seed);
+    nr_processors := NCPUS();
+    # nr_workers := nr_processors - 1;
+    nr_workers := nr_processors;
+    WriteLine("nr_workers = ", nr_workers);
+    WriteLine("number of variables = ", nr_vars);
+    WriteLine("number of values in domain = ", nr_values );
+    domain$init(nr_vars, nr_values);
+    # domain$print(nr_vars, nr_values);
+    time$Init(nr_processors);
+    con$Init(nr_processors);
+    nr_ops$Init(nr_processors);
+    modif$Init(nr_processors);
+    bar$init(nr_workers);
+
+    work$init(nr_vars, nr_workers, true);
+    no_solution$assign(false);
+    turn$assign(0);
+    FOR i IN 0 .. nr_workers - 1
+    DO
+        WriteString("Starting worker ");
+        WriteInt(i);
+        WriteLn();
+        FORK worker(domain, no_solution,  turn, con, modif, nr_ops,
+	       nr_workers, work, time, nr_vars, nr_values,
+		max_rel, nr_connections, rel_pairs, seed, bar)
+        ON (i);
+    OD;
+    WriteLine("Master waits for turn");
+    turn$AwaitValue(nr_workers);
+    nr_ch := 0;
+    IF no_solution$test()
+    THEN
+        WriteLine("!!! No solution found !!!");
+        FOR i IN 0 .. nr_vars  - 1
+        DO
+            gasit := false;
+            val := 0;
+            WHILE (val < nr_values) AND NOT gasit
+            DO
+                gasit := gasit OR domain$test(i,val);
+                val +:=1;
+            OD;
+            IF NOT gasit
+            THEN 
+                WriteLine("   for variable ", i);
+            FI;
+        OD;           
+    FI;
+#    ELSE
+#        FOR i IN 0.. nr_vars  - 1
+#        DO
+#            FOR j1 IN 0.. nr_values -1
+#            DO
+#                IF domain$test(i,j1)
+#                THEN
+#                    # WriteLine("D[",i,"][",j1,"]");
+#                ELSE
+#                    nr_ch +:= 1;
+#                FI;
+#            OD;
+#        OD;
+#    FI; 
+
+    # write_rezultate(nr_workers, con_checks, nr_modif, timp);
+    # domain$print(nr_vars, nr_values);
+#    FOR i IN 0 .. nr_vars - 1
+#    DO
+#        FOR j IN 0 .. nr_vars - 1
+#        DO
+#        r := constraint[i][j];
+#        IF r /= NOCONSTRAINT
+#        THEN
+#            FOR k IN 0 .. nr_values - 1
+#            DO
+#            IF domain$test(i, k)
+#            THEN
+#                good := false;
+#                FOR l IN 0 .. nr_values - 1
+#                DO
+#                IF domain$test(j, l)
+#                THEN
+#                    IF GetBit(relation[r], k * nr_values + l)
+#                    THEN
+#                    good := true;
+#                    FI;
+#                FI;
+#                OD;
+#                IF NOT good
+#                THEN
+#                WriteLine("wrong result, constraint(", i, ", ", j, "), value=", k);
+#                FI;
+#            FI;
+#            OD;
+#        FI;
+#        OD;
+#    OD;
+
+    rtime_end := SysMilli();
+    IF OpenOutputFile(outfile)
+    THEN
+	max := time$Value(0);
+	min := time$Value(0);
+	ops := 0;
+	FOR i IN 0 .. nr_workers - 1
+	DO
+	    WriteLine("Processor: ", i);
+	    WriteLine("time run (in seconds): ", FLOAT(time$Value(i)) / 1000.);
+	    WriteLine("Consistency checks: ", con$Value(i));
+	    WriteLine("Number of values removed: ", modif$Value(i));
+	    WriteLine("Number of domain$change operations sent: ",
+			nr_ops$Value(i));
+	    ops +:= nr_ops$Value(i);
+	    nr_ch +:= modif$Value(i);
+
+	    IF max < time$Value(i)
+	    THEN
+		max := time$Value(i);
+	    FI;
+
+	    IF min > time$Value(i)
+	    THEN
+		min := time$Value(i);
+	    FI;
+
+	    WriteLine("----------------------------------");
+	OD;
+        WriteLine(nr_ch, " values removed");
+        WriteLine("nr_workers = ", nr_workers);
+        WriteLine("number of variables = ", nr_vars);
+        WriteLine("number of values in domain = ", nr_values );
+        WriteLine("maximum run time  (in seconds) = ", FLOAT(max) / 1000.);
+        WriteLine("minimum run time  (in seconds) = ", FLOAT(min) / 1000.);
+	WriteLine("number of domain$change operations = ", ops);
+	WriteLine("number of operations/sec = ",
+			    1000. * FLOAT(ops) / FLOAT(max));
+        WriteLine("mean run time  (in seconds) = ",
+		FLOAT(min) / 1000. + FLOAT(max - min) / 2000.,
+		    " +/- ", FLOAT(max - min) / 2000., " (",
+		    (FLOAT(max - min) / 2000.) /
+		    (FLOAT(min) / 1000. + FLOAT(max - min) / 2000.) * 100.,
+		    "%)");
+        PrintTime("ArcConsistency, Rvdp", rtime_end-rtime_start);
+	WriteLine("----------------------------------");
+	WriteLine();
+	IF WriteData = "y"
+	THEN
+	    constraint := work$get_const();
+	    FOR i IN 0 .. nr_vars - 1
+	    DO
+		FOR j IN 0 .. nr_vars - 1
+		DO
+		    IF constraint[i][j] /= NOCONSTRAINT
+		    THEN
+			WriteLine("constraint ", i, " ", j, " ",
+				    ORD(constraint[i][j]));
+		    FI;
+		OD;
+	    OD;
+	FI;
+    FI;
+    CloseOutput();
+    PrintTime("ArcConsistency, Rvdp", rtime_end-rtime_start);
+    Finish();
+END;
+
+END;

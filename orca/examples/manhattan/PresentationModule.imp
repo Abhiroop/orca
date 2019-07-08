@@ -1,0 +1,165 @@
+MODULE IMPLEMENTATION PresentationModule;
+
+FROM TspTypes IMPORT 
+		ImprovementStatus,
+		NodeIndex, 
+		NodeSubset,
+		ProcessorStatusType;
+FROM LogModule IMPORT
+		LogStatusReport,
+		LogMessage,
+		LogMessageInt,
+		LogMessageReal,
+		LogError,
+		LogWarning,
+		LogStoreMessage,
+		Flush;
+FROM InOut IMPORT WriteLn, WriteString, WriteInt;
+
+FROM Time IMPORT SysMilli;
+
+
+
+
+
+FUNCTION PrintDistribution (nodes : NodeSubset);
+	min  : NodeIndex;
+	lastMin : integer;
+BEGIN
+	min := MAX(integer);
+	lastMin := -1;
+	WriteString ("Nodes in distribution (sorted):");
+	WriteLn ();
+	FOR n IN nodes DO
+		FOR m IN nodes DO
+			IF ((m < min) AND (m > lastMin)) THEN
+				min := m;
+			FI;
+		OD;
+		WriteInt (min);
+		WriteString (" ");
+		lastMin := min;
+		min := MAX(integer);
+	OD;
+	WriteLn ();
+	WriteLn ();
+
+END;
+
+
+
+
+FUNCTION PrintImprovementStatus (s : ImprovementStatus);
+BEGIN
+	WriteString ("IMPROVEMENT STATUS: (");
+	WriteInt (SysMilli ());
+	WriteString ("): Removed: ");
+	WriteInt (s.removed_length);
+	WriteString (", Open insertion: ");
+	WriteInt (s.inserted_length_open);
+	WriteString (", Closed improvement: ");
+	WriteInt (s.closed_improvement);
+	WriteLn ();
+END;
+	
+
+	
+FUNCTION PrintMessage (message : string);
+BEGIN
+
+	LogMessage (message, MYCPU());
+	Flush ();
+END;
+
+
+FUNCTION PrintSubMessage (message : string);
+BEGIN
+	WriteString ("   ");
+	WriteString (message);
+	WriteLn ();
+END;
+
+FUNCTION PrintMessageReal (message : string; val : real);
+BEGIN
+
+	LogMessageReal (message, val, MYCPU());
+	Flush ();
+END;
+
+
+FUNCTION PrintMessageInt (message : string; val : integer);
+BEGIN
+	LogMessageInt (message, val, MYCPU());
+	Flush ();
+END;
+
+
+FUNCTION Error (message : string);
+BEGIN
+
+	LogError (message, MYCPU ());
+	Flush ();
+END;
+
+FUNCTION Warning (message : string);
+BEGIN
+
+	LogWarning (message, MYCPU());
+	Flush ();
+END;
+
+
+FUNCTION StatusToString (stat : ProcessorStatusType) : string;
+	s1 : string;
+BEGIN
+	IF stat = running THEN s1 := "running"; FI;
+	IF stat = stopping THEN s1 := "stopping"; FI;
+	IF stat = stopped THEN s1 := "stopped"; FI;
+	IF stat = waiting THEN s1 := "waiting"; FI;
+	RETURN s1;
+END;
+
+
+
+FUNCTION StoreMessage (m : string);
+BEGIN
+	LogStoreMessage (m, MYCPU ());
+END;
+
+
+
+FUNCTION PrintStatusReport (prod_stat : ProcessorStatusType;
+		       eval_stat : ProcessorStatusType;
+		       no_of_jobs : integer;
+			improved : integer;
+		       no_of_solved : integer;
+		       best_value : integer);
+BEGIN
+	LogStatusReport (StatusToString (prod_stat),
+			StatusToString (eval_stat),
+			no_of_jobs,
+			improved,
+			no_of_solved,
+			best_value);
+END;
+
+
+
+FUNCTION StartFlow ();
+BEGIN
+END;
+
+
+FUNCTION PrintInFlow (s : string);
+BEGIN
+	WriteString (s);
+END;
+
+FUNCTION StopFlow ();
+BEGIN
+	WriteLn ();
+END;
+
+
+
+END;

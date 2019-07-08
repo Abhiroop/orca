@@ -1,0 +1,5 @@
+OBJECT SPECIFICATION sema;
+	OPERATION Pass();
+	OPERATION Free();
+END;
+

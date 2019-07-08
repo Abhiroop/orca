@@ -1,0 +1,446 @@
+.\"
+.\" (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+.\" For full copyright and restrictions on use see the file COPYRIGHT in the
+.\" top level of the Orca distribution.
+.\"
+.TH Vogle "18 July 1994"
+.EQ
+delim %%
+.EN
+.SH NAME
+Vogle, an Orca object for creating graphical user interfaces.
+.SH SYNOPSIS
+\fBIMPORT\fP Vogle, VTypes;
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Init();
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Exit();
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP BackBuffer(
+) : boolean;                            # Can we backbuffer?
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Circle(
+        col : integer;                  # the drawing colormap index
+        polyfill : boolean;             # filled or not
+        x, y : real;                    # center point
+        radius : real                   # radius
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Circle_Seg(
+        col : integer;                  # the drawing colormap index
+        polyfill : boolean;             # filled or not
+        nsegs : integer;                # number of segments
+        x, y : real;                    # center point
+        radius : real                   # radius
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Clear(
+        col : integer                   # background colormap index
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Color(
+        col : integer                   # colormap index
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP DrawStr(      
+        col : integer;                  # colormap index
+        x,y : real;                     # bottom left hand corner
+        str : string                    # the orca string
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Line(
+        col : integer;                  # colormap index
+        x1, y1,                         # starting point
+        x2, y2 :real                    # end point
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP MapColor(
+        index :  integer;               # colormap index
+        red :    integer;               # red intensity
+        green :  integer;               # green intensity
+        blue :   integer                # blue intensity
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Ortho(
+        left, right,                    # borders of the x-axis 
+        bottom, top : real		# borders of the y-axis
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Point(
+        col : integer;                  # color index
+        x, y : real                     # point coordinates
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP PrefPosition(
+        x, y : integer                  # x and y coordinates in device space
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP PrefSize(
+        width, height : integer         # width and height
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Rect(
+        col : integer;                  # color index
+        polyfill : boolean;             # filled or not
+        x1, y1,                         # first corner
+        x2, y2 : real                   # second corner
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP SwapBuffers();
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP VsetFlush(
+        yesno : boolean                 # do flushing or not?
+);
+.ft
+.fi
+.LP
+.nf
+.ft I
+\fBOPERATION\fP Vflush();
+
+.SH DESCRIPTION
+This manual page describes the Orca interface routines to VOGLE, a
+library of C routines which can be used to create simple graphical
+user interfaces.  The Orca interface is contained in an object called
+%Vogle%. The Vogle object and its operations can be used by
+other Orca programs in order to add a graphical interface
+to a program.
+.LP
+Currently only the \fIunix_proc (oc_unixproc)\fP and the \fIPanda
+(oc_panda)\fP run-time systems can be used for Vogle.
+.SH USAGE
+Vogle is an ordinary Orca object, and should to be used according to the
+rules applying to objects in Orca. For the \(aareal\(aa parallel
+run-time systems (currently only \fIPanda\fP, and in the future
+the Amoeba %bcast_rpc% RTS), the following statement should be included right after
+declaration of the Vogle object:
+.DS C
+       \f(CWStrategy(\fI<Vogle_object>\fP, 0, 0);\fP
+.DE
+.LP
+This call is used to prevent the havoc which will occur if the interface
+object is replicated over several processors. When running in parallel,
+each of the workers should be given the Vogle object as a SHARED parameter.
+.SS
+The following list gives a brief summary of the operations in the Vogle
+object:
+
+.TP
+.I Init()
+Initialize the interface. This call will open a window, with the
+background set to black. This operation should be the first operation
+called. Exceptions to this rule are the operations %PrefPosition()%
+and %PrefSize()%, which are used for placing the window opened.
+.nf
+NOTE:-  The environment variabele VDEVICE should be defined with your output device. 
+        Currently the following devices are supported:
+	
+		X11		- X windows (SUN's Openwindows etc etc)
+		postscript	- mono postscript devices
+.fi
+
+.TP
+.I Exit()
+Terminate the interface. The user should press 'q' in the window to
+close it. \fIExit()\fP should be the last Vogle operation called.
+
+.TP 
+.I BackBuffer() : boolean
+Where possible VOGLE allows for front and  back buffers  to enable
+animation and smooth updating of the screen. The operation
+%Backbuffer()% is used to initialize  double buffering. It returns false
+if the device is not up to it. See also \fISwapBuffer()\fP.
+
+.TP
+.I Circle(col, polyfill, x, y, radius)
+Draws a circle with center point (%x%, %y%). %x% and %y% are world coordinates
+(i.e. coordinates in the window). If %polyfill% is true the circle will
+be filled. \fIcol\fP is the color in which the (filled) circle will be
+drawn.
+
+.TP
+.I Circle_Seg(col polyfill, nsegs, x, y, radius)
+Same as %Circle% with the only difference that the user can now
+determine the number of segments that will be used to draw the circle.
+By default this number equals DEF_CIRCLE_SEGS as defined in
+%VTypes.spf%. So the %Circle()% operation is implemented as a call to
+%Circle_Seg()% with %nsegs% set to DEF_CIRCLE_SEGS. Note that this
+call can be used to draw regular (filled) polygons.
+
+.TP
+.I Clear(col)
+Clear the window and set the background color to \fIcol\fP.
+
+.TP
+.I Color(col)
+Set the current background color. All subsequent drawings will be done
+in color \fIcol\fP. The standard colors (defined in %VTypes.spf%) are as
+follows:
+.nf
+        black = 0       red = 1         green = 2       yellow = 3
+        blue = 4        magenta = 5     cyan = 6        white = 7.
+.fi
+
+.TP
+.I DrawStr(col, x,y , str)
+Draw the text in %str% at (%x%, %y%) using color \fIcol\fP. %x% and %y%
+are world coordinates.
+
+.TP
+.I Line(col, x1, y1, x2, y2)
+Draw a line in color \fIcol\fP from (%x1%, %y1%) to (%x2%, %y2%). All
+coordinates are world coordinates.
+
+.TP
+.I MapColor(index, red, green, blue)
+Create a new colormap by specifying the (red, green, blue) values.
+These values should be in the range 0 \.\. 255. See also %VTypes.spf%
+which defines the standard colors.
+
+.TP
+.I Ortho(left, right, bottom, top)
+This operation defines new clipping planes for the window opened by
+%Init()%. This operation can be used to scale your
+interface window. By default these values are: (left, right, bottom,
+top) = (-1.0, 1.0, -1.0, 1.0). So the origin is in the middle of the
+window. 
+.nf
+Example: - To create a window with a 10 units width and 
+           50 units height and the origin in the lower left
+           corner, call Ortho(0.0, 10.0, 0.0, 50.0);
+
+         - To create a window with a 100 X 100 window with
+           the origin in the top left corner, the positive x-axis
+           to the right and the positive y-axis going down, call
+           Ortho(0.0, 100.0, 100.0, 0.0);
+.fi
+
+.TP
+.I Point(col, x, y)
+Draw a point at (%x%, %y%) using colormap col. %x% and %y% are world coordinates.
+
+.TP
+.I PrefPosition(x, y)
+Specify the preferred position of the window opened by \fIInit()\fP.
+%x% and %y% are screen coordinates. See also \fIPrefSize()\fP.
+
+.TP
+.I PrefSize()
+Specify the preferred width and height of the window opened by
+\fIInit()\fP. For the X11 device the \fIPrefPosition()\fP and the
+\fIPrefSize()\fP operations can be avoided by making an entry in your
+\.Xdefaults file of the form vogle.Geometry =150x500+550+50 (where you
+specify your geometry as you please).
+
+.TP
+.I Rect(col, polyfill, x1, y1, x2, y2)
+Draw a rectangle using color \fIcol\fP. If %polyfill% is %true%, the
+rectangle will be filled. The corner points (%x1%, %y1%) and (%x2%,
+%y2%) are world coordinates. 
+
+.TP
+.I SwapBuffer() 
+Whenever double buffering is set (by means of the %BackBuffer()%
+operation) Vogle does not directly draw in the window (the front
+buffer), but in a second buffer (the back buffer). Calling
+%SwapBuffer()% swaps the front and back buffers which means that the
+backbuffer will be shown in the window.  
+
+.TP
+.I VsetFlush(yesno)
+On the X11 device considerable speedups in display can be achieved
+by not flushing each graphics primitive call to  the  actual
+display  until  necessary. Flushing is automatically delayed when
+double buffering (the flush is only done within %Swapbuffers()%).
+The %VsetFlush()% and the %Vflush()% operations control flushing.
+
+.TP
+.I Vflush()
+Call the device flush or syncronization routine. This forces a flush.
+
+.SH ERRORS
+In case of an error like %ortho2:~vogle~not~initialised%, you probably
+called an operation of Vogle before the first %Init()% or after the last
+%Exit()%.
+
+.SH EXAMPLES
+- The following two examples show simple examples of Vogle.
+
+.nf
+        - The worldfamous "Hello World" program in Orca, using the Vogle object.
+
+        \fBMODULE\fP World;
+
+        \fBIMPORT\fP Vogle, VTypes;
+
+        \fBPROCESS\fP OrcaMain();
+                x : Vogle;
+        \fBBEGIN\fP
+                # This is too silly to deserve comment :)
+                x$Init();
+                x$DrawStr(VTypes.GREEN, 0.0, 0.0, "Hello world");
+                x$Exit();
+        \fBEND\fP;
+	
+        \fBEND\fP;
+
+
+        - Let 2 processes draw circles in parallel (wow!)
+
+
+        \fBMODULE\fP ParCir;
+
+        \fBIMPORT\fP Vogle;
+        \fBFROM\fP   VTypes \fBIMPORT\fP MAGENTA;
+
+        \fBPROCESS\fP foo(
+                x : SHARED Vogle;               # the Vogle object
+                proc_num : integer              # process number
+        );
+
+        \fBBEGIN\fP
+                \fBIF\fP proc_nr = 1 \fBTHEN\fP
+                        x$Circle(MAGENTA, true, -0.5, -0.5, 0.1);
+                \fBELSE\fP
+                        x$Circle_Seg(MAGENTA, false, 5, 0.5, 0.5, 0.1);
+                \fBFI\fP;
+        \fBEND\fP;
+
+        \fBPROCESS\fP OrcaMain();
+
+                x : Vogle;
+
+        \fBBEGIN\fP
+		
+                # The Strategy()-call should be added for the Panda and
+                # Amoeba run-time systems
+                # Strategy(x, 0, 0);
+
+                x$Init();
+
+                \fBFORK\fP foo(x, 1) \fBON\fP 1;
+                \fBFORK\fP foo(x, 2) \fBON\fP 2;
+
+                x$Exit();
+        \fBEND\fP;
+	
+        \fBEND\fP;
+.fi
+
+.SH COMPILATION
+Compilation is done using the \fIoc_unixproc\fP(1) or \fIoc_panda\fP(1)
+command, adding the option \fI-I/usr/local/vogle/h\fP and also adding
+the libraries \fI/usr/local/vogle/lib/libvogle.a\fP, \fI-lX11\fP, and \fI-lm\fP.
+
+.SH COMING SOON...
+Some more support for string operations: scaling, centering, fonts, etc. 
+One disadvantage of the current implementation is that whenever the
+%Ortho()% call is used to scale the window, the fonts
+will also be scaled and/or rotated. Some support should be added to
+prevent/circumvent this.
+
+.SH SEE ALSO
+oc_unixproc(1), oc_panda(1).
+.br
+The VOGLE documentation in gondwana.ecr.mu.oz.au::/pub/vogle.tar.Z.
+An online version of the VOGLE documentation can be found in
+/usr/local/src/graphics/vogle/docs.
+.br
+Some VOGLE examples can be found in /usr/local/src/graphics/vogle/examples.
+
+.SH FILES
+/usr/local/vogle/lib contains the system vogle library.
+.br
+/usr/local/vogle/lib/h vontains the VOGLE include files.
+.br
+<To be added>
+
+.SH BUGS
+.IP
+The postscript driver has not been tested yet.
+.IP
+The interface has not been tested thoroughly on the %Panda% rts.
+.SH AUTHOR
+The Vogle library was made by:
+.br
+Department of Engineering Computer Resources. 
+.br
+Faculty of Engineering
+.br
+University of Melbourne Vic 3052
+.br
+Australia.
+.br
+Contact person: Eric H. Echidna (echidna@gondwana.ecr.mu.oz.au). 
+.br
+.sp 1
+Anil R. Sukul (anil@cs.vu.nl). Vrije Universiteit, Amsterdam 1994. 
+.EQ
+delim off
+.EN

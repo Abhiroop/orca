@@ -1,0 +1,61 @@
+MODULE IMPLEMENTATION task_stack;
+
+FROM ParamRes       IMPORT WriteParam;
+
+FUNCTION print_task_descr(task : SHARED task_descr);
+BEGIN
+    Write("task", task.task_id, " f(");
+    WriteParam(task.params);
+    WriteLine(")");
+END;
+
+FUNCTION push(S : SHARED task_stack;
+	      item: task_descr);
+
+p : stack_ptr;
+
+BEGIN
+    p := ADDNODE(S);
+    S[p].data := item;
+    S[p].next := S.stacktop;
+    S.stacktop := p;
+END;
+
+
+FUNCTION pop(S : SHARED task_stack;
+	     item: OUT task_descr);
+
+p : stack_ptr;
+
+BEGIN
+    IF S.stacktop /= NIL THEN
+	item       := S[S.stacktop].data;
+	p          := S.stacktop;
+	S.stacktop := S[S.stacktop].next;
+	DELETENODE(S,p);
+    ELSE
+	WriteLine("pop from empty stack!!!!");
+    FI;
+END;
+
+
+FUNCTION emptyS(S : SHARED task_stack) : boolean;
+BEGIN
+    RETURN S.stacktop = NIL;
+END;
+
+
+FUNCTION list(S : SHARED task_stack);
+
+p : stack_ptr;
+
+BEGIN
+    p := S.stacktop;
+    WHILE p /= NIL DO
+	Write("   --- stack elt = ");
+	print_task_descr(S[p].data);
+	p := S[p].next;
+    OD;
+END;
+
+END;

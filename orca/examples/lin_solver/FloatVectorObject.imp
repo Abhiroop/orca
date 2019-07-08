@@ -1,0 +1,114 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+OBJECT IMPLEMENTATION FloatVectorObject;
+
+FROM FloatVector IMPORT FloatVector, DynFloatVector;
+
+x : FloatVector;
+y : FloatVector;
+N : integer;
+updates : integer;
+sum_residue : real;
+stop : boolean;
+completed : integer;
+needed : integer;
+allxall_size : integer;
+
+turn: integer;
+
+OPERATION value() : FloatVector;
+BEGIN
+	RETURN x;
+END;
+
+
+OPERATION done( phase : integer) : boolean;
+BEGIN
+	GUARD stop DO
+		RETURN true;
+	OD;
+
+	GUARD (phase = completed)  AND  (needed > completed)  DO
+		RETURN false;
+	OD;
+END;
+
+
+OPERATION finished( epsilon : real) : boolean;
+BEGIN
+	GUARD updates = N DO
+		completed +:= 1;
+		IF (sum_residue < epsilon) THEN
+			stop := true;
+			RETURN true;
+		ELSE
+			x := y;		# copy :-(, could do with pointer swap
+			needed := completed+1;
+			updates := 0;
+			sum_residue := 0.0;
+			RETURN false;
+		FI;
+	OD;
+END;
+
+
+OPERATION subscr(i : integer) : real;
+BEGIN
+    RETURN x[i];
+END;
+
+
+OPERATION set_all(r : real);		# initialization for next run
+BEGIN
+    FOR i IN 1 .. N
+    DO  x[i] := r;
+    OD;
+
+    updates := 0;
+    sum_residue := 0.0;
+    completed := 0;
+    needed := 0;
+    stop := false;
+END;
+
+
+OPERATION set_arr(offs   : integer;
+		  sz     : integer;
+		  update : FloatVector;
+		  residue: real);
+BEGIN
+    turn +:= 1;
+    IF (turn = NCPUS()) THEN
+	turn := 0;
+    FI;
+    FOR i IN offs .. offs + sz - 1
+    DO  y[i] := update[i - offs + 1];	# don't update 'x' for consistency
+    OD;
+    updates +:= sz;
+    sum_residue +:= residue;
+END;
+
+
+OPERATION await_turn(caller: integer);
+BEGIN
+    GUARD turn / allxall_size = caller / allxall_size DO
+    OD;
+END;
+
+
+OPERATION init(new_N : integer; axa : integer);
+BEGIN
+    N := new_N;
+
+    x := DynFloatVector(N);
+    y := DynFloatVector(N);
+
+    allxall_size := axa;
+
+    turn := 0;
+END;
+
+
+END;

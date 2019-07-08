@@ -1,0 +1,51 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: InOut.spf,v 1.9 1998/01/21 10:59:10 ceriel Exp $
+
+MODULE SPECIFICATION InOut;
+
+  FUNCTION WriteChar(c : char);
+  FUNCTION WriteInt(i : integer);
+  FUNCTION WriteLongInt(i : longint);
+  FUNCTION WriteShortInt(i : integer);
+  FUNCTION WriteReal(r : real);
+  FUNCTION WriteLongReal(r : longreal);
+  FUNCTION WriteLn();
+  FUNCTION WriteString(str: string);
+
+  FUNCTION ReadChar(c: OUT char);
+  FUNCTION ReadInt(i: OUT integer);
+  FUNCTION ReadLongInt(i: OUT longint);
+  FUNCTION ReadShortInt(i: OUT shortint);
+  FUNCTION ReadReal(r: OUT real);
+  FUNCTION ReadLongReal(r: OUT longreal);
+  FUNCTION ReadShortReal(r: OUT shortreal);
+  FUNCTION ReadString(s: OUT string);
+
+  FUNCTION Ahead(): char;
+  FUNCTION Eof(): boolean;
+  FUNCTION Eoln(): boolean;
+
+  FUNCTION OpenInputFile(f: string): boolean;
+  FUNCTION OpenOutputFile(f: string): boolean;
+  FUNCTION AppendOutputFile(f: string): boolean;
+  FUNCTION CloseInput();
+  FUNCTION CloseOutput();
+
+  TYPE BufferingKind = (IOFBF, IOLBF, IONBF);
+
+  FUNCTION SetBuffering(kind: BufferingKind);
+  # Sets the I/O buffering of the current output stream to either
+  #  - unbuffered if kind is IONBF,
+  #  - line-buffered if kind is IOLBF,
+  #  - fully buffered if kind is IOFBF.
+  # This function may only be used before any other operation is performed
+  # on the output stream, or the effect is undefined.
+  # Also, the buffering-property is currently CPU-bound.
+
+  FUNCTION Flush();
+  # Flushes the currently buffered output.
+
+END;

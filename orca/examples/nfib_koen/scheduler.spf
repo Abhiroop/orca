@@ -1,0 +1,19 @@
+GENERIC (TYPE xpr; TYPE rslt)
+OBJECT SPECIFICATION scheduler;
+
+TYPE task;
+TYPE work = RECORD
+		t : task;
+		e : xpr;
+	    END;
+
+OPERATION create( e : xpr) : task;
+OPERATION result( t : task; r : rslt);
+OPERATION tryvalue( cpu : integer; t : task; r : OUT rslt) : boolean;
+OPERATION waitvalue( cpu : integer; t : task) : rslt;
+OPERATION get( w : OUT work) : boolean;
+OPERATION idle( cpu : OUT integer) : boolean;
+OPERATION init();
+OPERATION exit();
+
+END GENERIC;

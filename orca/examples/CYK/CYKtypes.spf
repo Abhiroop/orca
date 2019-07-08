@@ -1,0 +1,13 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION CYKtypes;
+        TYPE ProdSet     = SET OF char;
+        TYPE ColProdSet  = ARRAY [integer] OF ProdSet;
+	TYPE PartOfStrip = RECORD
+				size : integer;
+				elt  : ColProdSet;
+			   END;
+        TYPE Strip       = ARRAY [integer] OF PartOfStrip;
+END;

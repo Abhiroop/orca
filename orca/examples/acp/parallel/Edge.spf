@@ -1,0 +1,67 @@
+#=====================================================================
+#==== Edge.spf : Edge data structure  			          ====
+#==                                                                 ==
+MODULE SPECIFICATION Edge;
+
+FROM Types IMPORT symbol_name_t, word_t;
+
+#---------------------------------------------------------------------
+#---- types                                                       ----
+#---------------------------------------------------------------------
+
+TYPE edge_info_t = 
+	RECORD
+		from_node : 	integer; 	# source node 
+		to_node :	integer;	# destination node 
+		symbol_name : 	integer;	# label of edge
+		word :		integer;	# if (rc_index == lc_index == NIL) then
+		                                # this field represents the
+						# word that this edge
+						# represents 
+
+	
+		# some information needed for printing the parse tree
+
+                my_index :      integer;        # index in outgoing edges of from_node
+		combinator : 	integer;	# combinator of this edge
+
+                lc_index :      integer;        # left component index
+		lc_combinator:  integer; 	# combinator of left index
+
+		rc_src_node :	integer;	# right component src node
+                rc_index :      integer;        # right component integer
+		rc_combinator:  integer; 	# right component combinator
+	END;
+
+#---------------------------------------------------------------------
+#---- function prototypes                                         ----
+#---------------------------------------------------------------------
+
+# 
+# equal_edges:  If two edges are equal, return 0 else
+#               return result of comparison of symbol_name
+#
+FUNCTION compare_edges(                       
+ 	edge1 : edge_info_t;			# first edge 
+	edge2 : edge_info_t			# second edge
+) : integer;                            	# equal or not 
+
+
+#
+# copy_edge() : copy an edge record
+#
+
+FUNCTION copy_edge(
+	dest : 	OUT edge_info_t;		# dest edge
+	src :  	edge_info_t			# src edge
+);
+
+END;
+
+
+
+
+
+
+
+

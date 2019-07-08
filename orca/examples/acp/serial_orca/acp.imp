@@ -1,0 +1,894 @@
+# ========================================================================
+# == File:      acp.imp  						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  ACP main program 					==
+# ========================================================================
+MODULE IMPLEMENTATION acp;
+
+FROM InOut IMPORT WriteString, OpenInputFile, CloseInput, Eoln, ReadString,
+		  Ahead, ReadChar, WriteChar;
+FROM Finish IMPORT Finish;
+
+FROM Types        IMPORT word_t, symbol_name_t;
+FROM Parser       IMPORT read_grammar;
+FROM Const        IMPORT GRAMMAR_FILE, STOP_SYMBOL, SPACE, TAB;
+FROM Symbollist   IMPORT symbollist_t, num_elts_sl, give_ith_elt_sl,
+			 is_in_sl, create_sl, delete_sl;
+FROM Grammar      IMPORT grammar_t, num_elts_gramm, is_in_gramm,
+		         delete_gramm, create_gramm, give_ith_elt_gramm, 
+			 grammar_node_t;
+FROM Comblist     IMPORT num_elts_cl, is_in_cl, give_ith_elt_cl, comblist_node_t;
+FROM Dictionary   IMPORT dictionary_t, create_dict, delete_dict, give_ith_elt_dict,
+			 num_elts_dict, is_in_dict, dict_node_t;
+
+FROM Edgelist     IMPORT give_ith_elt_el, num_elts_el;
+FROM Nodelist     IMPORT node_list_t, create_nl, delete_nl, num_elts_nl, 
+			 add_incoming_nl, add_outgoing_nl, give_ith_elt_nl, nl_node_t; 
+FROM EdgeQueue    IMPORT Edgequeue_t, create_queue, delete_queue,
+	   	 	 add_edge_queue, num_elts_queue, get_edge_queue;
+FROM EdgeCollection IMPORT edge_p, edge_t, edge_info_t,
+			   fill_edge, create_edge, give_info; 
+FROM Time         IMPORT SysMilli;
+
+
+
+# ========================================================================
+# == function prototypes 						==
+# ========================================================================
+
+
+
+FUNCTION add_new_pending(
+	pending_edges : SHARED Edgequeue_t;
+	e_coll :        SHARED edge_t;
+	e_info :        edge_info_t
+);
+
+FUNCTION chart_parse(
+        nl :           	node_list_t;                
+        grammar :       grammar_t;	
+        dict  :         dictionary_t;       
+        symbols :       symbollist_t;
+        num_deriv : 	SHARED integer;
+        pending_edge :  SHARED Edgequeue_t;
+	e_coll : 	SHARED edge_t
+);
+
+
+FUNCTION check_stop_condition(
+	edge : 		edge_info_t;         	
+	nr_of_nodes : 	integer;
+	st_index : 	integer
+) : boolean;
+
+
+FUNCTION combination_in_grammar(
+	right1 : 	integer;		
+	right2 : 	integer;
+	grammar : 	grammar_t;
+	symbols :       symbollist_t;          
+	gramm_node : 	SHARED grammar_node_t;
+	cl_node : 	SHARED comblist_node_t
+) : boolean;
+
+
+FUNCTION combine_left(
+	nl : 		node_list_t;
+	edge : 		edge_p;    
+        e_info :        edge_info_t;
+        grammar :       grammar_t; 
+	symbols :       symbollist_t;          
+        pending_edges : SHARED Edgequeue_t;
+	e_coll : 	SHARED edge_t
+);
+
+FUNCTION combine_right(
+	nl : 		node_list_t;
+	edge : 		edge_p;
+        e_info :        edge_info_t;
+        grammar :       grammar_t;
+	symbols :       symbollist_t;
+        pending_edges : SHARED Edgequeue_t;
+	e_coll : 	SHARED edge_t
+);
+
+
+FUNCTION construct_edge(
+	edge : 		SHARED edge_info_t;		
+	from_node : 	integer;		
+	to_node : 	integer;                
+	comp1 : 	edge_p;
+	comp2 : 	edge_p;
+	new_symbol : 	integer		
+);
+
+
+FUNCTION create_new_edges(
+	nl : 		SHARED node_list_t;
+	edge : 		edge_p;
+        e_info :        edge_info_t;
+        grammar :       grammar_t;
+	symbols : 	symbollist_t;
+        pending_edges : SHARED Edgequeue_t;
+	e_coll :        SHARED edge_t
+);
+
+
+FUNCTION do_creats(
+	dict : 		SHARED dictionary_t;
+	grammar: 	SHARED grammar_t;
+	symbols :       SHARED symbollist_t
+);
+
+FUNCTION do_parse(
+	grammar : 	grammar_t;		
+	dictionary : 	dictionary_t;		
+	symbols : 	symbollist_t;
+	num_derivations : OUT integer		
+) : boolean;
+
+
+FUNCTION expand_symbol(
+	edge :        	edge_p;
+	e_info : 	edge_info_t;
+        grammar :       grammar_t;
+	symbols : 	symbollist_t;
+        pending_edges : SHARED Edgequeue_t;
+	e_coll : 	SHARED edge_t
+);
+
+FUNCTION handle_word(
+	word : 		word_t;			
+	node_nr : 	integer;                
+	dictionary :	dictionary_t;	
+        symbols :       symbollist_t;   
+        pending_edges : SHARED Edgequeue_t;   
+	e_coll : 	SHARED edge_t
+) : boolean;
+
+
+FUNCTION init_chart(
+	dictionary : 	dictionary_t;
+	symbols :       symbollist_t;
+	nr_of_words : 	OUT integer;
+        pending_edges : SHARED Edgequeue_t;
+	e_coll : 	SHARED edge_t
+) : boolean;
+
+
+FUNCTION open_grammar_file(
+) : boolean;
+
+
+FUNCTION print_dictionary(
+	dict : dictionary_t
+);
+
+FUNCTION print_grammar(
+		dict : grammar_t);
+
+FUNCTION print_sentence(
+	e_coll : 	edge_t;
+	e_info : 	edge_info_t;
+        dict  :         dictionary_t;   
+	symbols :       symbollist_t;
+	level : 	integer
+);
+
+FUNCTION print_symbol(
+	symbol : string
+);
+
+FUNCTION skip_spaces();
+
+# ========================================================================
+# == function defintions 						==
+# ========================================================================
+
+ #
+ # OrcaMain() : orca main program
+ #
+
+PROCESS OrcaMain();
+
+	dict : 		dictionary_t;
+	grammar : 	grammar_t;
+	symbols : 	symbollist_t;
+	num_derivations : integer;
+	start : integer;
+
+BEGIN	
+	start := SysMilli();
+	IF NOT open_grammar_file() THEN
+		Finish();
+	FI;
+
+	# create some variables
+	do_creats(dict, grammar, symbols);
+
+	WriteLine("done. calling parser");
+	
+	IF NOT read_grammar(grammar, dict, symbols) THEN
+		Finish();
+	FI;
+
+	CloseInput(); # read from stdin again
+
+	print_grammar(grammar);
+	print_dictionary(dict);
+
+	# do it
+        IF NOT do_parse(grammar, dict, symbols, num_derivations) THEN 
+		Finish();
+	FI;
+        
+	WriteString("deleting grammar.."); delete_gramm(grammar); WriteLine("done");
+	WriteString("deleting dictionary.."); delete_dict(dict); WriteLine("done");
+	WriteString("deleting symbols.."); delete_sl(symbols); WriteLine("done");
+	
+
+	Write("found a total of ", num_derivations, " derivations");
+	WriteLine(" in ", SysMilli() - start, " millisecs");
+	
+	Finish();
+END;
+
+
+ #
+ #  add_new_pending() : add a new edge to the pending edges table.
+ #			Check for double entries
+ #
+
+FUNCTION add_new_pending(
+	pending_edges : SHARED Edgequeue_t;	# the pending edges table
+	e_coll : 	SHARED edge_t;		# the collection of edges
+	e_info : 	edge_info_t 		# edge to be added 
+);
+        
+	new_edge : edge_p;        
+BEGIN
+	new_edge := create_edge(e_coll);
+	fill_edge(e_coll, new_edge, e_info);
+
+       	ASSERT (add_edge_queue(pending_edges, new_edge));
+END;
+
+
+ # 
+ # chart_parse : apply acp to parse sentence
+ #
+
+FUNCTION chart_parse(
+	nl : 	        node_list_t; 		# the node list
+	grammar : 	grammar_t;		# the grammar
+        dict  :         dictionary_t;           # the dictionary
+        symbols :       symbollist_t;           # the list of non-terminal symbols
+	num_deriv : 	SHARED integer;		# nr of derivations found
+	pending_edges : SHARED Edgequeue_t;	# the pending edges table 
+	e_coll : 	SHARED edge_t
+);
+
+    	edge : 	 edge_p;	        	# edge from pending edges table 
+	e_info : edge_info_t;			# info from edge
+	st_index : integer;			# index of stop symbol
+
+BEGIN
+	ASSERT(is_in_sl(symbols, STOP_SYMBOL, st_index));
+
+	# while there are still pending edges
+	WHILE num_elts_queue(pending_edges) /= 0 DO
+        
+	        # get element from pending edges queue
+	        ASSERT (get_edge_queue(pending_edges, edge));
+		give_info(e_coll, edge, e_info);
+
+        	# have we found a sentence ? 
+	        IF check_stop_condition(e_info, num_elts_nl(nl), st_index) THEN
+#			IF (((num_deriv + 1) % 100) = 0) THEN
+#		        	WriteLine(">>>>>>>>>>>>>>>>Found sentence ", 
+#		 	     		  num_deriv + 1, "!!!!!!!<<<<<<<<<<<<<<<<<<<");
+#			FI;
+
+ 	           	num_deriv +:=1;
+
+#			print_sentence(e_coll, e_info, dict, symbols, 1);
+  		FI;
+        
+         	# add edge to chart
+		ASSERT (add_outgoing_nl(nl, e_info.from_node, edge));
+
+        	ASSERT (add_incoming_nl(nl, e_info.to_node, edge));
+
+		# add new edges that can be made by last addition
+	        create_new_edges(nl, edge, e_info, grammar, symbols, 
+			         pending_edges, e_coll);
+	OD;
+END;
+
+
+ #
+ # check_stop_condition() : have we found the symbol we're looking for? 
+ #    
+
+FUNCTION check_stop_condition(
+	e_info : 	edge_info_t;      	# In : the edge
+	nr_of_nodes : 	integer;          	# In : nr of nodes
+	st_index : 	integer			# In : index in symbollist
+) : boolean;
+
+BEGIN
+	RETURN ((e_info.from_node = 1) AND
+            	(e_info.to_node = nr_of_nodes) AND
+		(e_info.symbol_name = st_index));
+END;
+
+
+ #
+ # combination_in_grammar() : 	check if a combination of non-terminals
+ # 				is in the grammar
+ #
+        
+FUNCTION combination_in_grammar(
+	right1 : 	integer;		# In : first right hand side symbol
+	right2 : 	integer;		# In : second right hand side symbol
+	grammar : 	grammar_t;		# In : the grammar
+	symbols : 	symbollist_t;		# In : the list of non-terminal symbols
+	gramm_node : 	SHARED grammar_node_t;
+	cl_node : 	SHARED comblist_node_t  # Out: list of left hand side symbols 
+) : boolean;
+
+	gramm_index, 
+	cl_index : 	integer;		# indices in lists
+	r1, r2 : 	symbol_name_t;
+BEGIN
+
+	# check if rule " -> right1 right2 " is in the grammar
+	
+	ASSERT(give_ith_elt_sl(symbols, right1, r1));
+	
+	IF is_in_gramm(grammar, r1, gramm_index) THEN
+
+	        ASSERT (give_ith_elt_gramm(grammar, gramm_index, r1, gramm_node));
+		IF (right2 = 0) THEN
+			r2 := "";
+		ELSE
+			ASSERT(give_ith_elt_sl(symbols, right2, r2));
+		FI;
+
+	        IF is_in_cl(grammar[gramm_node].comb_list, r2, cl_index) THEN
+        		ASSERT (give_ith_elt_cl(grammar[gramm_node].comb_list,
+				cl_index, r2, cl_node));
+			RETURN true;	
+		FI;
+	FI;
+	RETURN false;
+END;
+
+
+ # 
+ # combine_left() :  combine an edge in the chart with its left
+ #			   neighbour edges
+ #
+
+FUNCTION combine_left(
+	nl : 		node_list_t;	   	# the list of nodes 
+	edge : 		edge_p; 		# the edge under consideration
+	e_info : 	edge_info_t; 		# info of the edge
+	grammar : 	grammar_t;		# the grammar
+	symbols : 	symbollist_t;		# the list of non-terminal list
+        pending_edges : SHARED Edgequeue_t;     # the pending edges table
+	e_coll : 	SHARED edge_t
+);
+
+    	node :		nl_node_t;            	# src node of edge
+    	new_edge : 	edge_info_t; 		# new edge to add
+    	nb_edge :       edge_p;  		# neighbour edge
+    	new_symbol : 	symbol_name_t;       	# name of new symbol
+	nbe_info : 	edge_info_t;		# info on neighbour edge
+	g_node :        grammar_node_t;		# index in grammar
+	c_node :        comblist_node_t;	# index in comblist
+	index :		integer;		# index in symbol list
+  
+BEGIN
+	# get info on from_node of edge
+	ASSERT (give_ith_elt_nl(nl, e_info.from_node, node));
+
+	# Try all combinations of current edge and incoming edges of from_node
+
+	FOR j IN 1..num_elts_el(nl[node].node.incoming_edges) DO
+		ASSERT (give_ith_elt_el(nl[node].node.incoming_edges, j, nb_edge));
+        
+		give_info(e_coll, nb_edge, nbe_info);
+
+	    	IF combination_in_grammar(nbe_info.symbol_name, e_info.symbol_name,
+					  grammar, symbols, g_node, c_node) THEN
+			#Add all new combinations to the chart
+			FOR k IN 1..num_elts_sl(grammar[g_node].comb_list[c_node].symbol_list) DO
+
+		        	ASSERT(give_ith_elt_sl(grammar[g_node].comb_list[c_node].symbol_list, k, new_symbol));
+
+				ASSERT(is_in_sl(symbols, new_symbol, index));
+		                construct_edge(new_edge, nbe_info.from_node, 
+					       e_info.to_node,
+					       nb_edge,
+					       edge, 
+					       index);
+
+                		add_new_pending(pending_edges, e_coll, new_edge);
+			OD;
+		FI;
+	OD;
+END;
+
+
+ # 
+ # combine_right() :  combine an edge in the chart with its right
+ #		      neighbour edges
+ #
+
+FUNCTION combine_right(
+	nl : 		node_list_t;	   	# the list of nodes 
+	edge : 		edge_p;  		# the edge under consideration
+	e_info :        edge_info_t; 		# info on the edge
+        grammar :       grammar_t;              # the grammar
+	symbols :       symbollist_t;           # the list of non-terminal list
+	pending_edges : SHARED Edgequeue_t;	# the pending edges table
+	e_coll : 	SHARED edge_t	
+);
+
+    	node :		nl_node_t;            	# src node of edge
+    	new_edge : 	edge_info_t; 		# new edge to add
+    	nb_edge : edge_p;        		# neighbour edge
+    	new_symbol : 	symbol_name_t;       	# name of new symbol
+	nbe_info : 	edge_info_t;		# info on neighbour edge
+	g_node :        grammar_node_t;		# index in grammar
+	c_node :        comblist_node_t;	# index in comblist
+	index  :        integer;		# index in symbollist
+
+BEGIN
+	# get info on to_node of edge
+	ASSERT (give_ith_elt_nl(nl, e_info.to_node, node));
+
+	# Try all combinations of current edge and outgoing edges of to_node
+
+	FOR j IN 1..num_elts_el(nl[node].node.outgoing_edges) DO
+		ASSERT (give_ith_elt_el(nl[node].node.outgoing_edges, j, nb_edge));
+        	
+		give_info(e_coll, nb_edge, nbe_info);
+
+	    	IF combination_in_grammar(e_info.symbol_name, nbe_info.symbol_name,
+					  grammar, symbols, g_node, c_node) THEN
+			#Add all new combinations to the chart
+			FOR k IN 1..num_elts_sl(grammar[g_node].comb_list[c_node].symbol_list) DO
+		        	ASSERT(give_ith_elt_sl(grammar[g_node].comb_list[c_node].symbol_list, k, new_symbol));
+		
+				ASSERT(is_in_sl(symbols, new_symbol, index));
+		                construct_edge(new_edge, e_info.from_node, 
+					       nbe_info.to_node,
+						edge, 
+						nb_edge, 
+						index);
+
+                		add_new_pending(pending_edges, e_coll, new_edge);
+			OD;
+		FI;
+	OD;
+END;
+
+
+ #
+ # construct_edge() : fill in edge structure
+ #
+
+FUNCTION construct_edge(
+	edge : 		SHARED edge_info_t; 	# edge to be filled
+	from_node : 	integer;		# from_node of  edge
+	to_node : 	integer;                # to_node of edge 
+	comp_1 : 	edge_p;			# left component
+	comp_2 : 	edge_p;			# right component
+	new_symbol : 	integer			# label of new edge
+);
+
+BEGIN
+	edge.from_node := from_node;
+   	edge.to_node   := to_node;
+	edge.symbol_name :=  new_symbol;
+	edge.comp_1 := comp_1;	
+	edge.comp_2 := comp_2;
+	edge.word := 0;
+END;
+
+
+ # 
+ #  create_new_edges() : add new edges to chart by combining newly added
+ #                       edge with its neighbours in the chart
+ #
+
+FUNCTION create_new_edges(
+	nl : 		SHARED node_list_t;	# the node list
+	edge : 		edge_p;  		# ptr of the edge with which to combine
+	e_info : 	edge_info_t; 		# info on the edge
+	grammar : 	grammar_t;		# the grammar
+        symbols :       symbollist_t;           # the list of non-terminal symbols
+        pending_edges : SHARED Edgequeue_t;     # the pending edges table	
+	e_coll : 	SHARED edge_t		# collection of edges
+);
+
+BEGIN
+    	# first of all, see if the edge symbol can be expanded by its
+	# own, without combinations, e.g. in the rule:
+	#                 noun_clause   -> noun
+
+	expand_symbol(edge, e_info, grammar, symbols, pending_edges, e_coll);
+
+	# combine edge with left neighbours
+	combine_left(nl, edge, e_info, grammar, symbols, pending_edges, e_coll);
+
+	# combine edge with right neighbours
+	combine_right(nl, edge, e_info, grammar, symbols, pending_edges, e_coll);
+END;
+
+
+ #
+ # do_creats() : create some variables
+ #
+
+FUNCTION do_creats(dict :  	SHARED dictionary_t;
+		   grammar:     SHARED grammar_t;
+		   symbols : 	SHARED symbollist_t
+);
+
+BEGIN
+	ASSERT( create_dict(dict) AND create_gramm(grammar) AND
+		create_sl(symbols));
+END;
+
+
+ #
+ # do_parse() : setup and do parsing of sentence
+ # 
+
+FUNCTION do_parse(
+	grammar : 	grammar_t;		# the grammar
+	dictionary : 	dictionary_t;		# the dictionary
+	symbols : 	symbollist_t;           # the list of non-terminal symbols
+	num_derivations : OUT integer		# nr of derivations found
+) : boolean;
+
+	nr_of_words : 	integer;		# nr of words in the sentence
+	nl : 		node_list_t;		# list of nodes
+	pending_edges:  Edgequeue_t;		# pending edges table
+	e_coll : edge_t;			# collection of edges
+
+BEGIN
+	ASSERT(create_queue(pending_edges));
+
+	# read the sentence and initialize the chart
+	IF NOT init_chart(dictionary, symbols, nr_of_words,
+			  pending_edges, e_coll) THEN
+		RETURN false;
+	FI;
+
+	WriteLine("read line succesfully. Line contains ", nr_of_words, " words");
+	WriteLine("creating node_list...");
+
+	# nr of nodes is 1 larger than nr of words
+	ASSERT(create_nl(nl, nr_of_words + 1));
+
+	WriteLine("done");
+        
+        WriteLine ( "Searching for derivations......");
+        chart_parse(nl, grammar, dictionary, symbols, num_derivations,
+          	    pending_edges, e_coll);
+
+	WriteString("deleting nl.."); delete_nl(nl); WriteLine("done");
+	delete_queue(pending_edges);
+
+	RETURN true;
+END;
+
+ # 
+ # expand_symbol() : see if edge symbol can be expanded without need of
+ #                   a combination with neighbour edge (i.e. combination
+ #                   with "empty" neighbour
+ #
+
+FUNCTION expand_symbol(
+	edge : 		edge_p;			# edge under consideration
+	e_info : 	edge_info_t; 		# info on the edge
+        grammar :       grammar_t;              # the grammar
+        symbols :       symbollist_t;           # the list of non-terminal symbols
+	pending_edges : SHARED Edgequeue_t;	# the pending edges table
+	e_coll : 	SHARED edge_t		# collection of edges
+);
+
+	new_edge : 	edge_info_t; 		# new edge 
+	new_symbol : 	symbol_name_t;          # label of new edge
+	g_node :        grammar_node_t;		# index in grammar
+	c_node :        comblist_node_t;	# index in comb list
+	index : 	integer;
+
+BEGIN
+    	# if rule "new_symbol -> edge.symbol_name" is in the gramar,
+        # then add new_symbol to the pending edges table.
+
+	
+	IF combination_in_grammar(e_info.symbol_name, 0, grammar,
+				  symbols, g_node, c_node) THEN
+	        # Add all new combinations to the chart 
+	        FOR k IN 1..num_elts_sl(grammar[g_node].comb_list[c_node].symbol_list) DO
+			ASSERT(give_ith_elt_sl(grammar[g_node].comb_list[c_node].symbol_list, k, new_symbol));
+
+			ASSERT(is_in_sl(symbols, new_symbol, index));            
+	            	construct_edge(new_edge, e_info.from_node, e_info.to_node,
+				       edge, NIL, index);
+
+			add_new_pending(pending_edges, e_coll,  new_edge);
+		OD;
+	FI;
+
+END;
+
+
+ #
+ # handle_word() : check if a word is in the dictionary and if so, put
+ #                 it in the chart 
+ #
+
+FUNCTION handle_word(
+	word : 		word_t;			# the word to be checked/added
+	node_nr : 	integer;                # left node number of word
+	dictionary :	dictionary_t;		# the dictionary
+	symbols : 	symbollist_t;		# list of non-terminal symbols
+        pending_edges : SHARED Edgequeue_t;     # the pending edges table	
+	e_coll : 	SHARED edge_t   	# collection of edges
+) : boolean;
+
+	index :		integer;		# index of word in dictionary
+	edge : 		edge_p;  		# edge representing the word
+	sl : 		dict_node_t;            # non-terminals that expand to word
+	symbol : 	symbol_name_t;          # symbol name of edge
+	e_info : 	edge_info_t ;		# info on the edge
+    
+BEGIN
+	# is the word element of the dictionary
+	IF NOT is_in_dict(dictionary, word, index) THEN
+	        WriteLine("ERROR:     <<<<<<", word, ">>>>>>> not in grammar");
+		RETURN false;
+    	FI;
+    
+	ASSERT(give_ith_elt_dict (dictionary, index, word, sl));
+
+    	FOR i IN 1..num_elts_sl(dictionary[sl].symbol_list) DO
+		
+		ASSERT(give_ith_elt_sl(dictionary[sl].symbol_list, i, symbol));
+	
+        	WriteLine("    found: ", symbol, " -> ", word);
+
+		edge := create_edge(e_coll);
+        	e_info.from_node := node_nr;
+	        e_info.to_node := node_nr + 1;
+		ASSERT(is_in_sl(symbols, symbol, e_info.symbol_name));
+
+	        e_info.word := index;
+		e_info.comp_1 := NIL;
+		e_info.comp_2 := NIL;
+		fill_edge(e_coll, edge, e_info);
+		
+	        WriteLine("adding edge to pending edges table...");
+	        ASSERT (add_edge_queue(pending_edges, edge));
+	OD;
+
+	RETURN true;
+END;
+
+
+ #
+ # init_chart() : initialize the chart
+ #
+
+FUNCTION init_chart(
+	dictionary : 	dictionary_t;		# the dictionary
+	symbols :	symbollist_t;
+	nr_of_words : 	OUT integer;         	# nr of words in the sentence
+        pending_edges : SHARED Edgequeue_t;     # the pending edges table
+	e_coll : 	SHARED edge_t   	# collection of edges
+) : boolean;
+
+    	node_nr : 	integer; 		# node number in the chart
+	word : 		word_t; 		# word on input
+
+BEGIN
+	nr_of_words := 0;
+	node_nr := 1;
+
+	WriteLine("Type sentence...");
+	skip_spaces();
+	WHILE NOT Eoln() DO
+		ReadString(word);
+		WriteLine("read: ", word);
+		
+		# put word in the chart
+		IF NOT (handle_word(word, node_nr, dictionary,
+				    symbols, pending_edges, e_coll)) THEN
+			RETURN false;
+		FI;
+		nr_of_words +:= 1;
+		node_nr +:= 1;
+		skip_spaces();
+	OD;
+	RETURN true;
+END;
+
+
+ # 
+ # open_grammar_file()
+ #
+
+FUNCTION open_grammar_file() : boolean;
+BEGIN
+	WriteLine("opening input file ", GRAMMAR_FILE);
+	IF NOT OpenInputFile(GRAMMAR_FILE) THEN
+		WriteLine("Error: can't open ", GRAMMAR_FILE);
+		RETURN false;
+	FI;
+	RETURN true;
+END;
+
+
+ #
+ # print_dictionary() : print the dictionary read
+ # 
+
+FUNCTION print_dictionary(
+	dict : dictionary_t
+);
+
+    	word : 	 word_t;			# word in the dictionary
+	symbol : symbol_name_t;                 # non-terminal symbol
+        sl : 	 dict_node_t;                   # symbol list
+
+BEGIN
+	WriteLine("");
+	WriteLine("==========================Dictionary======================");
+	WriteLine(" nr of words in grammar is ", num_elts_dict(dict));
+
+        FOR i IN 1 .. num_elts_dict(dict) DO
+		ASSERT( give_ith_elt_dict(dict, i, word, sl));
+	
+	        FOR j IN 1..num_elts_sl(dict[sl].symbol_list) DO
+			ASSERT (give_ith_elt_sl(dict[sl].symbol_list, j, symbol));
+			print_symbol(symbol); WriteString(" -> "); print_symbol(word);
+			WriteLine("");
+		OD;
+		
+	OD;
+END;
+
+
+ #
+ # print_grammar() : print the grammar read
+ # 
+
+FUNCTION print_grammar(
+	grammar : grammar_t
+);
+
+    cl : 		grammar_node_t;		# index in the grammar
+    right1, right2, left : symbol_name_t;  	# lhs, and 2 rhs of a rule
+    sl : 		comblist_node_t;        # symbol list
+
+
+BEGIN
+	WriteLine("");
+	WriteLine("==========================Grammar======================");
+	WriteLine(" nr of words in grammar is ", num_elts_gramm(grammar));
+
+        FOR i IN 1 .. num_elts_gramm(grammar) DO
+		ASSERT(give_ith_elt_gramm(grammar, i, right1, cl));
+
+	        FOR j IN 1..num_elts_cl(grammar[cl].comb_list) DO
+			ASSERT (give_ith_elt_cl(grammar[cl].comb_list, j, right2, sl));
+
+			FOR k IN 1..num_elts_sl(grammar[cl].comb_list[sl].symbol_list) DO
+				ASSERT (give_ith_elt_sl(grammar[cl].comb_list[sl].symbol_list, k, left));
+				print_symbol(left); WriteString(" -> "); 
+				print_symbol(right1); print_symbol(right2);
+				WriteLine("");
+			OD;
+		OD;		
+	OD;
+END;
+
+ 
+ # 
+ # print_sentence() : print parse tree of a sentence
+ #
+
+FUNCTION print_sentence(
+	e_coll : 	edge_t;			# collection of edges
+	e_info : 	edge_info_t;		# info on the edge to print
+	dict  :		dictionary_t;		# the dictionary
+	symbols : 	symbollist_t; 		# list of no-terminal symbols
+	level : 	integer			# indentation levl
+);
+
+	l_info, r_info : edge_info_t;		# info on left and right components
+	word :		 word_t;
+	sl : 		dict_node_t; 
+	symbol : 	symbol_name_t;
+
+BEGIN
+	IF ((e_info.comp_1 = NIL) AND (e_info.comp_2 = NIL)) THEN
+		# lowest level; print terminal 
+
+		ASSERT(give_ith_elt_dict(dict, e_info.word, word, sl));
+		FOR i IN 1..level*2 DO
+			WriteChar(' ');
+
+		OD;
+
+		ASSERT(give_ith_elt_sl(symbols, e_info.symbol_name, symbol));
+	
+		WriteLine("[", symbol, " ", word, "]");
+		RETURN;
+	FI;
+
+        FOR i IN 1..level*2 DO
+		WriteChar(' ');
+        OD;
+
+	ASSERT(give_ith_elt_sl(symbols, e_info.symbol_name, symbol));	
+
+	WriteLine("[", symbol);
+	
+
+	# print left edge
+	IF e_info.comp_1 /= NIL THEN
+		give_info(e_coll, e_info.comp_1, l_info);
+		print_sentence(e_coll, l_info, dict, symbols, level + 1);
+	FI;
+
+	# print right edge
+	IF e_info.comp_2 /= NIL THEN
+		give_info(e_coll, e_info.comp_2, r_info);
+		print_sentence(e_coll, r_info, dict, symbols, level + 1);
+	FI;
+
+        FOR i IN 1..level*2 DO
+                WriteChar(' ');
+        OD;
+	WriteLine("]");
+END;
+		
+ #
+ # print_symbol() : print a grammar symbol in special format
+ #
+
+FUNCTION print_symbol(
+	symbol : string
+);
+
+BEGIN
+	FOR i IN 1..(20-UB(symbol)) DO
+		WriteString(" ");
+	OD;
+	WriteString(symbol);
+END;
+
+ #
+ # skip_spaces()) : skip blanks on input
+ #
+	
+FUNCTION skip_spaces();
+
+	ch : char;
+BEGIN
+	WHILE (Ahead() = SPACE) OR (Ahead() = TAB) DO
+		ReadChar(ch);
+		IF ch = ch THEN FI; # suppress warning;
+	OD;
+END;
+
+END;

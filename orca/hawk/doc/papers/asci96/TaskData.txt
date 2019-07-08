@@ -1,0 +1,13 @@
+PROCESS worker(Q: SHARED JobQueue; proclist: ProcessorList);
+
+  M: ARRAY[1..N][1..N] OF float;
+  Matrix: MatrixObject[1..N][1..N];    # a partitioned object
+
+BEGIN
+  Matrix$$partition(ROWWISE);     
+  Matrix$$distribute(BLOCK, proclist); 
+  WHILE Q$Dequeue(M) DO                # retrieve a matrix from the queue
+    Matrix$init(M);                    # use it to initialize the object
+    Matrix$do_transformation();        # invoke data parallel operation
+  OD;
+END;

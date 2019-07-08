@@ -1,0 +1,180 @@
+#ifndef __PAN_MCAST_NEXT_SEQNO_CI__
+#define __PAN_MCAST_NEXT_SEQNO_CI__
+
+
+/* Panda implementation of mcast_next_seqno.
+ * As straightforward as possible:
+ * - use a small nsap for this communication
+ * - allow only 1 outstanding request at the time
+ * - fixed server SEQNO_SERVER
+ * - if client == server, get the sequence number directly
+ */
+
+
+#include "pan_mcast_next_seqno.h"
+
+
+#ifdef PANDA_NEXT_SEQNO
+
+
+#include <fm.h>
+
+#include "pan_sys_msg.h"
+
+#include "pan_system.h"
+#include "pan_sync.h"
+
+
+#define SEQNO_SERVER	0
+
+
+typedef struct PAN_MCAST_SEQNO_HDR_T {
+    union {
+	int		client;
+	int		seqno;
+    } u;
+} pan_mcast_seqno_hdr_t, *pan_mcast_seqno_hdr_p;
+
+
+
+static pan_nsap_p seqno_nsap;
+
+
+/* Monitor to guarantee access to seqno, seqno send/receive */
+
+static pan_mutex_p	seqno_lock;
+static pan_cond_p	seqno_arrived;
+static pan_cond_p	seqno_free;
+static int		seqno_waiters;
+static int		outstanding_seqno;
+static int		mcast_seqno;
+
+
+static void
+rcve_seqno(struct FM_buffer *data, int size)
+{
+    pan_mcast_seqno_hdr_p hdr = (pan_mcast_seqno_hdr_p)data->fm_buf;
+    int                   sender;
+
+    if (pan_my_pid() == SEQNO_SERVER) {
+	pan_mutex_lock(seqno_lock);
+	sender = hdr->u.client;
+	hdr->u.seqno = mcast_seqno++;
+	pan_mutex_unlock(seqno_lock);
+	FM_send_buf(sender, rcve_seqno, hdr, sizeof(pan_mcast_seqno_hdr_t));
+	FM_free_buf(data);
+    } else {
+	pan_mutex_lock(seqno_lock);
+	mcast_seqno = hdr->u.seqno;
+	outstanding_seqno = 0;
+	pan_cond_signal(seqno_arrived);
+	pan_mutex_unlock(seqno_lock);
+    }
+}
+
+
+STATIC_CI INLINE void
+pan_mcast_begin_next_seqno(void)
+{
+    pan_mcast_seqno_hdr_t h;
+
+    if (pan_my_pid() == SEQNO_SERVER) {
+	return;
+    }
+
+    pan_mutex_lock(seqno_lock);
+    seqno_waiters++;
+    while (seqno_waiters > 1) {
+	pan_cond_wait(seqno_free);
+    }
+
+    h.u.client = pan_my_pid();
+    outstanding_seqno = 1;
+
+    pan_mutex_unlock(seqno_lock);
+    FM_send_buf(SEQNO_SERVER, rcve_seqno, &h, sizeof(pan_mcast_seqno_hdr_t));
+}
+
+
+STATIC_CI INLINE int
+pan_mcast_end_next_seqno(void)
+{
+    int seqno;
+
+    pan_mutex_lock(seqno_lock);
+
+    if (pan_my_pid() == SEQNO_SERVER) {
+
+	seqno = mcast_seqno++;
+
+    } else {
+
+	while (outstanding_seqno) {
+	    pan_cond_wait(seqno_arrived);
+	}
+	    
+	seqno = mcast_seqno;
+
+	seqno_waiters--;
+	if (seqno_waiters > 0) {
+	    pan_cond_signal(seqno_free);
+	}
+
+    }
+    pan_mutex_unlock(seqno_lock);
+
+    return seqno;
+}
+
+
+
+STATIC_CI INLINE int
+pan_mcast_next_seqno(void)
+{
+    pan_mcast_begin_next_seqno();
+    return pan_mcast_end_next_seqno();
+}
+
+
+
+STATIC_CI void
+pan_mcast_next_seqno_start(void)
+{
+    seqno_lock    = pan_mutex_create();
+    seqno_arrived = pan_cond_create(seqno_lock);
+    seqno_free    = pan_cond_create(seqno_lock);
+    seqno_waiters = 0;
+    outstanding_seqno  = 0;
+}
+
+
+STATIC_CI void
+pan_mcast_next_seqno_end(void)
+{
+    pan_mutex_clear(seqno_lock);
+    pan_cond_clear(seqno_arrived);
+    pan_cond_clear(seqno_free);
+
+    pan_nsap_clear(seqno_nsap);
+}
+
+
+#else		/* PANDA_NEXT_SEQNO */
+
+
+STATIC_CI void
+pan_mcast_next_seqno_start(void)
+{
+}
+
+
+STATIC_CI void
+pan_mcast_next_seqno_end(void)
+{
+}
+
+
+#endif		/* PANDA_NEXT_SEQNO */
+
+
+#endif

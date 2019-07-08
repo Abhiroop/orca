@@ -1,0 +1,8 @@
+OBJECT SPECIFICATION ShVP;
+
+	FROM Specs IMPORT vecproc;
+	OPERATION GetElt(i: integer): longreal;
+	OPERATION PutElt(i: integer; x: longreal);
+	OPERATION get(): vecproc;
+	OPERATION store(b: vecproc);
+END;

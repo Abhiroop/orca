@@ -1,0 +1,136 @@
+MODULE IMPLEMENTATION Manager;
+
+IMPORT Reducer, IntObject, GlobalMemory;
+FROM code_io IMPORT initoutput;
+FROM Reducer IMPORT sync;
+FROM Functions IMPORT set_params, local_init,
+		      SlaveStart;
+FROM LocalMemory IMPORT LocalMemoryType;
+IMPORT Node;
+FROM Util IMPORT Init;
+FROM Finish IMPORT Finish;
+
+#MODULE IntInfo = NEW OrcaInfo(Node);
+
+#FUNCTION Info(name: integer; obj: SHARED Node);
+#    owner: integer;
+#BEGIN
+#    owner := IntInfo.owner(obj);
+#    IF IntInfo.replicated(obj) THEN
+#	WriteLine(name, " is replicated");
+#    ELSE
+#	WriteLine(name, " is owned by processor ", owner);
+#    FI;
+#END;
+
+FUNCTION Compute_testdata(allnodes: SHARED Node; A, B, randx: integer);
+BEGIN
+     allnodes$Init();
+     allnodes$testdata(A, B, randx);
+END;
+
+FUNCTION barnes_worker_body( Global: SHARED GlobalMemory;
+			     b: SHARED Reducer;
+			     allnodes: SHARED Node;
+			     WorkersActive : SHARED IntObject; 
+			     WorkersAlive : SHARED IntObject; 
+			     turn : SHARED IntObject);
+    Local: LocalMemoryType;
+    ProcessId : integer;
+    A, B, randx : integer;
+BEGIN
+#    WriteLine(" Worker ",MYCPU()," started ");
+    WorkersAlive$inc();
+    Init(A, B, randx); 
+    set_params(A, B, randx);
+
+    ProcessId := MYCPU();
+    local_init( Local);
+
+    sync( b);
+
+    IF ProcessId = 0 THEN
+      Compute_testdata(allnodes, A, B, randx);
+      initoutput(allnodes);
+    FI;
+
+    sync( b);
+    SlaveStart( Local, b, allnodes, turn);
+    sync( b);
+
+#    FOR i IN 0 .. nbody + maxcell + maxleaf -1 DO
+#	 IF ProcessId = 0 THEN
+#	     Info( i, allnodes);
+#         FI;
+#     OD;
+
+     WorkersActive$dec();
+#     WriteLine(" Worker ", MYCPU(), " done");
+
+END;
+
+
+PROCESS barnes_worker( Global: SHARED GlobalMemory;
+		       b: SHARED Reducer;
+		       allnodes: SHARED Node;
+		       WorkersActive : SHARED IntObject; 
+		       WorkersAlive : SHARED IntObject; 
+		       turn : SHARED IntObject);
+BEGIN
+    barnes_worker_body(Global, b, allnodes, WorkersActive, WorkersAlive,
+		       turn);
+END;
+
+
+
+PROCESS OrcaMain();
+    desired_proc : integer;
+    Global : GlobalMemory; 
+    b : Reducer;
+    allnodes : Node;
+    WorkersActive : IntObject;
+    turn : IntObject;
+    WorkersAlive: IntObject;
+BEGIN
+#  turn$assign( 0);
+
+  # Make sure Orca RTS replicates the allnodes object
+  IF (NCPUS() > 1) THEN		# No group messages please in seq. case RFHH
+      Strategy( allnodes, 1, 0);
+      Strategy( WorkersActive, 1, 0);
+      Strategy( b, 0, 0);
+  FI;
+
+  desired_proc := NCPUS();
+  b$Init( );
+  # allnodes$init();	# Done automagically at startup
+  # initoutput(allnodes);
+  WorkersActive$assign(NCPUS());
+  WorkersAlive$assign(0);
+
+  FOR cpu IN 1 .. desired_proc - 1 DO
+      WriteLine("Fork worker on ", cpu);
+      FORK   barnes_worker( Global, b, allnodes, 
+			    WorkersActive, WorkersAlive,
+                            turn) ON cpu;
+      WorkersAlive$AwaitValue(cpu);
+  OD; 
+
+				# Avoid comm. in seq. case RFHH
+  WriteLine("Start worker on ", 0);
+  barnes_worker_body( Global, b, allnodes, 
+		      WorkersActive, WorkersAlive,
+		      turn);
+  WorkersAlive$AwaitValue(desired_proc);
+
+#  WriteLine(" Waiting for slaves to die ");
+
+  WorkersActive$AwaitValue( 0 );
+
+#  WriteLine( " ALL slaves dead now ");
+  Finish();
+
+END;
+
+
+END;

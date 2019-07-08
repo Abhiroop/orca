@@ -1,0 +1,297 @@
+OBJECT IMPLEMENTATION NetworkObject;
+
+FROM BpTypes	IMPORT ArrayType;
+FROM misc	IMPORT InitArrayBounds;
+		IMPORT Random;
+
+TYPE    IntArrayType = 	ARRAY [integer] OF integer;
+		
+	NumberLayers: 	integer;
+	NumberUnits: 	IntArrayType;
+	ActivIndex:	IntArrayType;
+	WghtIndex:	IntArrayType;
+	LearningRate: 	real;
+	NoiseProp: 	integer;
+	NoiseThreshold: real;
+	random:		Random;
+	weights:	ArrayType;
+	bias: 		ArrayType;
+	nw: 		integer;		# total number of weights
+	nb: 		integer;		# total number of neurons
+
+	
+###############################################################################
+# prints the network
+###############################################################################
+OPERATION PrintNetwork();
+BEGIN
+WriteLine("Number of layers: ", NumberLayers);
+Write("Number of units: ");
+FOR layer IN 0..NumberLayers DO Write(NumberUnits[layer]," "); OD;
+WriteLine();
+WriteLine("Learning Rate: ", LearningRate);
+WriteLine("Noise Threshold: ", NoiseThreshold);
+WriteLine("Proportion of the network that gets noise: ",NoiseProp);
+WriteLine("weights: ");
+FOR layer IN 0..NumberLayers-1 DO
+   WriteLine("layer ",layer," --> layer ",layer+1);
+   FOR sunit IN 0..NumberUnits[layer]-1 DO
+	FOR dunit IN 0..NumberUnits[layer+1]-1 DO 
+	   Write(weights[SELF$WeightIndex(layer,sunit,dunit)]," ");
+ 	OD;
+	WriteLine();
+   OD;
+OD;
+WriteLine();
+END;
+
+###############################################################################
+# returns the number of weights
+###############################################################################
+OPERATION NumberOfWeights(): integer;
+BEGIN
+# check whether all variables have been initialized
+#IF (NumberLayers < 0) THEN RETURN -1; FI;
+#FOR layer IN 0..NumberLayers DO
+#  IF (NumberUnits[layer] < 0) THEN RETURN -1; FI;
+#OD;
+RETURN nw;
+END;
+
+###############################################################################
+# returns the index of a weight
+###############################################################################
+OPERATION WeightIndex(	layer: integer; 
+			sunit: integer; 
+			dunit: integer)
+			: integer;
+BEGIN
+# check whether all variables have been initialized
+#IF (NumberLayers < 0) OR (layer >= NumberLayers) THEN RETURN -1; FI;
+#FOR layer IN 0..NumberLayers DO
+#  IF (NumberUnits[layer] < 0) THEN RETURN -1; FI;
+#OD;
+RETURN WghtIndex[layer]+NumberUnits[layer+1]*sunit+dunit;
+END;
+
+###############################################################################
+# returns the index of a neuron
+###############################################################################
+OPERATION ActivationIndex(	layer: integer;
+				unit: integer)
+				: integer;
+BEGIN
+# check whether all variables have been initialized
+#IF (NumberLayers < 0) OR (layer > NumberLayers) THEN RETURN -1; FI;
+#FOR layer IN 0..NumberLayers DO
+#  IF (NumberUnits[layer] < 0) THEN RETURN -1; FI;
+#OD;
+RETURN ActivIndex[layer]+unit;
+END;
+
+###############################################################################
+# returns the number of neurons
+###############################################################################
+OPERATION NumberOfNeurons(): integer;
+BEGIN
+# check whether all variables have been initialized
+#IF (NumberLayers < 0) THEN RETURN -1; FI;
+#FOR layer IN 0..NumberLayers DO
+#  IF (NumberUnits[layer] < 0) THEN RETURN -1; FI;
+#OD;
+RETURN nb;
+END;
+
+###############################################################################
+# Sets the number of layers
+###############################################################################
+OPERATION SetNumLayers(nl: integer): integer;
+scratch: IntArrayType[0..nl];
+BEGIN
+IF (nl < 0) THEN RETURN -1; FI;
+FOR i IN 0..nl DO scratch[i]:=-1; OD;
+NumberUnits:=scratch;
+ActivIndex:=scratch;
+WghtIndex:=scratch;
+NumberLayers := nl;
+RETURN nl;
+END;
+
+###############################################################################
+# Sets the number of units in a particular layer
+###############################################################################
+OPERATION SetNumUnits(layer: integer; nu: integer): integer;
+BEGIN
+IF (NumberLayers < 0) OR (layer > NumberLayers) OR (nu <0) THEN RETURN -1; FI;
+NumberUnits[layer] := nu;
+ActivIndex[0] := 0;
+WghtIndex[0] := 0;
+FOR i IN 1 .. NumberLayers DO
+	ActivIndex[i] := ActivIndex[i-1]+NumberUnits[i-1];
+	WghtIndex[i] := WghtIndex[i-1] + NumberUnits[i-1]*NumberUnits[i];
+OD;
+RETURN nu;
+END;
+
+
+###############################################################################
+# Sets the learning rate
+###############################################################################
+OPERATION SetLearningRate(lr: real): integer;
+BEGIN
+IF  lr <= 0.0 THEN RETURN -1; FI;
+LearningRate := lr;
+RETURN 0;
+END;
+
+###############################################################################
+# generates a random set of weights
+###############################################################################
+OPERATION GenerateWeights(): integer;
+BEGIN
+# check whether all variables have been initialized
+#IF (NumberLayers < 0) THEN RETURN -1; FI;
+#FOR layer IN 0..NumberLayers DO
+#  IF (NumberUnits[layer] < 0) THEN RETURN -1; FI;
+#OD;
+
+# initialize weights and biasses arrays bounds
+nw:=SELF$WeightIndex(NumberLayers-1,NumberUnits[NumberLayers-1]-1,NumberUnits[NumberLayers]-1)+1;
+InitArrayBounds(0,nw,weights);
+nb:=SELF$ActivationIndex(NumberLayers,NumberUnits[NumberLayers]-1)+1;
+InitArrayBounds(0,nb,bias);
+
+# initialize weights and biasses randomly
+FOR i IN 0..nb-1 DO
+  IF ((random$val()/10) & 1) = 0 
+	THEN bias[i] :=  random$val01();
+	ELSE bias[i] := -random$val01();
+    FI;
+OD;
+FOR i IN 0..nw-1 DO
+      IF ((random$val()/10) &  1) = 0
+	THEN weights[i] := random$val01();
+	ELSE weights[i] := -random$val01();
+      FI;
+OD;
+RETURN 0;
+END;
+
+###############################################################################
+# returns the number of layers
+###############################################################################
+OPERATION NumUnits(layer: integer): integer;
+BEGIN
+#IF (NumberLayers < 0) OR (layer > NumberLayers) THEN RETURN -1; FI;
+RETURN NumberUnits[layer];
+END;
+
+###############################################################################
+# returns the number of layers
+###############################################################################
+OPERATION NumLayers(): integer;
+BEGIN
+RETURN NumberLayers;
+END;
+
+###############################################################################
+# returns the learning rate
+###############################################################################
+OPERATION GetLearningRate(): real;
+BEGIN
+RETURN LearningRate;
+END;
+
+###############################################################################
+# sets the seed
+###############################################################################
+OPERATION SetSeed(s: integer);
+BEGIN
+	random$init(s);
+END;
+
+###############################################################################
+# changes the NoiseProp % of the weights at random 
+###############################################################################
+OPERATION Noise(): integer;
+unit: integer;
+BEGIN
+#IF (NumberLayers < 0) THEN RETURN -1; FI;
+#FOR l IN 0..NumberLayers DO
+#  IF (NumberUnits[l] < 0) THEN RETURN -1; FI;
+#OD;
+FOR num IN 1..nw/NoiseProp DO
+  unit := random$val() % nw;
+  IF ((random$val()/10) & 1) = 0
+	THEN weights[unit] := random$val01();
+	ELSE weights[unit] := -random$val01();
+  FI;
+OD;
+RETURN 0;
+END;
+
+###############################################################################
+# sets NoiseThreashold.
+###############################################################################
+OPERATION SetNoiseThreshold(threshold: real): integer;
+BEGIN
+IF ( threshold <= 0.0) OR ( threshold > 100.0) THEN RETURN -1; FI;
+NoiseThreshold := threshold;
+RETURN 0;
+END;
+
+###############################################################################
+# sets NoiseProp.
+###############################################################################
+OPERATION SetNoiseProportion(proportion: integer): integer;
+BEGIN
+IF (proportion <= 0) OR (proportion > 100) THEN RETURN -1; FI;
+NoiseProp := proportion;
+RETURN proportion;
+END;
+
+###############################################################################
+# Adds the values of DeltaWeights to the weights of the network.
+###############################################################################
+OPERATION UpdateWeights(DeltaWeights: ArrayType): integer;
+BEGIN
+#IF (NumberLayers < 0) THEN RETURN -1; FI;
+#FOR layer IN 0..NumberLayers DO
+#  IF (NumberUnits[layer] < 0) THEN RETURN -1; FI;
+#OD;
+FOR i IN 0..nw-1 DO
+  weights[i] := weights[i] + DeltaWeights[i];
+OD; 
+RETURN 0;
+END;
+
+###############################################################################
+# returns the weights of the specified connection.
+###############################################################################
+OPERATION GetWeight(layer: integer; SourceUnit:integer; DestUnit: integer): real;
+BEGIN
+#IF (NumberLayers < 0) OR (layer >= NumberLayers) THEN RETURN 0.0; FI;
+IF (SourceUnit >= NumberUnits[layer]) OR (DestUnit >= NumberUnits[layer+1]) 
+   OR (SourceUnit < 0) OR (DestUnit < 0) 
+   THEN RETURN 0.0; 
+FI;
+RETURN weights[WghtIndex[layer]+NumberUnits[layer+1]*SourceUnit+DestUnit];
+END;
+
+###############################################################################
+# returns the bias of the specified neuron.
+###############################################################################
+OPERATION GetBias(layer: integer; Unit:integer): real;
+  index: integer;
+BEGIN
+#IF (NumberLayers < 0) OR (layer > NumberLayers)
+#   THEN RETURN 0.0; FI;
+#IF (Unit >= NumberUnits[layer]) OR (Unit < 0)
+#   THEN RETURN 0.0; FI;
+index := 0;
+FOR i IN 0..layer-1 DO index:=index+NumberUnits[i]; OD;
+RETURN bias[index+Unit];
+END;
+
+# END OBJECT IMPLEMENTATION
+END; 

@@ -1,0 +1,397 @@
+MODULE IMPLEMENTATION iscas;
+
+     # This module doesn't parse the file but it is assumed that
+     # it has the right structure. Some primitive error values are
+     # returned but their meaning is not always very reliable.
+     # NO PROVISIONS are made for handling faults !
+     # Some errors result in an error-message written onto
+     # the standard output.
+
+     FROM AtpgTypes IMPORT GateType,Possible_Fault,FaultSet,
+			   AND_G,OR_G,NOR_G,NAND_G,XOR_G,XNOR_G,BUFF_G,
+			   NOT_G,FO_BR,INPT;
+
+     FROM InOut IMPORT OpenInputFile, OpenOutputFile,
+			CloseInput, CloseOutput;
+
+     CONST LF=10;
+     CONST EOF=64;
+
+
+     FUNCTION LOG(message: string);
+
+     # Write the LOG-message on the standard output
+
+     BEGIN
+	WriteLine();
+	Write("MODULE iscas...");
+	Write(message);
+     END; # FUNCTION LOG
+
+     FUNCTION Read_Comment(kar:char);
+
+     # A comment-line is read, comment is useless so the line
+     # read will be discarded. kar contains the first character
+     # of the commentline.
+
+     BEGIN
+          WHILE (ORD(kar)/=LF) AND (ORD(kar)/=EOF) DO
+	       Read(kar);
+          OD;
+          RETURN;
+     END; # FUNCTION Read_Comment
+
+     FUNCTION Read_Integer(kar:SHARED char;
+                           number:OUT integer);
+
+     # Reads an integer from the input file.
+     # kar is the first character of the number-string.
+
+     BEGIN
+          number:=0;
+          WHILE (ORD(kar)>=48) AND (ORD(kar)<=57) DO
+               number:=number*10+(ORD(kar)-48);
+	       Read(kar);
+          OD;
+          RETURN;
+     END; # FUNCTION Read_Integer
+
+     FUNCTION Read_Faults(kar:SHARED char;
+			  faultset:OUT FaultSet);
+
+     # One or more strings present on the current input line
+     # will be read. The strings read indicate the faults to be
+     # tested and are returned in the variable faultset.
+     # The current line is read up to and including the LF-character.
+
+     BEGIN
+          faultset:=FaultSet:{};
+          WHILE (ORD(kar)/=LF) AND (ORD(kar)/=EOF) DO
+               IF kar='>' THEN     # Start of a fault-indicator
+                    WHILE (kar/='0') AND (kar/='1') DO
+			 Read(kar);
+                    OD;
+                    CASE kar OF
+                         '0'  =>   
+                               faultset+:=FaultSet:{Stuck_At_0};
+                       | '1'  =>   
+                               faultset+:=FaultSet:{Stuck_At_1};
+                    ESAC;
+               FI;
+	       Read(kar);
+          OD;
+          RETURN;
+     END; # FUNCTION Read_Faults
+
+
+     FUNCTION String_To_Type(stype:string;type:OUT GateType):boolean;
+
+     # The mapping from the type of gate just read and the gatetype which
+     # has been defined as an enumeration type is handled by this function.
+     # If false is returned the string read didn't correspond with the 
+     # known gatetypes. If a mapping could be made true is returned.
+
+     retval: boolean;
+
+     BEGIN
+	retval:=false;
+	IF stype="inpt" THEN	# inpt
+		type:=INPT;
+		retval:=true;
+	FI;
+	IF stype="and" THEN	# and
+		type:=AND_G;
+		retval:=true;
+	FI;
+	IF stype="nand" THEN	# nand
+		type:=NAND_G;
+		retval:=true;
+	FI;
+	IF stype="or" THEN	# or
+		type:=OR_G;
+		retval:=true;
+	FI;
+	IF stype="nor" THEN	# nor
+		type:=NOR_G;
+		retval:=true;
+	FI;
+	IF stype="xor" THEN  	# xor
+		type:=XOR_G;
+		retval:=true;
+	FI;
+	IF stype="xnor" THEN	# xnor
+		type:=XNOR_G;
+		retval:=true;
+	FI;
+	IF stype="buff" THEN	# buff
+		type:=BUFF_G;
+		retval:=true;
+	FI;
+	IF stype="not" THEN	# not
+		type:=NOT_G;
+		retval:=true;
+	FI;
+	IF stype="from" THEN	# from
+		type:=FO_BR;
+		retval:=true;
+	FI;
+	RETURN retval;
+     END; # FUNCTION String_To_Type
+     
+     FUNCTION Type_To_String(type:GateType;stype:OUT string):boolean;
+
+     # This function maps the gatetype onto the corresponding string.
+     # If false is returned the gatetype didn't correspond with the 
+     # known gatetypes. If a mapping could be made true is returned.
+
+     retval: boolean;
+
+     BEGIN
+	retval:=true;
+	CASE type OF
+		BUFF_G	=>	stype:="buff";
+	     |	NOT_G	=>	stype:="not";
+	     |	FO_BR	=>	stype:="from";
+	     |	INPT	=>	stype:="inpt";
+	     |	AND_G	=>	stype:="and";
+	     |	OR_G	=>	stype:="or";
+	     |	XOR_G	=>	stype:="xor";
+	     |	NAND_G	=>	stype:="nand";
+	     |	NOR_G	=>	stype:="nor";
+	     |	XNOR_G	=>	stype:="xnor";
+	     ELSE
+		retval:=false;
+		stype:="UNKNOWN";
+	ESAC;
+	RETURN retval;
+     END; # FUNCTION Type_To_String
+
+
+     FUNCTION Read_Nodeline(number:OUT integer;
+                            name:OUT string;type:OUT GateType;
+		            fanout:OUT integer;
+                            fanin:OUT integer;
+                            faults:OUT FaultSet):Return_Value;
+
+     # Read a nodeline out of the file indicated by the
+     # filedescriptor. Return the contents.
+     # If no new nodeline could be read in or if unexpected EOF is encountered
+     # END_OF_FILE is returned, if a valid nodeline is read OK is returned.
+
+     kar: char;
+     stop: boolean;
+     retval:Return_Value;
+     ktype,stype: string;
+
+     BEGIN
+          # Assume we're at the beginning of a line
+	  retval:=OK; 
+	  Read(kar);
+	  IF ORD(kar)=EOF THEN
+		LOG("message....END_OF_FILE");
+		RETURN END_OF_FILE;
+	  FI;
+          stop:=false;
+          WHILE NOT stop DO
+               IF kar='*' THEN
+                    Read_Comment(kar);
+               FI;
+               IF (ORD(kar)>=48) AND (ORD(kar)<=57) THEN
+                    Read_Integer(kar,number);
+                    stop:=true;
+               ELSE
+		    IF ORD(kar)=EOF THEN
+			stop:=true;
+			RETURN END_OF_FILE;
+		    ELSE
+			Read(kar);
+		    FI;
+               FI;
+          OD;
+	  IF ORD(kar)/=EOF THEN
+		Read(name);
+		Read(ktype);
+		stype:=ktype;
+		IF NOT(String_To_Type(stype,type)) THEN
+		   LOG("ERROR....illegal gatetype");
+		   Write("'",stype,"'");
+		   RETURN E_SYNTAX;
+		FI;
+		Read(fanout);
+		Read(fanin);
+		Read(kar);
+          	Read_Faults(kar,faults);
+		retval:=OK;
+	  FI;
+          RETURN retval;
+     END; # FUNCTION Read_Nodeline
+
+
+
+     FUNCTION Read_Faninline(fanin:integer;
+                             faninnrs:OUT Int_Array):Return_Value;
+
+     # Read the fanin-numbers from the current input-line.
+
+     kar: char;
+
+     BEGIN
+          FOR i IN 1..fanin DO
+		Read(kar);
+               WHILE (NOT((ORD(kar)>=48) AND (ORD(kar)<=57)))
+		      AND (ORD(kar)/=EOF) DO
+		    Read(kar);
+		    IF ORD(kar)=EOF THEN
+			LOG("ERROR...unexpected END_OF_FILE");
+			RETURN E_SYNTAX;
+		    FI;
+               OD;
+               Read_Integer(kar,faninnrs[i]);
+          OD;
+          WHILE (ORD(kar)/=LF) AND (ORD(kar)/=EOF) DO
+		Read(kar);
+          OD;
+	IF ORD(kar)=EOF THEN
+		LOG("END_OF_FILE reached in Read_Faninline");
+	FI;
+        RETURN OK;
+     END; # FUNCTION Read_Faninline
+
+     FUNCTION Read_Fanoutline(number:OUT integer;
+                              name:OUT string;
+                              fromname:OUT string;
+			      faults:OUT FaultSet):Return_Value;
+
+     # Read in a fanout line and return its contents in the 
+     # OUT-parameters.
+
+	stop: boolean;
+	keyword: string;
+	kar: char;
+
+     BEGIN
+          # Assume we're at the beginning of a line
+          stop:=false;
+          WHILE NOT stop DO
+		Read(kar);
+               IF (ORD(kar)>=48)AND(ORD(kar)<=57) THEN
+                    Read_Integer(kar,number);
+                    stop:=true;
+	       ELSE
+		    IF ORD(kar)=EOF THEN
+			stop:=true;
+		    FI;	
+               FI;
+          OD;
+	  IF NOT(ORD(kar)=EOF) THEN
+		Read(name);
+         	Read(keyword);
+		IF keyword/="from" THEN
+			LOG("Unexpected keyword in fanoutline");
+		FI;
+		Read(fromname);
+		Read(kar);
+          	Read_Faults(kar,faults);
+                RETURN OK;
+	  ELSE
+		LOG("ERROR...unexpected END_OF_FILE");
+          	RETURN E_SYNTAX;
+	  FI;
+     END; # FUNCTION Read_Fanoutline
+
+     FUNCTION Write_Nodeline(address:integer;
+                            name:string;type:GateType;
+		            fanout:integer;
+                            fanin:integer;
+                            faults:FaultSet);
+
+     # Write a nodeline to the file indicated by the filedescriptor.
+
+     stype: string;
+
+     BEGIN
+		# Assume we're at the beginning of a line
+		Write(address, "  ", name, "  ");
+		IF NOT(Type_To_String(type,stype)) THEN
+			LOG("ERROR...unknown gatetype");
+		FI;
+		Write(stype, "  ", fanout, "  ", fanin, "  ");
+		IF Stuck_At_0 IN faults THEN
+			Write(">sa0  "); 
+		ELSE
+			Write("      ");
+		FI;
+		IF Stuck_At_1 IN faults THEN
+			Write(">sa1  "); 
+		ELSE
+			Write("      ");
+		FI;
+		WriteLine();
+     END; # FUNCTION Write_Nodeline
+
+     FUNCTION Write_Faninline(fanin:integer;
+                             faninnrs:Int_Array);
+
+     # Write the fanin-numbers to the output file.
+
+     BEGIN
+          FOR i IN 1..fanin DO
+	       Write(faninnrs[i], "  ");
+          OD;
+	  WriteLine();
+     END; # FUNCTION Write_Faninline
+    
+     FUNCTION Write_Fanoutline(address:integer;
+                              name:string;fromname:string;
+			      faults:FaultSet);
+
+     # Write one fanout line to the output file.
+
+     BEGIN
+		Write(address, "  ", name, "  from  ", fromname, "  ");
+		IF Stuck_At_0 IN faults THEN
+			Write(">sa0  ");
+		ELSE
+			Write("      ");
+		FI;
+		IF Stuck_At_1 IN faults THEN
+			Write(">sa1  ");
+		ELSE
+			Write("      ");
+		FI;
+		WriteLine();
+     END; # FUNCTION Write_Fanoutline
+
+     FUNCTION Write_EOF();
+
+     # Write the EOF-character to the output file.
+
+     BEGIN
+	WriteLine(CHR(EOF));
+     END; # FUNCTION Write_EOF
+
+     FUNCTION Iopen(fname:string;mode: integer):boolean;
+
+     # Open the named ISCAS-circuit-description file.
+
+     BEGIN
+	  IF mode = 1 THEN
+		RETURN OpenOutputFile(fname);
+	  FI;
+	  RETURN OpenInputFile(fname);
+     END; # FUNCTION Iopen
+
+     FUNCTION Iclose(mode:integer);
+
+     # Close the named ISCAS-circuit-description.
+
+     BEGIN
+	  IF mode = 1 THEN
+		CloseOutput();
+	  ELSE
+		CloseInput();
+	  FI;
+     END; # FUNCTION Iclose
+
+
+END; # MODULE IMPLEMENTATION ISCAS

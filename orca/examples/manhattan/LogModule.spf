@@ -1,0 +1,24 @@
+MODULE SPECIFICATION LogModule;
+
+	FROM TspTypes IMPORT
+		ProcessorStatusType;
+
+	FUNCTION LogMessage (m : string; cpu : integer);
+	FUNCTION LogMessageInt (m : string; i : integer; cpu : integer);
+	FUNCTION LogMessageReal (m : string; r : real; cpu : integer);
+	FUNCTION LogWarning (m : string; cpu : integer);
+	FUNCTION LogError (m : string; cpu : integer);
+
+	FUNCTION LogStoreMessage (m : string; cpu : integer);
+	FUNCTION LogStoreMessageOn (m : string; f : string; cpu : integer);
+	
+	FUNCTION LogStatusReport (prod_stat : string;
+			       eval_stat : string;
+			       no_of_jobs : integer;
+			       improved_jobs : integer;
+			       no_of_solved : integer;
+			       best_value : integer);
+	
+	FUNCTION Flush ();
+
+END;

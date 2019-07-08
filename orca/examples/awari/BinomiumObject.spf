@@ -1,0 +1,34 @@
+#-----------------------------------------------#
+# Author[s]: H. Staalman  and  E.J.J. de Waal	#
+# Date	   : August 1994			#
+# Version  : 1.0				#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION BinomiumObject;
+
+# Defines operations on a binomium object with 'size' (N over K)
+# Restriction: N>=K
+# After initialisation, the binomium can be accessed directly by indexing.
+
+FROM	AwariTypes	IMPORT	BinomiumType;
+
+
+FUNCTION Init_Binomium(binomium: SHARED BinomiumType;
+		       n: IN integer;
+		       k: IN integer);
+    # Initialises the Binomium Object
+
+
+# Only needed for debugging.
+#FUNCTION Print_Binomium();
+#  # Prints all binomial coefficients of the Binomium Object
+
+
+# Needed in the object version of Binomium.
+#FUNCTION Get_Binomial_Coefficient(x:integer; y:integer):longint;
+#  # Returns the binomial coefficient (x over y) if and only
+#  # if x<=N and y<=K and x>=y
+#  # OK ??
+
+
+END; # BinomiumObject

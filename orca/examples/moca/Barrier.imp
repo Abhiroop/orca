@@ -1,0 +1,52 @@
+OBJECT IMPLEMENTATION Barrier;
+
+N, OldN, Hit, Released : integer;
+
+
+OPERATION Done(NrWorkers : integer);
+
+BEGIN
+	GUARD Released = OldN DO
+	    N    := NrWorkers;
+	    Hit +:= 1;
+	    IF Hit = N THEN
+		OldN     := N;
+		Released := 0;
+	    FI;
+	OD;
+END;
+
+
+OPERATION Ack();
+
+BEGIN
+	GUARD Hit = N DO
+	    Released +:= 1;
+	    IF Released = N THEN
+		Hit := 0;
+	    FI;
+	OD;
+END;
+
+
+FUNCTION Sync(Bar       : SHARED Barrier;
+	      NrWorkers : integer);
+BEGIN
+	IF NrWorkers > 1 THEN
+	    Bar$Done(NrWorkers);
+	    Bar$Ack();
+	FI; 
+END;
+
+
+OPERATION Init(NrWorkers : integer);
+
+BEGIN
+	N        := NrWorkers;
+	OldN     := N;
+	Released := N;
+	Hit      := 0;
+END;
+
+
+END;

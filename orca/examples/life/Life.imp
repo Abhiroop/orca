@@ -1,0 +1,135 @@
+MODULE IMPLEMENTATION Life;
+
+# From: MODULA-2, An Introduction, by Daniel Thalmann, Springer-Verlag,
+#	 New York, 1985
+# Figure 10.18
+
+# John Horton Conway's game "life"
+
+  FROM Finish IMPORT Finish;
+  FROM InOut  IMPORT WriteLn, WriteString;
+
+  CONST	MaxInd = 30;
+  CONST	MaxInd1 = MaxInd+1;
+
+  TYPE	State = integer;	# [0..1];
+  TYPE	Cells = ARRAY [integer 0..MaxInd1]
+		OF ARRAY [integer 0..MaxInd1]
+		OF State;
+
+  TYPE	CellStateType = ARRAY [integer 0..1] OF Cells;
+  TYPE	StatusType = ARRAY [integer 0..17] OF State;
+
+  FUNCTION InitGame(	CellsState: OUT CellStateType;
+			Status: OUT StatusType;
+			PreviousNext: OUT integer	);
+  BEGIN
+	# Clear all cells
+	FOR Line IN 0..MaxInd1 DO
+	  FOR Column IN 0..MaxInd1 DO
+		CellsState[0][Line][Column] := 0;
+	  OD;
+	OD;
+	CellsState[1] := CellsState[0];
+
+	# Initialize positions (Orca has no Read..() yet)
+	CellsState[0][13][13] := 1;
+	CellsState[0][13][14] := 1;
+	CellsState[0][13][15] := 1;
+
+	CellsState[0][14][13] := 1;
+	CellsState[0][14][16] := 1;
+
+	CellsState[0][15][13] := 1;
+	CellsState[0][15][17] := 1;
+
+	PreviousNext := 0;
+
+	# Initialize Status array
+	FOR Ind IN 0..17 DO
+		Status[Ind] := 0;
+	OD;
+	Status[3] := 1; Status[11] := 1; Status[12] := 1;
+  END;
+
+  FUNCTION Neighbourhood(	L, C: IN integer;
+				nbn: SHARED integer;
+			   	CellsState: IN CellStateType;
+				PreviousNext: IN integer	);
+  BEGIN
+	nbn := 0;
+	FOR Line1 IN L-1 .. L+1 DO
+	  FOR Column1 IN C-1 .. C+1 DO
+		nbn +:= CellsState[PreviousNext][Line1][Column1];
+	  OD;
+	OD;
+	nbn -:= CellsState[PreviousNext][L][C];
+  END;
+
+  FUNCTION NextGeneration(	CellsState: SHARED CellStateType;
+				Status: IN StatusType;
+				PreviousNext: SHARED integer	);
+	nbN: integer;
+  BEGIN
+	FOR Line IN 1 .. MaxInd DO
+	  FOR Column IN 1 .. MaxInd DO
+		Neighbourhood(Line, Column, nbN, CellsState, PreviousNext);
+		CellsState[1-PreviousNext][Line][Column] := 
+		  Status[CellsState[PreviousNext][Line][Column]*9 + nbN];
+	  OD;
+	OD;
+	PreviousNext := 1-PreviousNext;
+  END;
+
+  FUNCTION Impression(	CellsState: IN CellStateType;
+		      	PreviousNext: IN integer;
+			Generation: IN integer		);
+  BEGIN
+	WriteLn();
+	WriteLine("        Generation ", Generation);
+	WriteLn();
+	WriteString("      ");
+	FOR N IN 1 .. 2 * MaxInd + 3 DO
+		WriteString("-");
+	OD;
+	WriteLn();
+	FOR Line IN 1 .. MaxInd DO
+		WriteString("      |");
+		FOR Column IN 1 .. MaxInd DO
+		  IF CellsState[PreviousNext][Line][Column] = 1 THEN
+			WriteString(" @");
+		  ELSE
+			WriteString(" .");
+		  FI;
+		OD;
+		WriteString(" |");
+		WriteLn();
+	OD;
+	WriteString("      ");
+	FOR N IN 1 .. 2*MaxInd + 3 DO
+		WriteString("-");
+	OD;
+	WriteLn();
+	WriteLn();
+  END;
+
+  PROCESS OrcaMain();
+	Generation, NbOfGen: integer;
+	PreviousNext: integer;
+	CellsState: CellStateType;
+	Status: StatusType;
+  BEGIN
+	Generation := 0;
+	NbOfGen := 20;
+	InitGame(CellsState, Status, PreviousNext);
+
+	Impression(CellsState, PreviousNext, Generation);
+	REPEAT
+		Generation +:= 1;
+		NextGeneration(CellsState, Status, PreviousNext);
+		Impression(CellsState, PreviousNext, Generation);
+	UNTIL Generation = NbOfGen;
+	Finish();
+  END;
+
+END;

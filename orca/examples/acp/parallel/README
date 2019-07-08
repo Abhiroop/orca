@@ -1,0 +1,3 @@
+This directory contains the paralle code of ACP. Sentences will not be printed. 
+If you want to change this, uncomment the corresponding code at the end of the 
+manager() process in acp.imp. 

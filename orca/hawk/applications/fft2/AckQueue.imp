@@ -1,0 +1,38 @@
+OBJECT IMPLEMENTATION AckQueue;
+	TYPE ItemName = NODENAME OF queue;
+	TYPE queue =
+		GRAPH
+			first, last: ItemName;
+		NODES
+			next: ItemName;
+			data: Ack_T;
+		END;
+
+	Q: queue;  # the queue itself
+
+	OPERATION Add(time: IN Ack_T);
+		p: ItemName;
+	BEGIN  # add an acknowledgement to the tail of the queue
+		p := ADDNODE(Q);  # add a new node to Q, return its name in p
+		Q[p].data := time; # fill in data field of the new node
+		IF Q.first = NIL THEN  # Is it the first node?
+			Q.first := p;  # yes; assign it to global data field
+		ELSE
+			Q[Q.last].next := p; # no; set its next field
+		FI;
+		Q.last := p;  # Assign to "last" global data field
+	END;
+
+	OPERATION Get(time: OUT Ack_T);
+		p: ItemName;
+	BEGIN  # Try to fetch an acknowledgement from the queue
+		GUARD Q.first /= NIL DO  # A job is available
+			p := Q.first;  # Remove it from the queue
+			Q.first := Q[p].next;
+			IF Q.first = NIL THEN Q.last := NIL; FI;
+			time := Q[p].data;
+			DELETENODE(Q,p);  # delete the node
+		OD;
+	END;
+BEGIN
+END;

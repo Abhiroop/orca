@@ -1,0 +1,123 @@
+OBJECT SPECIFICATION Node;
+
+ #
+ # BODY and CELL data structures are used to represent the tree:
+ #
+ #         +-----------------------------------------------------------+
+ # root--> | CELL: mass, pos, cost, quad, /, o, /, /, /, /, o, /, done |
+ #         +---------------------------------|--------------|----------+
+ #                                           |              |
+ #    +--------------------------------------+              |
+ #    |                                                     |
+ #    |    +--------------------------------------+         |
+ #    +--> | BODY: mass, pos, cost, vel, acc, phi |         |
+ #         +--------------------------------------+         |
+ #                                                          |
+ #    +-----------------------------------------------------+
+ #    |
+ #    |    +-----------------------------------------------------------+
+ #    +--> | CELL: mass, pos, cost, quad, o, /, /, o, /, /, o, /, done |
+ #         +------------------------------|--------|--------|----------+
+ #                                       etc      etc      etc
+ #
+
+
+
+ # NODE: data common to BODY and CELL structures.
+
+FROM Types IMPORT MAX_PROC, MAX_BODIES_PER_LEAF;
+FROM vectmath IMPORT NSUB, Vectmath, matrix;
+FROM LocalMemory IMPORT LocalMemoryType, tree_t, mybody_t, IntArray;
+
+CONST BODY = 1;		# type code for bodies 
+CONST CELL = 2;		# type code for cells
+CONST LEAF = 3;		# type code for leaves 
+
+TYPE vect2 = ARRAY[integer 0..MAX_BODIES_PER_LEAF-1] OF integer;
+TYPE vect1 = ARRAY[integer 0..NSUB-1] OF integer;
+
+TYPE ubody = RECORD
+  vel : Vectmath;		    # velocity of body 
+  acc : Vectmath;		    # acceleration of body 
+  phi : real;			    # potential at body 
+END;
+
+TYPE ucell = RECORD
+  subp : vect1;	            # descendents of cell 
+END;
+
+TYPE uleaf = RECORD
+  bodyp : vect2;             # bodies of leaf 
+  num_bodies : integer;
+END;
+
+TYPE treenode = UNION (type: integer)
+  BODY =>	b: ubody;
+  CELL =>	c: ucell;
+  LEAF =>	l: uleaf;
+END;
+
+TYPE NodeType = RECORD
+  mass : real;			    # total mass of node 
+  pos : Vectmath;		    # position of node 
+  cost : integer;		    # number of interactions computed 
+  level : integer;
+  parent : integer;		    # ptr to parent of this node in tree 
+  child_num: integer;
+.ifdef QUADPOLE
+  quad : matrix;	            # quad. moment of cell
+.endif
+  n: treenode;
+END;
+
+TYPE ChangeSummary = RECORD
+  acc : Vectmath;
+  phi : real;
+  cost : integer;
+.ifdef QUADPOLE
+  quad : matrix;	            # quad. moment of cell
+.endif
+END;
+
+
+TYPE NodeTypeArray      = ARRAY[integer] OF NodeType;
+TYPE ChangeSummaryArray = ARRAY[integer] OF ChangeSummary;
+
+FUNCTION alloc_vect( n : integer; r: OUT IntArray);
+
+OPERATION await_token(ProcessId: integer);
+
+OPERATION Body(r: OUT NodeTypeArray);
+OPERATION Pos(p: integer; pos : OUT Vectmath);
+OPERATION PosVel(p: integer; pos, vel : OUT Vectmath);
+OPERATION Vel(p: integer; vel : OUT Vectmath);
+OPERATION SetVel(p: integer; v : Vectmath);
+OPERATION Cost(p: integer) : integer;
+OPERATION PosVeli(p: integer; i: integer; pos : OUT real; vel : OUT real);
+OPERATION SetPosVeli(p: integer; i : integer; val : real; Val : real);
+OPERATION Subpv(cmr : Vectmath; cmv : Vectmath);
+OPERATION SetPos(p: integer; v : Vectmath);
+OPERATION start_test(p: integer);
+OPERATION opdiag(p: integer; Localin : LocalMemoryType;Localout: OUT LocalMemoryType);
+OPERATION testdata(A,B,randx: integer);
+
+OPERATION G_root() : integer;
+
+OPERATION maketree( ProcessId: integer;
+		   mybody: mybody_t;
+		   tree: OUT tree_t;
+		   rmin: Vectmath;
+		   rsize: real);
+
+OPERATION find_my_bodies(direction: integer;
+			 ProcessId: integer; mybody: OUT mybody_t);
+
+OPERATION hackcofm(p: integer);
+
+OPERATION advance(mybody: mybody_t; min, max: OUT Vectmath; nstep: integer; copy: ChangeSummaryArray; ProcessId: integer);
+
+OPERATION PrintTree(p: integer);
+
+OPERATION Init();
+
+END;

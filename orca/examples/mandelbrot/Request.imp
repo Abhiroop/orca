@@ -1,0 +1,161 @@
+OBJECT IMPLEMENTATION Request;
+#
+# Program:	Mandelbrot
+# File:		Request.imp
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	Mandelbrot computation user-request info (parameters).
+#		Manages interaction Graphics Display Process => Workers 
+#
+
+FROM Job IMPORT request_t;
+
+	TYPE ReqName = NODENAME OF Req;
+	TYPE Req =
+		GRAPH
+			head: ReqName;
+		NODES
+			next: ReqName;
+			data: request_t;
+			no: integer;
+		END;
+
+	req_data: request_t;
+	req_nr: integer;
+	g: Req;
+
+
+FUNCTION Append(g: SHARED Req; data: request_t; no: integer);
+	n: ReqName;
+BEGIN
+	n := ADDNODE(g);
+	g[n].next := g.head;
+	g.head := n;
+	g[n].data := data;
+	g[n].no := no;
+END;
+
+
+OPERATION Zoom(x, y, w, h: IN integer);
+	f1,f2: real;
+BEGIN
+	WriteLine(x, " ", y, " ", w, " ", h);
+	Append(g, req_data, REQUEST_ZOOM);
+	req_data.x_left +:= FLOAT(x)*req_data.scale; 
+	req_data.y_up   +:= FLOAT(y)*req_data.scale; 
+	f1 := FLOAT(w)/FLOAT(req_data.width);
+	f2 := FLOAT(h)/FLOAT(req_data.height);
+	IF (f1 < f2) THEN 
+		req_data.scale *:= f2;
+	ELSE
+		req_data.scale *:= f1;
+	FI;
+	req_nr := REQUEST_ZOOM;
+END;
+
+
+OPERATION Resize(w, h: IN integer);
+	f1,f2: real;
+	p: ReqName;
+BEGIN
+	# Kill all saved entries. They don't survive a resize.
+	WHILE g.head /= NIL DO
+		p := g.head;
+		g.head := g[p].next;
+		DELETENODE(g, p);
+	OD;
+
+	f1 := FLOAT(req_data.width)/FLOAT(w);
+	f2 := FLOAT(req_data.height)/FLOAT(h);
+	IF (f1 < f2) THEN 
+		req_data.scale *:= f2;
+	ELSE
+		req_data.scale *:= f1;
+	FI;
+	req_data.width := w;
+	req_data.height := h;
+	req_nr := REQUEST_RESIZE;
+END;
+
+
+OPERATION Quit();
+BEGIN
+	req_nr := REQUEST_QUIT;
+END;
+
+
+
+OPERATION NewDwell(d: IN integer);
+	p: ReqName;
+BEGIN
+	IF (d > 0) THEN
+	    # Give all saved entries the same (new) dwell.
+	    p := g.head;
+	    WHILE p /= NIL DO
+		g[p].data.dwell := d;
+		p := g[p].next;
+	    OD;
+
+	    req_data.dwell := d;
+	    req_nr := REQUEST_DWELL;
+	FI; 
+END;
+
+
+OPERATION Reset();
+	f: real;
+BEGIN
+	WriteLine("0 0 0 0");
+	Append(g, req_data, REQUEST_ZOOM);
+	f := X_WINDOW/FLOAT(req_data.width);
+	req_data.scale := Y_WINDOW/FLOAT(req_data.height);
+	IF (f > req_data.scale) THEN
+		req_data.scale := f;
+	FI;
+	req_data.x_left := X_LEFT;
+	req_data.y_up   := Y_UP;
+	req_nr := REQUEST_RESET;
+END;
+
+
+OPERATION Back();
+	n: ReqName;
+BEGIN
+	IF g.head = NIL THEN
+		req_nr := REQUEST_RESIZE;
+		RETURN;
+	FI;
+	n := g.head;
+	g.head := g[n].next;
+	req_data := g[n].data;
+	req_nr := g[n].no;
+	DELETENODE(g, n);
+END;
+
+
+OPERATION Next(r: OUT request_t): boolean;
+BEGIN
+	GUARD (req_nr /= REQUEST_NOP)
+	DO
+		IF (req_nr = REQUEST_QUIT) THEN
+			RETURN false;
+		FI;
+		r := req_data;
+		req_nr := REQUEST_NOP;
+		RETURN true;
+	OD;
+END;
+
+
+
+BEGIN
+	req_data.width	:= WIDTH; 
+	req_data.height	:= HEIGHT; 
+	req_data.dwell  := DWELL;
+	req_data.x_left := X_LEFT;
+	req_data.y_up   := Y_UP;
+	req_data.scale := Y_WINDOW/FLOAT(req_data.height);
+	IF (X_WINDOW/FLOAT(req_data.width) > req_data.scale) THEN
+		req_data.scale := X_WINDOW/FLOAT(req_data.width);
+	FI;
+	req_nr 	:= REQUEST_NOP;
+END;

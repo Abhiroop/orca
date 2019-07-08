@@ -1,0 +1,4 @@
+MODULE SPECIFICATION ab;
+
+	PROCESS OrcaMain();
+END;

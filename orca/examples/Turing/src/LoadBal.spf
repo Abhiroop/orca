@@ -1,0 +1,52 @@
+#===============================================================
+#=======        LoadBal.spf: Load balancing function    ========
+#===                                                        ====
+
+MODULE SPECIFICATION LoadBal;
+
+IMPORT LinkObj;
+
+
+# Maximal difference in load between workers allowed
+CONST MaxLoadDiff = 50;
+
+
+TYPE StatusType = 
+	RECORD
+                State: integer;         	# State in automaton
+
+                Load, FLoad: integer;   	# My load and future load
+		LoadDiff: integer;		# Possible load difference
+
+                NBLoad: integer;        	# Neighbour's load
+                NBFLoad: integer;       	# Neighbour's future load
+		NBLoadDiff: integer;		# NB's possible load difference
+
+                Send: boolean;                 # Wether to send an cell
+                PlannedSend: boolean;          # Wether to send an cell
+	END;
+
+# @ InitLoadBal: Initialises the load balancing function
+FUNCTION InitLoadBal(
+        LStatus: SHARED StatusType;     # Status with left neighbour
+        RStatus: SHARED StatusType      # Status with right neighbour
+);
+
+# @ Negotiate: negotiates with neighbours to find out if a cell cen be sent
+FUNCTION Negotiate(
+	WorkLoad: integer;		# The callers current workload
+        LLoadDiff: integer;             # The load of left border cell
+        RLoadDiff: integer;             # The load of right border cell
+        LStatus: SHARED StatusType;     # Status with left neighbour
+        RStatus: SHARED StatusType;     # Status with right neighbour
+        LLinkUp: SHARED LinkObj;        # Link to left neighbour
+        LLinkDn: SHARED LinkObj;        # Link from left neighbour
+        RLinkUp: SHARED LinkObj;        # Link to right neighbour
+        RLinkDn: SHARED LinkObj         # Link from right neighbour
+);
+
+END;
+
+#===                                                        ====
+#=======        LoadBal.spf                             ========
+#===============================================================

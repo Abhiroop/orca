@@ -1,0 +1,62 @@
+OBJECT IMPLEMENTATION barrier;
+	P: integer;		# number of processes
+	joined: integer;	# number of processes that did a join
+	voted: integer;		# number of processes that voted
+	result: boolean;	# result of vote
+
+	OPERATION init(nproc: integer);
+	BEGIN
+		P := nproc;
+		joined := 0;
+		voted := 0;
+		result := true;
+	END;
+
+	OPERATION inc();
+	BEGIN
+		joined +:= 1;
+		ASSERT(joined <= P);
+		IF joined = P THEN
+			# everybody else is blocked in block(), so it's
+			# safe to clear voted counter and result now
+			voted := 0;
+			result := true;
+		FI;
+	END;
+
+	OPERATION block();
+	BEGIN
+		GUARD joined = P DO; OD;
+	END;
+
+	FUNCTION join(b: SHARED barrier);
+	BEGIN
+		b$inc();
+		b$block();
+	END;
+
+	OPERATION DoVote(v: boolean);
+	BEGIN
+		voted +:= 1;
+		ASSERT(voted <= P);
+		IF NOT v THEN result := false; FI;	# veto
+		IF voted = P THEN
+			# everybody else is blocked in AwaitVote, so it's
+			# safe to clear joined counter now
+			joined := 0;
+		FI;
+	END;
+
+	OPERATION AwaitVote(): boolean;
+	BEGIN
+		GUARD voted = P DO
+			RETURN result;
+		OD;
+	END;
+
+	FUNCTION vote(v: boolean; b: SHARED barrier): boolean;
+	BEGIN
+		b$DoVote(v);
+		RETURN b$AwaitVote();
+	END;
+END;

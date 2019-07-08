@@ -1,0 +1,197 @@
+# ========================================================================
+# == File:      Grammar.imp						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  implementation of grammar object			==
+# ========================================================================
+MODULE IMPLEMENTATION Grammar;
+
+FROM StringObject IMPORT compare_string;
+FROM Types        IMPORT symbol_name_t, rule_t;
+FROM Comblist     IMPORT create_cl, delete_cl, insert_comb_cl;
+
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+#
+# create() : create the grammar
+#
+FUNCTION create_gramm(
+	gramm : SHARED grammar_t
+) : boolean;					# succes?
+
+BEGIN
+	gramm.head := NIL;
+	gramm.tail := NIL;
+	gramm.nr_elts := 0;
+
+	RETURN true;
+END;
+
+
+#
+# delete() : delete the grammar
+
+FUNCTION delete_gramm(
+	gramm : SHARED grammar_t
+);
+
+	old_elt : grammar_node_t;		# element to be deleted
+BEGIN
+	FOR i IN 1..gramm.nr_elts DO
+		old_elt := gramm.head;
+		gramm.head := gramm[gramm.head].next;
+		delete_cl(gramm[old_elt].comb_list);
+		DELETENODE(gramm, old_elt);
+	OD;
+END;
+
+
+#
+# insert_rule() : insert production rule in grammar
+#
+FUNCTION insert_rule_gramm(
+	gramm 	    : SHARED grammar_t;
+	rule        : rule_t			# rule to be inserted
+) : boolean;
+
+	new_elt, ptr : grammar_node_t;		# pointers to elements
+	index : integer;			# index in list
+BEGIN
+	IF is_in_gramm(gramm, rule.right1, index) THEN
+
+		# add to its symbol list
+		ptr := gramm.head;
+		FOR i IN 1..(index-1) DO
+			ptr := gramm[ptr].next;
+		OD;
+		
+		RETURN insert_comb_cl(gramm[ptr].comb_list, rule.right2, rule.new);
+	ELSE
+		new_elt := ADDNODE(gramm);
+		gramm[new_elt].from_symbol := rule.right1;
+
+		IF NOT (create_cl(gramm[new_elt].comb_list) AND
+			insert_comb_cl(gramm[new_elt].comb_list, rule.right2, rule.new)) THEN
+			RETURN false;
+		FI;
+		gramm[new_elt].next := NIL;
+
+		IF (gramm.nr_elts = 0) THEN	
+			gramm.head := new_elt;
+			gramm.tail := new_elt;
+			gramm.nr_elts +:= 1;
+			RETURN true;
+		FI;
+		
+		ptr := gramm.head;
+
+		# should we insert as first element?
+		IF (compare_string(gramm[ptr].from_symbol, rule.right1) >= 0) THEN
+			gramm[new_elt].next := gramm.head;
+			gramm.head := new_elt;
+			gramm.nr_elts +:= 1;
+			RETURN true;
+		FI;
+
+		# insert at correct position
+		WHILE (gramm[ptr].next /= NIL) DO
+			IF (compare_string(gramm[gramm[ptr].next].from_symbol, 
+					   rule.right1) >= 0) THEN
+				gramm[new_elt].next := gramm[ptr].next;
+				gramm[ptr].next := new_elt;
+				gramm.nr_elts +:= 1;
+        	        	RETURN true;
+			FI;
+			ptr := gramm[ptr].next;
+	        OD;
+	
+		# insert as new tail
+		gramm[gramm.tail].next := new_elt;
+		gramm.tail := new_elt;
+		gramm.nr_elts +:= 1;	
+	FI;
+	RETURN true;
+END;
+
+
+#
+# num_elts() : return number of rules in grammar
+#
+
+FUNCTION num_elts_gramm(
+	gramm : grammar_t
+) : integer;					# nr of production rules
+
+BEGIN
+	RETURN gramm.nr_elts;
+END;
+
+
+#
+# give_ith_elt() ; return info on ith element in the list
+#
+FUNCTION give_ith_elt_gramm(
+	gramm       : grammar_t;
+	index       : integer; 			# index in list
+	from_symbol : SHARED symbol_name_t; 	# left part of right hand side
+	comb_list   : SHARED grammar_node_t	# list combinations that can be
+						# made with from_symbol
+) : boolean;			
+
+	ptr : grammar_node_t;			# pointer to element in list
+BEGIN
+	IF ((index < 1) OR (index > gramm.nr_elts)) THEN
+		RETURN false;
+	FI;
+	
+	ptr := gramm.head;
+	
+	FOR i IN 1..(index-1) DO
+		ptr := gramm[ptr].next;
+	OD;
+	
+	from_symbol := gramm[ptr].from_symbol;
+	comb_list := ptr;
+
+	RETURN true;
+END;
+	
+
+#
+# is_in() : check if rule is in grammar
+#
+FUNCTION is_in_gramm(
+	gramm       : grammar_t;
+	from_symbol : symbol_name_t; 		# check if there is a rule in the 
+						# grammar with from_symbol as the
+						# left part of the right hand side
+	index       : OUT integer		# position in the list, if present
+) : boolean;					# was it in the grammar?
+		
+	ptr : grammar_node_t;			# pointer to element in list
+	cmp : integer;				# result of comparsion
+BEGIN
+	ptr := gramm.head;
+
+	FOR i IN 1.. gramm.nr_elts DO
+		cmp := compare_string(gramm[ptr].from_symbol, from_symbol);
+
+		#list is sorted, so check if we can break
+		IF (cmp > 0) THEN
+			RETURN false;
+		FI;
+	
+		IF (cmp = 0) THEN
+			index := i;
+			RETURN true;
+		FI;
+		ptr := gramm[ptr].next;
+	OD;
+	RETURN false;
+END;
+
+END;
+

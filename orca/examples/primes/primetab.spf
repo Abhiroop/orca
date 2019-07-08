@@ -1,0 +1,8 @@
+OBJECT SPECIFICATION primetab;
+	OPERATION initvar();
+	OPERATION wait();
+	OPERATION init(limit: integer);
+	OPERATION AddPrime(p: integer);
+	OPERATION GetPrime(i: integer; prime, square: OUT integer);
+	OPERATION NPrimes(): integer;
+END;

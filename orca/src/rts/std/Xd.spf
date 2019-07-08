@@ -1,0 +1,207 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+#========================================================================
+#== File:      Xd.spf						       ==
+#== Program:   Orca<->Vogle interface				       ==
+#== Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994        ==
+#== Contains:  Orca specification of interface functions called by     ==
+#==	       operations in the Vogle object. 			       ==
+#========================================================================
+MODULE SPECIFICATION Xd;
+
+
+#========================================================================
+#== Note : At all times in this module a current color and a current   ==
+#==        graphics point are defined indicating respectively the color==
+#==        in which subsequent drawings will be done and a point in    ==
+#==        window at which drawings will start. After the call to      ==
+#==        X_init() these values are undefined.                        ==
+#==                                                                    ==
+#== Note2: all x and y coordinates are in WORLD-coordinates (i.e       ==
+#==        coordinates IN the window), unless stated differently       ==
+#========================================================================
+
+
+#
+# X_Init() : initialize interface
+#
+FUNCTION X_Init();
+
+
+
+#
+# X_Exit() : exit interface
+#
+FUNCTION X_Exit();
+
+
+
+#
+# BackBuffer() : initialize backbuffering.
+#
+FUNCTION BackBuffer(
+) : integer;				# sucess or not	
+
+
+#
+# Circle : draw a circle in the current color. If polyfilling is
+#          on, the rectangle will be filled, else not.
+#
+FUNCTION Circle(
+	x, y : real;			# center in world-coordinates
+	radius : real			# circle radius
+);
+
+
+
+#
+# CirclePrecision() : set the number of segments for subsequent circles
+#
+FUNCTION CirclePrecision(
+	nseg : integer			# number of segments
+);
+
+
+#
+# Clear() : clear the window with the current color
+#
+FUNCTION Clear();
+
+
+
+#
+# Color() : set current color. All subsequent drawings will be drawn
+#	    using color col.
+#
+FUNCTION Color(
+	col : integer			# the color index		
+);
+
+
+
+#
+# Draw2() : draw a line from the current graphics point to (x, y)
+#
+FUNCTION Draw2(
+	x, y : real			# the destination point
+);
+
+
+
+#
+# DrawStr() : draw an Orca string at the current graphics point
+#
+FUNCTION DrawStr(
+	str : string			# the orca string
+);
+
+
+
+#
+# MapColor() : create a new color index by a (red, green , blue)
+#	       combination
+FUNCTION MapColor(
+        index :  integer;		# the new index
+        red :    integer;		# red factor
+        green :  integer;		# green factor
+        blue :   integer		# blue factor
+);
+
+
+
+#
+# Move2() : change current graohics position
+# 
+FUNCTION Move2(
+	x, y : real
+);
+
+
+
+#
+# Ortho2() : Define new clipping plane. This operation can be used to
+#	     scale and/or rotate your interface window. By default these values are: 
+#            (left, right, bottom, top) = (-1.0, 1.0, -1.0, 1.0). So,
+#            by default the origin is in the middle of the window. 
+#
+
+FUNCTION Ortho2(
+	left, right,
+	bottom, top : real
+);
+
+
+
+#
+# Point2() : draw a point at (x,y) in the current color
+#
+FUNCTION Point2(	
+	x, y : real			# x and y coordinates
+);
+
+
+
+#
+# PolyFill() : set whether subsequent polygons (circles, rectangles)
+#              should be filled 
+#
+FUNCTION PolyFill(
+	onoff : boolean
+);
+
+
+
+#
+# PrefPosition(): Specify the preferred position of the window opened
+#                 by Init()
+FUNCTION PrefPosition(
+	x, y : integer
+);
+
+
+
+#
+# PrefSize() : Specify the preferred width and height of the window
+#              opened by Init()
+FUNCTION PrefSize(
+	width, height : integer
+);
+
+
+
+#
+# Rect() : draw a rectangle in the current color. If polyfilling is 
+#          on, the rectangle will be filled, else not.
+FUNCTION Rect(
+	x1,y1, 				# corners of the rectangle.
+	x2, y2 : real
+);
+
+
+#
+# SwapBuffers() : Swap the front and back buffers. Used in combination
+#                 with the BackBuffer() routine.
+#
+FUNCTION SwapBuffers();
+
+#
+# VsetFlush() : set global flushing status. If yesno = false
+#  		then don't  do  any  flushing  (except  in swapbuffers(), or
+#	        vflush()). If yesno = 1 true then do the flushing as
+#		described above. 
+# 
+FUNCTION VsetFlush(
+	yesno : boolean			# do flushing or not?
+);
+
+
+
+#
+# Vflush() : Call the device flush or syncronisation  routine. This
+#            forces a flush.
+#
+FUNCTION Vflush();
+
+END;

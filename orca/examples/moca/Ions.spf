@@ -1,0 +1,37 @@
+MODULE SPECIFICATION Ions;
+
+IMPORT	Barrier;
+IMPORT	VarObject;
+IMPORT	RandObject;
+FROM	Common	IMPORT	IntKinsType, RealTableType,
+			IntRecordType, RealRecordType, ConstType;
+
+
+##
+## Moves all elements to their new positions.
+##
+FUNCTION MoveIons(GLOB               : SHARED VarObject;
+		  CNST               : ConstType;
+		  TDT                : real;
+		  NRP, NRE, FLOATCPU : integer;
+		  FEX                : RealTableType;
+		  SEED               : SHARED integer;
+		  RAND               : SHARED RandObject);
+
+
+##
+## Checks all the pairs of particles if they are within respective
+## reaction spheres. If so, calls the reaction subroutines. Calcu-
+## lates the mutual electric field for the charged particles.
+##
+FUNCTION CheckR(GLOB                  : SHARED VarObject;
+		BARRIER               : SHARED Barrier;
+		CNST                  : ConstType;
+		T                     : real;
+		FLOATALL, FLOATCPU,
+		NRREAC, NRP, NRE, IDX : SHARED integer;
+		STOP                  : SHARED boolean;
+		IKIN                  : SHARED IntKinsType;
+		NRECORD               : SHARED IntRecordType;
+		TRECORD               : SHARED RealRecordType): boolean;
+END;

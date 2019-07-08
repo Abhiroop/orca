@@ -1,0 +1,69 @@
+OBJECT IMPLEMENTATION TableObj;
+
+TYPE Task = 
+          RECORD
+               WORKER    : integer;
+               CPU_TIME  : integer;
+               IDLE_TIME : integer;
+          END;
+
+TYPE TaskArray = ARRAY[integer] OF Task;
+
+
+table      : TaskArray;
+printer    : integer;
+
+FUNCTION Init( up_b: integer; tab: OUT TaskArray[1..up_b]);
+BEGIN
+END;
+
+
+OPERATION InitTable( up_b: integer );
+BEGIN
+     Init(up_b,table);
+END;
+
+
+OPERATION SetPrinter( nr : integer );
+BEGIN 
+       printer := nr;
+END;
+
+OPERATION DecPrinter( nr : integer);
+BEGIN 
+       printer -:= nr;
+END;
+
+OPERATION PrintAwaitValue( nr : integer );
+BEGIN 
+       GUARD printer = nr DO 
+       OD;
+END;
+
+OPERATION PrinterValue():integer;
+BEGIN 
+       RETURN printer;
+END;
+
+OPERATION GetCpuTime( nr : integer ):integer;
+BEGIN
+      RETURN table[nr].CPU_TIME;
+END;
+
+OPERATION GetIdleTime( nr : integer ):integer;
+BEGIN
+      RETURN table[nr].IDLE_TIME;
+END; 
+
+OPERATION PutCpuTime( nr, time : integer );
+BEGIN
+      table[nr].CPU_TIME := time;
+END;
+
+OPERATION PutIdleTime( nr, time : integer );
+BEGIN
+      table[nr].IDLE_TIME := time;
+END; 
+
+
+END;

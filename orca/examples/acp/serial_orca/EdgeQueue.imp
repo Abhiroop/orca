@@ -1,0 +1,135 @@
+# ========================================================================
+# == File:      Fifo.imp   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  implementation of Queue of pending edges		==
+# ========================================================================
+MODULE IMPLEMENTATION EdgeQueue;
+
+FROM EdgeCollection IMPORT edge_t, edge_p, compare_edges;
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+#
+# create_queue() : create the queue
+#
+FUNCTION create_queue(
+	Q : SHARED Edgequeue_t			# the queue
+) : boolean;					# succes?
+
+BEGIN
+	Q.head := NIL;
+	Q.tail := NIL;
+	Q.num_elts := 0;
+	RETURN true;
+END;
+
+
+#
+# delete_queue() : delete the queue
+#
+FUNCTION delete_queue(
+	Q : SHARED Edgequeue_t			# the queue
+);
+
+        old_elt : Edge_queue_elt_p;		# pointer to element to be deleted
+BEGIN
+        FOR i IN 1..Q.num_elts DO
+                old_elt := Q.head;
+                Q.head := Q[Q.head].next;
+                DELETENODE(Q, old_elt);
+        OD;
+END;
+
+
+#
+# add_edge_queue() : add an edge to the tail of the queue
+#
+
+FUNCTION add_edge_queue(	
+	Q : SHARED Edgequeue_t;			# the edge queue
+#	e_coll : edge_t;			# the collection of edges
+	edge: edge_p				# edge to be added
+) : boolean;					# succes?
+
+	p : Edge_queue_elt_p;
+BEGIN
+#	IF is_in_queue(Q, e_coll, edge) THEN
+#		RETURN true;
+#	FI;
+
+	p := ADDNODE(Q);  # add a new node to Q, return its name in p
+        Q[p].data := edge; # fill in data field of the new node
+        IF Q.head = NIL THEN  # Is it the first node?
+		Q.head := p;  # yes; assign it to global data field
+        ELSE
+                Q[Q.tail].next := p; # no; set its next field
+        FI;
+        Q.tail := p;  # Assign to "tail" global data field
+	Q.num_elts +:= 1;
+	RETURN true;
+END;
+  	
+
+#
+# num_elts_queue() : return number of elements in the queue
+#
+FUNCTION num_elts_queue(		
+	Q : Edgequeue_t				# the queue
+) : integer;					# nr of elements in the queue
+
+BEGIN
+	RETURN Q.num_elts;
+END;
+
+
+#
+# get_edge_queue() : get first element of the queue. Elt itself is not
+# deleted, but head is updated.
+#
+FUNCTION get_edge_queue(
+	Q : SHARED Edgequeue_t;			# the queue
+	edge : OUT edge_p        		# first element of queue
+) : boolean;					# true if queue is non-empty. false else
+
+	p: Edge_queue_elt_p;			# pointer to element
+
+BEGIN   # Try to fetch a job from the queue
+	IF Q.head /= NIL THEN  # An edge is available
+        	p := Q.head;  # Remove it from the queue
+                Q.head := Q[p].next;
+                IF Q.head = NIL THEN 
+			Q.tail := NIL; 
+		FI;
+                edge := Q[p].data;
+		Q.num_elts -:= 1;
+                RETURN true;
+	FI;
+END;
+
+
+#
+# is_in_queue() : is an element in the queue?
+#
+FUNCTION is_in_queue(
+	Q : Edgequeue_t;			# the queue
+	e_collection : edge_t;			# the collection of edges
+	edge : edge_p				# is this edge in the queue
+) : boolean;					# yes or no?
+
+
+	ptr : Edge_queue_elt_p;			# pointer to item
+BEGIN
+	ptr := Q.head;
+	FOR i IN 1..Q.num_elts DO
+		IF (compare_edges(e_collection, Q[ptr].data, edge) = 0) THEN
+			RETURN true;
+		FI;
+		ptr := Q[ptr].next;
+	OD;
+	RETURN false;
+END;
+
+END;

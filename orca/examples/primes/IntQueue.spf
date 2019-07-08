@@ -1,0 +1,7 @@
+OBJECT SPECIFICATION IntQueue;
+	OPERATION Enqueue(item: integer);
+	   # add a new item at end of queue
+	OPERATION Dequeue(): integer;
+	   # wait until item available at front of queue, then delete it
+	   # from the queue and return it.
+END;

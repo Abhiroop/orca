@@ -1,0 +1,82 @@
+echo "Installing binaries and scripts ..."
+
+rm -f $TARGET/bin/makedepend $TARGET/bin.$MACH/makedepend
+mkdep=`which makedepend`
+case "$mkdep" in
+'no '*)	unset mkdep
+	;;
+esac
+cd $CONF/scripts
+if $MAKE install > Out 2>&1
+then	:
+else	echo "make scripts failed, see $CONF/scripts/Out"
+	exit 1
+fi
+
+case $MACH in
+sol2)	if $MAKE prun_install > Out.2 2>&1
+	then	echo "Done"
+	else	echo "make scripts failed, see $CONF/scripts/Out.2"
+		exit 1
+	fi
+	;;
+*)	echo "Done"
+	;;
+esac
+
+rm -f $TARGET/bin/ancpp-T800
+
+case X$mkdep in
+X)	;;
+*)	rm -f  $TARGET/bin/makedepend
+	mkdir -p $TARGET/bin.$MACH
+	ln -s $mkdep $TARGET/bin.$MACH/makedepend
+	;;
+esac
+
+echo "Building compiler support libraries ... "
+cd $CONF/libs
+for i in system flt_arith alloc
+do
+( cd $i
+  if $MAKE > Out 2>&1
+  then	:
+  else	echo "make $i library failed, see $CONF/libs/$i/Out"
+	exit 1
+  fi
+)
+done
+echo "compiler support libraries done"
+
+echo "Building parser generator ... "
+cd $CONF/LLgen
+if $MAKE install > Out 2>&1
+then
+	$MAKE clean > /dev/null 2>&1
+	rm -f Out
+	echo "Done"
+else	echo "make parser generator failed, see $CONF/LLgen/Out"
+	exit 1
+fi
+
+echo "Building compiler binary ..."
+cd $CONF/comp
+if $MAKE install > Out 2>&1
+then	$MAKE clean > /dev/null 2>&1
+	rm -f Out
+	echo "compiler binary done"
+else	echo "make compiler failed, see $CONF/comp/Out"
+	exit 1
+fi
+
+echo "Building compiler driver ..."
+cd $CONF/driver
+if $MAKE install > Out 2>&1
+then	$MAKE clean > /dev/null 2>&1
+	rm -f Out
+	echo "compiler driver done"
+else	echo "make compiler driver failed, see $CONF/driver/Out"
+	exit 1
+fi
+
+echo "Binaries and scripts done"

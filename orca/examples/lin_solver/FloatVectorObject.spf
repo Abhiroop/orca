@@ -1,0 +1,30 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+OBJECT SPECIFICATION FloatVectorObject;
+
+FROM FloatVector IMPORT FloatVector;
+
+TYPE FloatVectorObjVector = ARRAY[integer] OF FloatVectorObject;
+
+OPERATION value() : FloatVector;
+
+OPERATION done( phase : integer) : boolean;
+
+OPERATION finished( epsilon : real) : boolean;
+
+OPERATION subscr(i : integer) : real;
+
+OPERATION set_all(r : real);
+
+OPERATION set_arr(offs   : integer;
+		  upb    : integer;
+		  update : FloatVector;
+		  residue: real);
+
+OPERATION await_turn(caller: integer);
+
+OPERATION init(new_N : integer; axa: integer);
+
+END;

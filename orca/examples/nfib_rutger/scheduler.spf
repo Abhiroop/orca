@@ -1,0 +1,12 @@
+MODULE SPECIFICATION scheduler;
+
+FROM semaphore       IMPORT semaphore;
+FROM task_graph_obj  IMPORT task_graph_obj;
+FROM action_list_obj IMPORT action_list_obj;
+
+PROCESS scheduler(task_graph  : SHARED task_graph_obj;
+		  action_list : SHARED action_list_obj;
+		  ncpus       : integer;
+		  print_sema  : SHARED semaphore);
+
+END;

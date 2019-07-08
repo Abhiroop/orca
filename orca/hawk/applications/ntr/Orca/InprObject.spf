@@ -1,0 +1,12 @@
+OBJECT SPECIFICATION InprObject[integer, integer];
+  
+FROM global IMPORT NReals;
+
+  OPERATION init();
+  OPERATION doppler();
+  OPERATION psum(): NReals;
+  OPERATION cfar(LocalThresh: IN NReals);
+  OPERATION PrintDetChannel0();
+  OPERATION PrintInpr();
+  OPERATION PrintMag();
+END;

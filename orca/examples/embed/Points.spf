@@ -1,0 +1,18 @@
+MODULE SPECIFICATION Points;
+	IMPORT InOut;
+	CONST dimension = 2;
+
+	TYPE Point = ARRAY[integer 1..dimension] OF longreal;
+
+	FUNCTION distanceBetween( p: Point; q: Point) : longreal;
+	  # the euclidean distance
+
+	FUNCTION length( p: Point) : longreal;
+
+	FUNCTION normalized(p : Point) : Point;
+ 
+ 	
+
+	FUNCTION printIt( p: Point);
+	
+END;

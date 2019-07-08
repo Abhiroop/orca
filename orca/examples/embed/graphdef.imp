@@ -1,0 +1,130 @@
+# This is a module for getting the graph data into the program
+# It is not very general, we just define a 2-dimensional array with
+# a table of adjacent nodes to node i in row i
+
+MODULE IMPLEMENTATION graphdef;
+IMPORT RowCollection;
+FROM InOut  IMPORT ReadString, ReadInt, WriteString, WriteInt, WriteLn, 
+		Eof, Eoln;
+
+CONST MaxDegree = 50;  # The maximum degree we allow a vertex to have
+
+TYPE adjacencyList = ARRAY[integer] OF ARRAY[integer] OF integer;
+
+FUNCTION initList(l : SHARED adjacencyList);
+BEGIN
+ # initialize the vertex numbers to -1
+  FOR row IN 1 .. NVertices DO
+    FOR column IN 1 .. MaxDegree DO     
+      l[row][column] := -1;
+    OD;
+  OD;
+END;
+
+FUNCTION fillList(l : SHARED adjacencyList); 
+BEGIN
+   # fill the vertex list to reflect a 3x3 grid
+   l[1][1]:=2; l[1][2]:=4; 
+   l[2][1]:=1; l[2][2]:=5; l[2][3]:=3;
+   l[3][1]:=2; l[3][2]:=6; 
+   l[4][1]:=1; l[4][2]:=7; l[4][3]:=5;
+   l[5][1]:=2; l[5][2]:=4; l[5][3]:=8; l[5][4]:=6;
+   l[6][1]:=3; l[6][2]:=5; l[6][3]:=9;
+   l[7][1]:=4; l[7][2]:=8;
+   l[8][1]:=5; l[8][2]:=7; l[8][3]:=9;
+   l[9][1]:=6; l[9][2]:=8;
+END;
+
+FUNCTION fillListGrid(columns : integer; l : SHARED adjacencyList); 
+BEGIN
+  # fill the vertex list to reflect a grid of columns columns
+  # say the nodes are numbered from top left
+  # horizontal connections in 1st row
+  FOR vertex IN 1..columns-1 DO
+    l[vertex][1]:= vertex + 1; # connect right
+  OD;
+  
+  # 
+  FOR vertex IN columns+1..NVertices DO
+    l[vertex][1]:=vertex - columns; # connect up
+    IF (vertex % columns /= 0) AND (vertex + 1 <= NVertices) THEN 
+      l[vertex][2] := vertex + 1; # connect right
+    FI;
+  OD;
+END;
+
+
+FUNCTION fillListInput(l : SHARED adjacencyList);
+i, vertex, v : integer;
+s : string;
+BEGIN
+  vertex := 1;
+  WHILE (NOT Eof()) AND (vertex /= -1) DO
+    # WriteLine();
+    ReadInt(vertex);
+    IF vertex /= -1 THEN
+      WriteInt(vertex);
+      WriteLine();
+      i := 1;
+      ReadString(s);
+      WHILE NOT Eoln() DO
+        ReadInt(v);
+        l[vertex][i]:=v;
+        i:=i+1;
+      OD;
+    FI;
+  OD;
+  FOR j IN 1..NVertices DO
+    IF l[j][1]=-1 THEN l[j][1]:=1; FI;
+  OD;  # connect empty rows to node 1
+END;
+
+FUNCTION initDistances(l : adjacencyList; matrix: SHARED RowCollection);
+  i,j : integer;
+BEGIN
+  # initialize the distances to infinity,
+  # initialize distances between adjacent vertices to 1
+  # all other distances to infinity
+
+  FOR row IN 1 .. NVertices DO
+    Write(row);
+   WriteLine();
+    FOR column IN 1 .. MaxDegree DO    
+      IF l[row][column] >= 0 THEN 
+        i := row;
+        j := l[row][column];
+        matrix$atPut(i, j, 1);      
+        matrix$atPut(j, i, 1);
+        # we do not suppose that the graph is undirected 
+      FI;
+    OD;
+  OD;
+END;
+
+FUNCTION createDistanceMatrix(dm: SHARED RowCollection);
+  adjList : adjacencyList[1..NVertices][1..MaxDegree];
+BEGIN
+  WriteLine("here");
+  initList(adjList);
+  fillListGrid(10, adjList);
+#  fillListInput(adjList);
+  WriteLine("here2");
+  initDistances(adjList, dm);
+  WriteLine("here3");
+END;
+
+
+END;
+
+
+
+
+
+
+
+
+
+
+
+
+

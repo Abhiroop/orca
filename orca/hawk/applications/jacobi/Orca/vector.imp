@@ -1,0 +1,79 @@
+OBJECT IMPLEMENTATION vector[integer n..N];
+
+  FROM data IMPORT a, b;
+  FROM Math IMPORT fabs;
+  FROM consts IMPORT PRECISION, MAX_VALUE;
+
+  x: real;
+
+  OPERATION check_result();
+	res: real;
+	err: real;
+  BEGIN
+	FOR i IN n..N DO
+		res := 0.0;
+		err := 0.0;
+		FOR j IN n..N DO
+			err +:= fabs(PRECISION * a[i,j]);
+			res +:= a[i,j]*x[j];
+		OD;
+		IF fabs(res - b[i]) > err THEN
+			WriteLine("incorrect: i = ", i, ", res = ", res, ", b[i] = ", b[i]);
+		FI;
+	OD;
+  END;
+
+  OPERATION print_system();
+  BEGIN
+	FOR i IN n..N DO
+		FOR j IN n..N DO
+			Write(a[i,j], "	");
+		OD;
+		WriteLine(x[i], "	=	", b[i]);
+	OD;
+	WriteLine();
+  END;
+
+  OPERATION print_x();
+  BEGIN
+	WriteLine();
+	WriteLine("X: ");
+	FOR i IN n..N DO
+		Write(x[i], "	");
+		IF ((i-n)%5) = 0 THEN WriteLine(); FI;
+	OD;
+	WriteLine();
+  END;
+
+  FUNCTION max(v1, v2: SHARED real);
+  BEGIN
+	IF v1 < v2 THEN v1 := v2; FI;
+  END;
+
+  PARALLEL OPERATION[ind] update_x(): REDUCE real WITH max;
+	val: real;
+	diff: real;
+  BEGIN
+	val := b[ind];
+#	FOR j IN n..N DO
+#		IF j /= ind THEN
+#			val := val - x[j] * a[ind, j];
+#		FI;
+#	OD;
+
+# Replaced by the following two loops so that the optimizer can do more.
+	FOR j IN n..ind-1 DO
+		val := val - x[j] * a[ind, j];
+	OD;
+	FOR j IN ind+1..N DO
+		val := val - x[j] * a[ind, j];
+	OD;
+	val /:= a[ind, ind];
+	diff := fabs(val - x[ind]);
+	x := val;
+	RETURN diff;
+  END;
+
+BEGIN
+  FOR i IN n..N DO x[i] := FLOAT(i-n)/MAX_VALUE; OD;
+END;

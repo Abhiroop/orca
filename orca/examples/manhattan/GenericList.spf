@@ -1,0 +1,36 @@
+
+GENERIC (TYPE T)
+OBJECT SPECIFICATION GenericList;
+	
+	TYPE PrintFunType = FUNCTION ( IN T );
+	TYPE NodeType = NODENAME OF ListType;
+	TYPE ListType =
+		GRAPH
+			root : NodeType;
+			nr : integer;
+		NODES
+			id : string;
+			info : T;
+			next : NodeType;
+			prev : NodeType;
+		END;
+
+
+	OPERATION Insert (el : string; inf : T);
+	OPERATION Update (el : string; inf : T);
+	OPERATION Exists (el : string) : boolean;
+	OPERATION Info (el : string) : T;
+
+	OPERATION First () : NodeType;
+	OPERATION Last () : NodeType;
+	OPERATION Next (n : NodeType) : NodeType;
+	OPERATION Previous (n : NodeType) : NodeType;
+	OPERATION Size () : integer;
+	OPERATION Name (n : NodeType) : string;
+
+
+	OPERATION Print (foo : PrintFunType);
+
+END;
+
+

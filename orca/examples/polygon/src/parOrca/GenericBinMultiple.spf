@@ -1,0 +1,24 @@
+ ###############################################################################
+ #####  GenericBinMultiple.spf                                            ######
+ ##                                                                          ###
+   
+GENERIC (TYPE T)
+OBJECT SPECIFICATION GenericBinMultiple;
+
+    OPERATION reset(
+	N : integer
+    );
+
+    OPERATION put(
+        data: IN T
+    );
+
+    OPERATION get(
+	n: IN integer
+    ) : T;
+
+END GENERIC;
+
+ ##                                                                          ###
+ #####  GenericBinMultiple.spf                                            ######
+ ###############################################################################

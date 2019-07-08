@@ -1,0 +1,74 @@
+# ========================================================================
+# == File:      Dictionary.spf   					==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  data structure for the dictionary  in the grammar	==
+# ========================================================================
+MODULE SPECIFICATION Dictionary;
+
+FROM Types IMPORT word_t, symbol_name_t;
+FROM Symbollist IMPORT symbollist_t;
+
+# ========================================================================
+# == types								==
+# ========================================================================
+
+TYPE    dict_node_t    	= NODENAME OF dictionary_t;
+TYPE    dictionary_t    =
+                GRAPH
+                        head, tail : dict_node_t;	# head and tail of the list
+                        nr_elts    : integer;		# nr of elts in dictionary
+                NODES
+                        word  	    :  word_t;		# the terminal
+                        symbol_list :  symbollist_t;	# non-terminal generating word
+                        next :  dict_node_t;
+                END;
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+FUNCTION create_dict(
+	dictionary   : SHARED dictionary_t	# the dictionary
+) : boolean;					# succes?
+
+
+FUNCTION delete_dict(
+	dictionary   : SHARED dictionary_t	# the dictionary
+);
+
+
+FUNCTION insert_word_dict(
+	dictionary   : SHARED dictionary_t;	# the dictionary
+	word	     : word_t; 			# word to be inserted
+	non_terminal : symbol_name_t		# non_terminal generating this word
+) : boolean;
+
+
+FUNCTION num_elts_dict(
+	dictionary   : dictionary_t		# the dictionary
+) : integer;					# number of elements in the dictionary
+
+
+FUNCTION give_ith_elt_dict(
+	dictionary   : dictionary_t;		# the dictionary
+	index 	     : integer; 		# index in the list
+	word  	     : OUT word_t; 		# word on position i
+	symbol_list  : SHARED dict_node_t	# symbol_list on position i
+) : boolean;
+
+
+FUNCTION is_in_dict(
+	dictionary   : dictionary_t;		# the dictionary
+	word 	     : word_t; 			# word to be checked for
+	index        : OUT integer		# position of in list
+) : boolean;					# is the word in the list?
+						
+END;
+
+
+
+
+
+
+

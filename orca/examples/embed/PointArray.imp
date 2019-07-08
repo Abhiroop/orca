@@ -1,0 +1,50 @@
+OBJECT IMPLEMENTATION PointArray;
+FROM Points IMPORT Point, printIt;
+FROM InOut  IMPORT WriteLn, WriteString, WriteInt, WriteLongReal;
+
+	TYPE collection = ARRAY[integer] OF Point;
+     	tab : collection;
+
+	OPERATION init(size: integer);
+     	  # Set size of the array
+     	  tmp: collection[1..size];
+	BEGIN
+		tab := tmp;
+	END;
+
+
+	OPERATION at(index: integer): Point;
+     	  # Answer the point at index
+     	BEGIN
+	  RETURN(tab[index]);
+     	END;
+
+
+	OPERATION atPut(index: integer; p : Point);
+     	  # put p at index index
+     	BEGIN
+	  tab[index]:= p;
+        END;
+
+	OPERATION size():integer;
+	BEGIN
+	  RETURN(SIZE(tab));
+	END;
+
+
+	OPERATION printItMma();
+	p : Point;
+	BEGIN
+  	WriteString("{");
+  	FOR i IN 1..SELF$size()-1 DO
+    		printIt(SELF$at(i));
+    		WriteString(",");
+     		WriteLine();
+   	OD;
+        p := SELF$at(SELF$size());
+   	printIt(p);
+   	WriteString("},   ");
+   	WriteLine();
+   	WriteLine();
+END;
+END;

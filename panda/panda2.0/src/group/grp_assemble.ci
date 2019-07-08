@@ -1,0 +1,179 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/******************************************************************************
+ *
+ * The layer for reassembly of fragments.
+ * Upcall hook to the group fragment layer:
+ * pan_grp_assemble_and_deliver(pan_group_p g, pan_fragment_p frag)
+ *
+ ******************************************************************************/
+
+
+#ifndef __PAN_GRP_ASSEMBLE_CI__
+#define __PAN_GRP_ASSEMBLE_CI__
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+
+#include "pan_sys.h"
+
+#include "pan_trace.h"
+
+#include "grp_global.h"
+#include "grp_stats.h"
+
+#include "grp_send.h"
+#include "grp_frag.ci"
+#include "grp_assemble.h"
+
+
+
+
+typedef struct RCVE_EV_INFO_T {
+    short int mem;
+    short int messid;
+    int seqno;
+} rcve_ev_info_t;
+
+typedef struct MSG_RCVE_EV_T {
+    int seqno;
+} msg_rcve_ev_t;
+
+
+
+static trc_event_t pb_rcve_ev;
+static trc_event_t bb_rcve_ev;
+static trc_event_t msg_rcve_ev;
+
+
+
+/* Perform an upcall to deliver an ordered group message to the layer above.
+ * The ordered control messages (GRP_JOIN and GRP_LEAVE) must have been
+ * filtered out.
+ *
+ * Fragmented messages are reassembled here. For group messages from other
+ * members than this receiving member, this follows the example in the
+ * Panda message documentation.
+ * For group messages from this member, extra trouble has been taken.
+ * All fragments are ignored, the original unfragmented message is
+ * picked up from the retransmission database with pan_grp_frag_arrived().
+ */
+STATIC_CI void
+pan_grp_assemble_and_deliver(pan_group_p g, pan_fragment_p frag, grp_hdr_p hdr)
+{
+    unsigned int  flags;
+    int           is_last;
+    pan_msg_p     catch_msg;
+#ifdef TRACING
+    rcve_ev_info_t rcve_info;
+
+    rcve_info.mem = hdr->sender;
+    rcve_info.seqno = hdr->seqno;
+    rcve_info.messid = hdr->messid;
+    if (hdr->type == GRP_BB_ACPT) {
+	trc_event(bb_rcve_ev, &rcve_info);
+    } else {
+	trc_event(pb_rcve_ev, &rcve_info);
+    }
+#endif
+
+    assert(hdr->type == GRP_BB_ACPT || hdr->type == GRP_PB_ACPT);
+
+    flags = pan_fragment_flags(frag);
+    is_last = flags & PAN_FRAGMENT_LAST;
+
+    if (hdr->sender == pan_grp_me) {
+				/* Delivered fragments are ignored: the
+				 * complete msg is obtained from the sender
+				 * via a frag_arrived tt action. */
+					STATDISCARD(g, DX_HOME_FRAG, 1);
+
+				/* Dequeue timer daemon entry. */
+	catch_msg = pan_grp_frag_arrived(g, hdr, is_last);
+	assert(catch_msg != NULL);
+
+    } else {
+	if (flags & PAN_FRAGMENT_FIRST) {
+				/* First fragment. Start catch. */
+	    catch_msg = pan_msg_create();
+
+	    if (! (flags & PAN_FRAGMENT_LAST)) {
+				/* Multiple frag msg. Store the msg. */
+		if (! pan_grp_fb_store(g->frag_buf, hdr->sender, hdr->sender_id,
+				     catch_msg)) {
+		    pan_panic("fragment buffer overrun (sender %d, id %d)\n",
+				hdr->sender, hdr->sender_id);
+		}
+	    }
+
+	} else if (is_last) {
+				/* Locate and erase catch */
+	    catch_msg = pan_grp_fb_delete(g->frag_buf, hdr->sender,
+					  hdr->sender_id);
+	    assert(catch_msg != NULL);
+
+	} else {
+				/* Locate catch */
+	    catch_msg = pan_grp_fb_locate(g->frag_buf, hdr->sender,
+					  hdr->sender_id);
+	    assert(catch_msg != NULL);
+	}
+
+	pan_msg_assemble(catch_msg, frag, 0);
+    }
+
+    if (! is_last) {
+	return;
+    }
+
+    g->is_ordr_busy = TRUE;
+    pan_mutex_unlock(pan_grp_upcall_lock);
+    g->receive(catch_msg);
+    pan_mutex_lock(pan_grp_upcall_lock);
+    g->is_ordr_busy = FALSE;
+}
+
+
+
+STATIC_CI void
+pan_grp_assemble_init(pan_group_p g)
+{
+    g->frag_buf = pan_grp_fb_create(pan_grp_fb_size, pan_nr_platforms());
+}
+
+
+STATIC_CI void
+pan_grp_assemble_clear(pan_group_p g)
+{
+    pan_grp_fb_clear(g->frag_buf);
+}
+
+
+
+STATIC_CI void
+pan_grp_assemble_start(void)
+{
+    pb_rcve_ev  = trc_new_event(3400, sizeof(rcve_ev_info_t),
+				"grp pb frag rcve",
+				"mem %h, msg-id %h, seqno %d");
+    bb_rcve_ev  = trc_new_event(3400, sizeof(rcve_ev_info_t),
+				"grp bb frag rcve",
+				"mem %h, msg-id %h, seqno %d");
+    msg_rcve_ev = trc_new_event(3800, sizeof(msg_rcve_ev_t), "grp msg rcve",
+				"seqno %d");
+}
+
+
+STATIC_CI void
+pan_grp_assemble_end(void)
+{
+}
+
+
+#endif

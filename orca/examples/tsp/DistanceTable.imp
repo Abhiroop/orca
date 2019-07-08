@@ -1,0 +1,104 @@
+DATA MODULE IMPLEMENTATION DistanceTable;
+
+	FROM args	IMPORT Argc, Argv;
+	FROM InOut	IMPORT OpenInputFile;
+	FROM Consts	IMPORT Inf, MAXSZ, MaxHops;
+	FROM conversions
+			IMPORT	StringToInt;
+
+	FUNCTION ComputeOrder();
+
+	    TYPE td = ARRAY[integer 0..MAXSZ-1] OF integer;
+	    tempdist: td;
+	    tmp: integer;
+	    x: integer;
+
+	BEGIN
+		FOR i IN 0..distance.NrTowns_min_1 DO
+			FOR j IN 0..distance.NrTowns_min_1 DO
+				tempdist[j] := distance.dst[i,j];
+			OD;
+			# Sort
+			FOR j IN 0..distance.NrTowns_min_1 DO
+				tmp := Inf+1;
+				FOR k IN 0..distance.NrTowns_min_1 DO
+					IF tempdist[k] < tmp THEN
+						tmp := tempdist[k];
+						x := k;
+					FI;
+				OD;
+				tempdist[x] := Inf+1;
+				distance.order[i,j] := x;
+			OD;
+		OD;
+	END;
+
+	FUNCTION Usage(): boolean;
+	BEGIN
+		IF MYCPU() = 0 THEN
+			WriteLine("Usage: ", Argv(0), " [ -m <maxhops> ] <inputfile>");
+		FI;
+		RETURN false;
+	END;
+
+	FUNCTION InitDistance(): boolean;
+		options: integer;
+		skip: integer;
+		dummy: integer;
+	BEGIN
+		distance.limit := false;
+		options := 0;
+		skip    := 0;
+		FOR i IN 1 .. Argc() - 1 DO
+		    IF skip > 0 THEN
+			skip -:= 1;
+		    ELSIF Argv(i) = "-m" THEN
+			maxhops := StringToInt(Argv(i + 1), dummy);
+			skip := 1;
+		    ELSIF Argv(i) = "-limit" THEN
+			distance.limit := true;
+		    ELSIF options = 0 THEN
+
+			IF NOT OpenInputFile(Argv(i)) THEN
+				IF MYCPU() = 0 THEN
+				    WriteLine("Could not open ", Argv(i));
+				FI;
+				RETURN false;
+			FI;
+			options +:= 1;
+		    ELSE
+			RETURN Usage();
+		    FI;
+		OD;
+
+		Read(distance.NrTowns_min_1);
+		distance.NrTowns_min_1 -:= 1;
+		IF distance.NrTowns_min_1 >= MAXSZ THEN
+			IF MYCPU() = 0 THEN
+				WriteLine("Maximum number of cities is ", MAXSZ);
+			FI;
+			RETURN false;
+		FI;
+
+		FOR i IN 0..distance.NrTowns_min_1 DO
+		    FOR j IN 0..distance.NrTowns_min_1 DO
+			Read(distance.dst[i,j]);
+			IF (i /= j) AND (distance.dst[i,j] = 0) THEN
+				distance.dst[i,j] := Inf;
+			FI;
+		    OD;
+		OD;
+		FOR i IN 0..distance.NrTowns_min_1 DO
+		    IF (distance.dst[i,i] /= 0) AND (MYCPU() = 0) THEN
+			WriteLine("Strange map: distance from city ", i, " to itself is non-zero");
+		    FI;
+		    distance.dst[i,i] := Inf;
+		OD;
+		ComputeOrder();
+		RETURN true;
+	END;
+
+BEGIN
+	maxhops := MaxHops;
+	init_succeeded := InitDistance();
+END;

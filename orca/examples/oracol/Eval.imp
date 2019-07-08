@@ -1,0 +1,321 @@
+# The module Eval contains functions to evaluate the playing board.
+
+MODULE IMPLEMENTATION Eval;
+
+FROM Types IMPORT DataRecord,EvalType,SaveType,MoveArray;
+FROM Const IMPORT BLACK,PAWNVAL,PAWN,KNIGHT,BISHOP,ROOK,QUEEN,KING,MATE,
+		  FULLSRCH,MATECHCK;
+FROM MoveGen IMPORT Moves,FieldMoves;
+FROM Misc IMPORT ThinkMove,UnthinkMove,Pinned,Check,OnBoard,Owner,Other,Val,Min;
+
+	FUNCTION CriticalPoint(dr : SHARED DataRecord;
+			       color : integer) : boolean;
+	FUNCTION Escapes(dr : SHARED DataRecord; color : integer) : integer;
+	FUNCTION Checking(dr : SHARED DataRecord; color : integer) : boolean;
+	FUNCTION Movable(dr : SHARED DataRecord; player : integer;
+			 xfrom,yfrom : integer; xt,yt : integer) : boolean;
+	FUNCTION Count(dr : SHARED DataRecord; player : integer;
+		       piece,x,y : integer; ap,dp,minval : SHARED integer);
+	FUNCTION LineCount(dr : SHARED DataRecord; player : integer;
+			   x,y : integer; piece : integer;
+			   xt,yt : integer; ap,dp,minval : SHARED integer);
+
+	# The function Analyse() decides whether we will do a Mate Approach or
+	# search for Tactical Win. We try a Mate Approach if three conditions
+	# are met :
+	#
+	#	-- There is a Critical Point (explained later)
+	#	-- The opponent king has at most one escape field
+	#	-- The opponent king can be checked
+	#
+	# Otherwise we look for material win.
+	FUNCTION Analyse(dr : SHARED DataRecord);
+	  color : integer;
+	BEGIN
+		dr.mate := false;
+		color := dr.player;
+		IF CriticalPoint(dr,Other(color)) AND
+		   (Escapes(dr,Other(color)) < 2) AND
+		   Checking(dr,color) THEN
+			WriteLine("Analyse : Do Mate Approach");
+			dr.mate := true;
+		 ELSE WriteLine("Analyse : Go For Tactical Win");
+		FI;
+	END;
+
+	# The function CriticalPoint() looks whether there is a critical point
+	# in the opponent's defence. A critical point is a field next to the
+	# king where the number of attackers is equal or greater than the
+	# number of defenders.
+	FUNCTION CriticalPoint(dr : SHARED DataRecord;
+			       color : integer) : boolean;
+	  xk,yk : integer;
+	  ap,dp : integer;
+	  minval : integer;
+	BEGIN
+		xk := dr.kpos[color] & 7; yk := dr.kpos[color] >> 3;
+		FOR x IN xk - 1 .. xk + 1 DO
+		  FOR y IN yk - 1 .. yk + 1 DO
+		    IF NOT((x = xk) AND (y = yk)) AND OnBoard(x,y) THEN
+		      ap := 0; dp := 0;
+		      Guards(dr,color,x,y,ap,dp,minval);
+		      # Are there equal or more attackers than defenders ?
+		      IF ap >= dp THEN RETURN true; FI;
+		    FI;
+		  OD;
+		OD;
+		RETURN false;
+	END;
+
+	# The function Escapes() returns the number of escape fields for the
+	# opponent's king.
+	FUNCTION Escapes(dr : SHARED DataRecord; color : integer) : integer;
+	  index : integer;
+	  method : integer;
+	  mbuf : MoveArray;
+	BEGIN
+		  index := 1;
+		  method := dr.method; dr.method := FULLSRCH;
+		  FieldMoves(dr,color,dr.kpos[color] >> 3,dr.kpos[color] & 7,
+			     mbuf,index,0);
+		  dr.method := method;
+		  RETURN index - 1;
+	END;
+
+	# The function Checking() looks whether there are checking moves.
+	FUNCTION Checking(dr : SHARED DataRecord; color : integer) : boolean;
+	  index : integer;
+	  result : boolean;
+	  movelist : MoveArray;
+	  save : SaveType;
+	BEGIN
+		index := 1; result := false;
+		Moves(dr,color,movelist,0);
+		WHILE (movelist[index] /= 0) AND NOT(result) DO
+		  ThinkMove(dr,color,movelist[index],save);
+		  result := Check(dr,Other(color));
+		  UnthinkMove(dr,color,save);
+		  index +:= 1;
+		OD;
+		RETURN result;
+	END;
+
+	# The function Evaluate() calculates two values for the given 
+	# position. The first one, realval, gives the material balance on the
+	# board. The second one, expval, gives the expectation of the last
+	# move. We distinguish two cases :
+	#
+	#	(1) Mate Approach : we do not care about the material balance.
+	#	    The expectation value depends on the threats and the 
+	#	    escape fields of the opponent king.
+	#	(2) Tactical Win : the real value depends on the material value
+	#	    and the fact whether the last piece moved is capturable.
+	#	    The expectation value reflects the threats.
+	#
+	# The real value is used to reflect the the static evaluation value of
+	# the position.
+	# The expectation value gives the dynamic evaluation value : it reflects
+	# the aggressive possibilities of the given position.
+	FUNCTION Evaluate(value : SHARED EvalType; dr : SHARED DataRecord;
+			  color,level,lmove : integer);
+	  minval : integer;
+	  x,y : integer;
+	  ap,dp : integer;
+	  index : integer;
+	  method : integer;
+	  mbuf : MoveArray;
+	BEGIN
+		IF dr.checked THEN
+		  # Can the player do a move ?
+		  mbuf[1] := 0;
+		  method := dr.method; dr.method := MATECHCK;
+		  Moves(dr,color,mbuf,lmove);
+		  dr.method := method;
+		  IF mbuf[1] = 0 THEN
+		    # The player cannot move.
+		    value.realval := -MATE; RETURN;
+		  FI;
+		FI;
+		y := lmove & 7; x := (lmove >> 3) & 7;
+		IF NOT(dr.mate) THEN
+		  value.realval := dr.bval;
+		  IF color = BLACK THEN value.realval := - value.realval; FI;
+		  ap := 0; dp := 0;
+		  Guards(dr,Other(color),x,y,ap,dp,minval);
+		  # Test whether the attackers are in majority or an attacking
+		  # piece is less valuable than the attacked piece. 
+		  IF (ap > dp) OR (minval < Val(dr.b[x][y] & 7)) THEN
+		    value.realval +:= Val(dr.b[x][y] & 7);
+		  FI;
+		FI;
+		# The threats have been calculated one level higher.
+		value.expval := -dr.threat;
+		IF dr.mate THEN
+		  # Determine the escape fields of the king.
+		  index := Escapes(dr,color);
+		  value.expval -:= 200 - 50 * index;
+		  value.realval := value.expval / 10;
+		FI;
+	END;
+
+	# The function Guards() calculates the number of attackers and
+	# defenders for a given field. This values are placed in the shared
+	# variables 'ap' and 'dp'. The shared integer 'minval' gives the
+	# value of the minimal attacking piece.
+	FUNCTION Guards(dr : SHARED DataRecord; player : integer;
+		        x,y : integer; ap,dp,minval : SHARED integer);
+	  opponent : integer;
+	  factor : integer;
+	BEGIN
+		minval := MATE;
+		opponent := Other(player);
+		IF player = BLACK THEN factor := -1; ELSE factor := 1; FI;
+		# Look for pawns.
+		IF OnBoard(x-1,y+factor) AND (dr.b[x-1][y+factor] & 7 = PAWN)
+		   AND (Owner(dr.b[x-1][y+factor]) = opponent) AND
+		   Movable(dr,opponent,x-1,y+factor,-1,factor) THEN
+			ap +:= 1; minval := PAWNVAL;
+		FI;
+		IF OnBoard(x+1,y+factor) AND (dr.b[x+1][y+factor] & 7 = PAWN)
+		   AND (Owner(dr.b[x+1][y+factor]) = opponent) AND
+		   Movable(dr,opponent,x+1,y+factor,1,factor) THEN
+			ap +:= 1; minval := PAWNVAL;
+		FI;
+		IF OnBoard(x-1,y-factor) AND (dr.b[x-1][y-factor] & 7 = PAWN)
+		   AND (Owner(dr.b[x-1][y-factor]) = player) AND
+		   Movable(dr,opponent,x-1,y-factor,-1,-factor) THEN
+			dp +:= 1;
+		FI;
+		IF OnBoard(x+1,y-factor) AND (dr.b[x+1][y-factor] & 7 = PAWN)
+		   AND (Owner(dr.b[x+1][y-factor]) = player) AND
+		   Movable(dr,opponent,x+1,y-factor,1,-factor) THEN
+			dp +:= 1;
+		FI;
+		# Look for kings.
+		FOR i IN x-1 .. x+1 DO
+		  FOR j IN y-1 .. y+1 DO
+		    IF NOT((i = x) AND (j = y)) THEN
+		      Count(dr,player,KING,i,j,ap,dp,minval);
+		    FI;
+		  OD;
+		OD;
+		# Look for knights.
+		Count(dr,player,KNIGHT,x-1,y-2,ap,dp,minval);
+		Count(dr,player,KNIGHT,x+1,y-2,ap,dp,minval);
+		Count(dr,player,KNIGHT,x-1,y+2,ap,dp,minval);
+		Count(dr,player,KNIGHT,x+1,y+2,ap,dp,minval);
+		Count(dr,player,KNIGHT,x-2,y-1,ap,dp,minval);
+		Count(dr,player,KNIGHT,x+2,y-1,ap,dp,minval);
+		Count(dr,player,KNIGHT,x-2,y+1,ap,dp,minval);
+		Count(dr,player,KNIGHT,x+2,y+1,ap,dp,minval);
+		# Look for rooks and queens on lines.
+		LineCount(dr,player,x,y,ROOK,0,1,ap,dp,minval);
+		LineCount(dr,player,x,y,ROOK,0,-1,ap,dp,minval);
+		LineCount(dr,player,x,y,ROOK,1,0,ap,dp,minval);
+		LineCount(dr,player,x,y,ROOK,-1,0,ap,dp,minval);
+		# Look for bishops and queens on diagonals.
+		LineCount(dr,player,x,y,BISHOP,-1,-1,ap,dp,minval);
+		LineCount(dr,player,x,y,BISHOP,1,-1,ap,dp,minval);
+		LineCount(dr,player,x,y,BISHOP,-1,1,ap,dp,minval);
+		LineCount(dr,player,x,y,BISHOP,1,1,ap,dp,minval);
+	END;
+
+	# Count the number of attackers and defenders.
+	# This function is called for kings and knights.
+	FUNCTION Count(dr : SHARED DataRecord; player : integer;
+		       piece,x,y : integer; ap,dp,minval : SHARED integer);
+	  opponent : integer;
+	  px,py : integer;
+	BEGIN
+		opponent := Other(player);
+		IF OnBoard(x,y) AND (dr.b[x][y] & 7 = piece) AND
+		   ((dr.b[x][y] & 7 = KING) OR
+		    NOT(Pinned(dr,opponent,x,y,px,py))) THEN
+		  IF Owner(dr.b[x][y]) = player THEN dp +:= 1;
+		   ELSE
+		     ap +:= 1; minval := Min(minval,Val(dr.b[x][y] & 7)); 
+		  FI;
+		FI;
+	END;
+
+	# Count all attackers and defenders on lines and diagonals.
+	FUNCTION LineCount(dr : SHARED DataRecord; player : integer;
+			   x,y : integer; piece : integer;
+			   xt,yt : integer; ap,dp,minval : SHARED integer);
+	  txt,tyt : integer;
+	  opponent : integer;
+	  break,first : boolean;
+	BEGIN
+		opponent := Other(player);
+		txt := xt; tyt := yt;
+		break := false; first := true;
+		WHILE NOT(break) AND OnBoard(x+txt,y+tyt) DO
+		  IF (dr.b[x+txt][y+tyt] & 7 = piece) OR
+		     (dr.b[x+txt][y+tyt] & 7 = QUEEN) THEN
+		    IF Owner(dr.b[x+txt][y+tyt]) = player THEN
+		      IF Movable(dr,player,x+txt,y+tyt,xt,yt) THEN
+		        dp +:= 1;	# defender found
+		       ELSE break := true;
+		      FI;
+		     ELSE
+		      IF Movable(dr,opponent,x+txt,y+tyt,xt,yt) THEN
+			ap +:= 1;	# attacker found
+			IF first THEN
+			  # New minimal attacking piece found.
+			  minval := Min(minval,Val(dr.b[x+txt][y+tyt] & 7));
+			FI;
+		       ELSE break := true;
+		      FI;
+		    FI;
+		    first := false;
+		   ELSE IF (dr.b[x+txt][y+tyt] & 7 /= 0) THEN break := true; FI;
+		  FI;
+		  txt +:= xt; tyt +:= yt;
+		OD;
+	END;
+
+	# The function Movable() decides whether a piece is capable of making
+	# the suggested move. This depends whether he is pinned and if so 
+	# whether he can capture the pinning opponent.
+	FUNCTION Movable(dr : SHARED DataRecord; player : integer;
+			 xfrom,yfrom : integer; xt,yt : integer) : boolean;
+	  px,py : integer;	# the direction of the pin.
+	BEGIN
+		IF NOT(Pinned(dr,player,xfrom,yfrom,px,py)) OR
+		   ((xt = px) AND (yt = py)) THEN
+			RETURN true;
+		FI;
+		RETURN false;
+	END;
+
+	# The function Threat() counts the threats imposed by the move 'move'.
+	FUNCTION Threat(dr : SHARED DataRecord; color : integer;
+		        move : integer) : integer;
+	  sum : integer;
+	  x,y : integer;
+	  method : integer;
+	  index : integer;
+	  save : SaveType;
+	  mbuf : MoveArray;
+	BEGIN
+		ThinkMove(dr,color,move,save);
+		index := 1;
+		method := dr.method;
+		dr.method := FULLSRCH;
+		# Generate all possible moves after 'move'.
+		FieldMoves(dr,color,(move>>3)&7,move&7,mbuf,index,0);
+		dr.method := method;
+		sum := 0;	# threat value
+		FOR i IN 1 .. index - 1 DO
+		  y := mbuf[i] & 7;
+		  x := (mbuf[i] >> 3) & 7;
+		  IF (dr.b[x][y] & 7 /= 0) AND
+		     (NOT(dr.mate) OR (dr.b[x][y] & 7 = KING)) THEN
+		    sum +:= Val(dr.b[x][y] & 7);
+		  FI;
+		OD;
+		UnthinkMove(dr,color,save);
+		RETURN sum;
+	END;
+
+END;

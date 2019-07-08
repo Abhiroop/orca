@@ -1,0 +1,8 @@
+MODULE SPECIFICATION BoolVector;
+
+TYPE BoolVector = ARRAY [integer] OF boolean;
+TYPE BoolMatrix = ARRAY [integer, integer] OF boolean;
+FUNCTION DynBoolVector (N:integer): BoolVector;
+FUNCTION DynBoolMatrix (Nrow:integer; Ncol: integer): BoolMatrix;
+
+END;

@@ -1,0 +1,28 @@
+OBJECT SPECIFICATION PatternSet;
+
+FROM BpTypes 	IMPORT  ArrayType;
+
+OPERATION InitPatterns(	NumberPatterns: integer; 
+			NumInputUnits: integer; 
+			NumOutputUnits: integer)
+			: integer;
+OPERATION InitInputPatterns(	pattern: integer; 
+				unit: integer; 
+				value: real)
+				: integer;
+OPERATION InitOutputPatterns(	pattern: integer; 
+				unit: integer; 
+				value: real)
+				: integer;
+OPERATION difference(	output: ArrayType; 
+			pattern: integer)
+			: ArrayType;
+OPERATION NumPatterns()	: integer;
+OPERATION InputPattern(	pattern: integer)
+			: ArrayType;
+OPERATION OutputPattern(pattern: integer)
+			: ArrayType;
+OPERATION PrintPatternSet();
+
+# OBJECT SPECIFICATION
+END;  

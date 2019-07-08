@@ -1,0 +1,84 @@
+#=====================================================================
+#==== EdgeCollection.spf : EdgeCollection data structure          ====
+#==                                                                 ==
+MODULE SPECIFICATION EdgeCollection;
+
+FROM Types IMPORT symbol_name_t, word_t;
+
+#---------------------------------------------------------------------
+#---- types                                                       ----
+#---------------------------------------------------------------------
+
+TYPE edge_p = NODENAME OF edge_t;
+
+TYPE edge_info_t = 
+	RECORD
+		from_node : 	integer; 	# source node 
+		to_node :	integer;	# destiantion node 
+#		symbol_name : 	symbol_name_t;	# label of edge	
+		symbol_name : 	integer;
+	
+		# some information needed for printing the parse tree
+		
+		comp_1 :	edge_p; 	# left component
+		comp_2 :	edge_p; 	# right component
+#		word :		word_t;		
+		word : 		integer;	# if (comp_1 == comp_2 == NIL) then
+		                                # this field represents the
+						# word that this edge
+						# represents 
+	END;
+
+
+TYPE edge_t = 	
+	GRAPH
+	NODES
+		data : edge_info_t;
+	END;
+
+
+#---------------------------------------------------------------------
+#---- function prototypes                                         ----
+#---------------------------------------------------------------------
+
+# 
+# equal_edges:  If two edges are equal, return 0 else
+#               return result of comparison of symbol_name
+#
+FUNCTION compare_edges(                       
+	edge_coll : edge_t;
+ 	edge1 : edge_p;			      
+	edge2 : edge_p				
+) : integer;                            	
+
+
+#
+# construct_edge() : fill in values of an edge
+#
+FUNCTION fill_edge(	
+	edge_coll : SHARED edge_t;
+	edge : edge_p;
+	info : edge_info_t
+);
+
+
+
+#
+# create_edge() : create an edge and return a pointer to it
+#
+FUNCTION create_edge(
+	edge_coll : SHARED edge_t
+) : edge_p;
+
+
+
+#
+# give_info() : return info on an edge
+#
+FUNCTION give_info(
+	edge_coll : edge_t;
+	edge : edge_p;
+	info : OUT edge_info_t
+);	
+
+END;

@@ -1,0 +1,16 @@
+PROCESS DataParallelFFT();
+BEGIN
+    A: fftObject[1..N];           # create the partitioned object
+
+    A$$partition(N);              # partitioning/distribution directives
+    A$$distribute_on_list(Procs, P, BLOCK);
+    2Dfft(A);
+END;
+
+FUNCTION 2Dfft(A: SHARED fftObject);
+BEGIN
+    A$rowFFT();                   # operations on the rows
+    A$transpose();                # transpose the matrix
+    A$rowFFT();                   # operations on (transposed) columns
+    A$transpose();                # transpose matrix back
+END;

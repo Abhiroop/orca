@@ -1,0 +1,118 @@
+DATA MODULE IMPLEMENTATION GlobalVars;
+
+FROM args	 IMPORT Argv, Argc;
+FROM conversions IMPORT StringToInt, StringToReal;
+FROM Math	 IMPORT pow;
+FROM LocalMemory IMPORT IntArray;
+FROM Types	 IMPORT MAX_BODIES_PER_LEAF;
+FROM Types 	 IMPORT InitChildSequence,InitDirectionSequence;
+
+
+FUNCTION add_reporter(old_rep: IntArray;
+		      rep    : integer) : IntArray;
+    res: IntArray[LB(old_rep) .. UB(old_rep) + 1];
+BEGIN
+    FOR i IN LB(old_rep) .. UB(old_rep) DO
+	res[i] := old_rep[i];
+    OD;
+    res[UB(res)] := rep;
+    RETURN res;
+END;
+
+
+FUNCTION init_vars();
+    skip   : integer;
+    dummy  : integer;
+    option : integer;
+    scale  : real;
+    nprocs : integer;
+BEGIN
+    seed    := 123;
+    eps     := 0.05;		# potential softening parameter
+    fcells  := 2.0;		# ratio of cells/leaves allocated
+    fleaves := 1.0;
+    dtime   := 0.025;
+    tol     := 1.0;
+    dtout   := 0.25;
+    tstop   := 0.25;
+
+    option  := 0;
+    skip    := 0;
+
+    FOR i IN 1 .. Argc() - 1 DO
+	IF skip > 0 THEN
+	    skip -:= 1;
+	ELSIF Argv(i) = "-seed" THEN
+	    seed := StringToInt(Argv(i + 1), dummy);
+	    skip := 1;
+	    IF (seed < 0) THEN
+		seed := MYCPU();
+	    FI;
+	ELSIF Argv(i) = "-dtime" THEN
+	    dtime := StringToReal(Argv(i + 1), dummy);
+	    skip := 1;
+	ELSIF Argv(i) = "-eps" THEN
+	    eps := StringToReal(Argv(i + 1), dummy);
+	    skip := 1;
+	ELSIF Argv(i) = "-tol" THEN
+	    tol := StringToReal(Argv(i + 1), dummy);
+	    skip := 1;
+	ELSIF Argv(i) = "-fcells" THEN
+	    fcells := StringToReal(Argv(i + 1), dummy);
+	    skip := 1;
+	ELSIF Argv(i) = "-fleaves" THEN
+	    fleaves := StringToReal(Argv(i + 1), dummy);
+	    skip := 1;
+	ELSIF Argv(i) = "-tstop" THEN
+	    tstop := StringToReal(Argv(i + 1), dummy);
+	    skip := 1;
+	ELSIF Argv(i) = "-dtout" THEN
+	    dtout := StringToReal(Argv(i + 1), dummy);
+	    skip := 1;
+	ELSIF Argv(i) = "-report" THEN
+	    report := add_reporter(report, StringToInt(Argv(i + 1), dummy));
+	    skip := 1;
+	ELSIF option = 0 THEN
+	    nbody := StringToInt(Argv(i), dummy);
+	    option +:= 1;
+	ELSE
+	    WriteLine("No such option: ", Argv(i), " -- ignored");
+	FI;
+    OD;
+
+    # scale dtime and tol according to nbody
+    # (per scaling rules in splash TR)
+
+    scale  := pow((FLOAT( nbody) / 16384.0), -0.25);
+    dtime *:= scale;
+    tol   *:= scale;
+    tstop *:= scale;
+
+    ### compute derived quantities
+
+    epssq := eps * eps;
+    tolsq := tol * tol;
+    dthf  := 0.5 * dtime;
+
+    # Check report
+    FOR i IN LB(report) .. UB(report) DO
+	IF (report[i] < 0) OR (report[i] >= nbody) THEN
+	    WriteLine("Illegal report value specified: ", report[i],
+		      "; should be >= 0, < ", nbody);
+	FI;
+    OD;
+
+    maxleaf := TRUNC(fleaves * FLOAT(nbody));
+    maxcell := TRUNC(fcells * FLOAT(maxleaf));
+
+    nprocs := NCPUS();
+    maxmycell := maxcell / nprocs;
+    maxmyleaf := maxleaf / nprocs;
+    maxmybody := (nbody + maxleaf * MAX_BODIES_PER_LEAF) / nprocs;
+END;
+
+BEGIN
+    init_vars();
+    InitChildSequence( Child_Sequence);
+    InitDirectionSequence( Direction_Sequence);
+END;

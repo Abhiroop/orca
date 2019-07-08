@@ -1,0 +1,59 @@
+DATA MODULE IMPLEMENTATION global;
+
+  FROM Math		IMPORT cos, sin, PI;
+  FROM args		IMPORT Argc, Argv;
+  FROM conversions	IMPORT StringToInt;
+
+FUNCTION GenBitReverseTable(brt: OUT integer_array);
+  j,k: integer;
+
+BEGIN
+    j := 1;
+    brt[1] := j;
+    FOR i IN 2..N DO
+      k := NDV2;
+      WHILE (k < j) DO
+        j := j-k;
+        k := k >> 1;
+      OD;
+      j := j+k;
+      brt[i] := j;
+    OD;
+END;
+
+FUNCTION GenWTable(w: OUT complex_array);
+  wx: complex;
+
+BEGIN
+  wx.r := cos(PI/FLOAT(NDV2));
+  wx.i := -sin(PI/FLOAT(NDV2));
+  w[1].r := 1.0;
+  w[1].i := 0.0;
+  FOR i IN 2..NDV2 DO
+    w[i].r := w[i-1].r * wx.r - w[i-1].i * wx.i;
+    w[i].i := w[i-1].r * wx.i + w[i-1].i * wx.r;
+  OD;
+END;
+
+FUNCTION Init();
+  dummy: integer;
+BEGIN
+  init_done := false;
+  IF Argc() = 1 THEN
+    iters := ITERS;
+  ELSIF Argc() = 2 THEN
+    iters := StringToInt(Argv(1), dummy);
+  ELSE
+    IF MYCPU() = 0 THEN
+      WriteLine("Usage: ", Argv(0), " [ <niters> ]");
+    FI;
+    RETURN;
+  FI;
+  GenBitReverseTable(brt);
+  GenWTable(w);
+  init_done := true;
+END;
+
+BEGIN
+  Init();
+END;

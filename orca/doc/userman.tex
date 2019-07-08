@@ -1,0 +1,1058 @@
+%
+% (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+% For full copyright and restrictions on use see the file COPYRIGHT in the
+% top level of the Orca distribution.
+%
+
+\documentclass[10pt]{article}
+
+\usepackage{html}
+
+\setlength{\textheight}{9in}
+\setlength{\textwidth}{6.75in}
+\setlength{\oddsidemargin}{-0.19in}
+\setlength{\evensidemargin}{-0.19in}
+\setlength{\topmargin}{-0.25in}
+
+\begin{document}
+\title{User's Manual of the Programming Language
+{\html {\htmladdnormallink {Orca} {http://www.cs.vu.nl/proj/orca/}}}
+{\latex {Orca}}}
+
+\maketitle
+
+\section{Introduction}
+
+This manual describes how to compile and run Orca programs.
+\begin{htmlonly}
+It is also available in
+\htmladdnormallink{postscript}{http://www.cs.vu.nl/proj/orca/userman.ps.gz}.
+\end{htmlonly}
+The definition of Orca and pointers to the literature are given in
+the {\html {\htmladdnormallink{Report on the Programming Language Orca}{http://www.cs.vu.nl/proj/orca/refman/refman.html}}}{\latex {\em Report on the Programming Language Orca}}.
+The Orca system is stored in some directory,
+for instance
+{\em /usr/local/orca},
+or
+{\em /usr/proj/orca};
+we will refer to this directory as
+{\em \$ORCA}.
+Example Orca programs can be found in the directory
+{\em \$ORCA/examples}.
+Orca compilation scripts can be found in {\em \$ORCA/bin}.
+
+The Orca system consists of a compiler and several run-time systems (RTSs).
+The compiler will be described in Section \ref{sec:compiler}.
+The RTSs will be described in Section \ref{sec:rts}.
+Section \ref{sec:using} will describe how to use the Orca system.
+Section \ref{sec:example} discusses how to compile and run an example program.
+Impatient users may immediately proceed to this section and try out the system.
+The run-time error messages will be described in Section \ref{sec:errors}.
+Section \ref{sec:standard}
+will describe a number of useful standard modules, object types, and
+generic types. Section \ref{sec:interface} will discuss the interface to the C programming
+language, as far as needed to implement a module in C.
+
+\section{The Orca compiler}\label{sec:compiler}
+
+The Orca compiler consists of
+
+\begin{itemize}
+\item
+a {\em driver}, called {\bf oc},
+which will normally run all phases
+of the compilation.
+\item
+a {\em front end} that translates Orca into (ANSI) C.
+\item
+a {\em C compiler} that translates C into assembly code for the
+target machine.
+\item
+an {\em assembler} that translates assembly code into object code.
+\item
+a {\em loader} that links the object code together with the run-time system
+to form an executable file, which can be run on multiple processors.
+\end{itemize}
+
+Only the first two items are Orca-specific; all other phases are part of the
+C compiler and will not be described here.
+Currently, the GNU C compiler is used, but any ANSI C compiler should do.
+
+The compiler should be given files containing one or more
+{\bf implementation}
+or
+{\bf specification}
+units (modules or objects) as input.
+Usually, specification units need not be compiled, but they must be if there
+is no accompanying implementation unit (for instance when it is implemented
+in C).
+The compiler's 
+{\em --I}
+flag can be used to specify the directories in which
+files with specification units and generic units are stored.
+A number of useful standard object types and generic types can be found
+in the directory
+{\em \$ORCA/lib/std},
+which
+{\em oc}
+searches automatically.
+
+\subsection{Compiler optimizations done at present}
+
+The compiler optimizes input parameters of procedures.
+A data structure that is passed by value and that is not changed in the
+called function is implemented as if it were passed by reference.
+Hence, if a complex data structure needs to be passed by value to
+a procedure, the formal parameter need not be declared as a reference
+({\bf shared}) parameter, as in Pascal. In fact, if the parameter
+is declared as 
+{\bf shared},
+the compiler assumes that the procedure will
+change the actual parameter and will not do certain other optimizations
+described below.
+
+The compiler distinguishes between
+{\em read}
+and
+{\em write}
+operations on objects.
+A read operation does not change the local data of the object it is
+applied to; all other operations are write operations.
+The run-time system implements read operations much
+more efficiently than write operations.
+On replicated objects, read operations are applied to local copies of
+objects, without doing any interprocess communication.
+
+To implement this optimization,
+the compiler needs to have information about the 
+{\em implementation}
+of objects.
+It maintains a file called 
+.{\em module name}.db"
+with information about object implementations and functions.
+If an implementation uses an object type whose implementation part
+has not yet been compiled, the compiler assumes all operations on the
+object do not modify it and do not block.
+If this assumption turns out not to be true, or
+if the implementation part of an object type is changed, all other
+modules and objects using it have to be recompiled.
+The 
+{\em oc}
+program will take care of this automatically.
+
+There are also some (more or less stable) optimizers which are enabled
+through compiler switches:
+\begin{itemize}
+\item
+The {\em {\em --}--O} flag enables a combined strength-reduction/common
+sub-expression elimination/code motion optimizer.
+\item
+The {\em {\em --}--V} flag enables a compiler pass that attempts to reduce
+the number of temporary variables by combining them.
+\item
+The {\em {\em --}--f} flag enables a compiler pass that generates two
+versions of any function that has an object as shared parameter: one which
+treats it as a local object, and the other that treats it as a shared object.
+Also, at each call site the compiler determines which version to call.
+\item
+The {\em {\em --}--n} flag enables some very simple minded loop-unrolling
+(this phase is only useful if you have loops which are executed a fixed
+small number of times).
+\end{itemize}
+
+\subsection{Deviations from the language definition}
+
+The compiler deviates in the following ways from the language definition.
+
+\begin{itemize}
+\item
+In addition to the standard types ``real'' and ``int'',
+the compiler also supports
+the types ``longreal'' and ``longint'', and
+``shortreal'' and ``shortint''.
+\item
+In addition to the letter 'E', the compiler also accepts the letter 'D' as the
+start of a scale factor, for backwards compatibility with an earlier
+Orca compiler, which used this to distinguish floating point constants of
+type ``longreal'' from those of type ``real''.
+\item
+The compiler recognizes the built-in call
+\begin{quote}
+\verb+Strategy(+{\em object}\verb+, +{\em replicate}\verb+, +{\em cpu}\verb+)+
+\end{quote}
+which tells the RTS to replicate {\em object} if {\em replicate} is non-zero,
+or else store the object on CPU {\em cpu}.
+\end{itemize}
+
+\section{The run-time system}\label{sec:rts}
+
+The run-time system takes care of management of processes and shared objects.
+Currently, the following runtime systems exist or are in development:
+\begin{itemize}
+\item
+the {\bf unixproc} RTS. This RTS runs in a Unix process.
+It is currently available for Sun Sparcstations running SunOS 4.1 or Solaris 2,
+and for Intel x86 processors running BSD/OS or Linux.
+the {\bf Panda}
+RTS. This RTS runs on top of the Panda platform. Several implementations of
+this platform are available, a.o. for Amoeba, Solaris2, Linux, and BSD/OS,
+on different networks.
+In fact, there are several versions of Panda. The currently used ones are
+Panda3.0 and Panda4.0.
+\end{itemize}
+
+\subsection{The unixproc RTS}
+
+The unixproc RTS runs an Orca program within one Unix process, so
+the parallelism of the Orca program is simulated using threads.
+Hence, this RTS can be used to debug Orca programs, but not to measure
+speedups.
+Orca processes are implemented as threads, so the RTS depends on the
+availability of a suitable threads package.
+The compiler and RTS make sure that every now and then a thread switch takes
+place, so Orca processes are more or less time-sliced.
+
+The number of processors that is to be simulated must be passed as an argument.
+
+\subsection{The Panda RTS}
+
+This RTS is built on top of the Panda platform. It can be
+used on any system that is supported by Panda. The Panda platform offers
+primitives for RPC, group communication, and threads.
+
+A number of processes are started, and these processes
+are numbered. Preferably, each of these processes runs on a different CPU.
+Each Orca process is represented as a Panda thread.
+The Orca statement
+\begin{quote}
+\begin{verbatim}
+FORK name(parameters) ON (P);
+\end{verbatim}
+\end{quote}
+creates a new thread within the Panda RTS process
+{\em P}.
+(If the ON part is omitted, the new thread is created in the current process.)
+
+\section{Using Orca}\label{sec:using}
+
+This section explains how to compile Orca programs on a Unix system and execute
+them on the run-time systems.
+
+\subsection{Compiling Orca programs}
+
+The first step in running an Orca program is compiling the program.
+The program
+{\em oc}
+invokes the different passes of the compiler.
+There are scripts
+in
+{\em \$ORCA/bin}
+which call 
+{\em oc}
+with parameters set for the different RTSs.
+For instance,
+{\em \$ORCA/bin}
+contains
+{\html {\htmladdnormallink {oc\_unixproc} {http://www.cs.vu.nl/proj/orca/oc_unixproc.1.html}}}
+{\latex {\em oc\_unixproc}},
+{\html {\htmladdnormallink {oc\_panda} {http://www.cs.vu.nl/proj/orca/oc_panda.1.html}}}
+{\latex {\em oc\_panda}},
+and others.
+These should be given the implementation unit containing
+{\em OrcaMain}
+as parameter, for example:
+\begin{quote}
+\begin{verbatim}
+oc_unixproc GordonBellAward.imp
+\end{verbatim}
+\end{quote}
+The
+{\em oc}
+program will find any other modules automatically, and compile them
+when needed, and will then, in the absence of errors,
+produce an
+{\em a.out}
+file.
+
+The
+{\em oc}
+program invokes the compiler with the
+{\em --I\$ORCA/lib/std}
+flag,
+so modules and objects from the
+{\em \$ORCA/lib/std}
+directory can be directly
+imported and used.
+For more details about the
+{\em oc}
+program, the reader is referred to the
+{\html {\htmladdnormallink {oc} {http://www.cs.vu.nl/proj/orca/oc.1.html}}}
+{\latex {\em oc}}
+manual page.
+
+\subsection{Orca command-line arguments}
+
+Usually, the RTS accepts some command-line options. 
+Following these RTS options, one 
+can pass command-line arguments to the Orca program using the "--OC"
+option.
+All options after this "--OC" option are ignored by the RTS and are
+available to the Orca program through the {\em args} module, as described
+in Section \ref{mod:args}.
+
+\subsection{Running Orca programs using the unixproc RTS}
+
+To run an Orca program using the
+{\em unixproc}
+RTS, 
+compile the Orca program with the
+{\html {\htmladdnormallink {oc\_unixproc} {http://www.cs.vu.nl/proj/orca/oc_unixproc.1.html}}}
+{\latex {\em oc\_unixproc}}
+command.
+
+The generated
+{\em a.out}
+file can now be executed.
+It should be given the number of simulated CPUs as first and only parameter.
+For example:
+\begin{quote}
+\begin{verbatim}
+a.out 10
+\end{verbatim}
+\end{quote}
+will run the program, simulating 10 CPUs.
+If no parameter is given, 1 CPU is simulated.
+The
+{\em NCPUS()}
+standard function returns
+the parameter given in the command line.
+The
+{\em MYCPU()}
+standard function returns the number of the simulated CPU on which the
+calling Orca process is run.
+
+\subsection{Running Orca programs using the Panda RTS}
+
+\subsubsection{On Solaris 2, BSD/OS or Linux}
+
+To run an Orca program using the Panda RTS under Solaris 2, BSD/OS or Linux, it
+must be compiled on the corresponding system using the
+{\html {\htmladdnormallink {oc\_panda} {http://www.cs.vu.nl/proj/orca/oc_panda.1.html}}}
+{\latex {\em oc\_panda}}
+command.
+Additional compile flags determine exactly which version of the Panda RTS
+and Panda library are chosen.
+This will create an executable file, which can be run using the
+{\em prun} command, as follows:
+\begin{quote}
+\verb+prun+ [ flags ] {\em exec\_file nr\_cpus} ...
+\end{quote}
+See the
+{\html {\htmladdnormallink {prun manual page} {http://www.cs.vu.nl/das/prun/prun.1.html}}}
+{\latex {{\em prun} manual page}}
+for more details, and the
+{\html {\htmladdnormallink {Panda documentation} {http://www.cs.vu.nl/proj/panda/}}}
+{\latex {Panda documentation}}
+for the
+currently available Panda implementations.
+
+\subsubsection{On SunOS4}
+
+To run an Orca program using the Panda RTS under SunOS4, it
+must be compiled on the corresponding system using the
+{\html {\htmladdnormallink {oc\_panda} {http://www.cs.vu.nl/proj/orca/oc_panda.1.html}}}
+{\latex {\em oc\_panda}}
+command.
+This will create an executable file, which can be run using the
+{\em prun} command, as follows:
+\begin{quote}
+\verb+prun+ [ flags ] {\em exec\_file nr\_cpus} ...
+\end{quote}
+This command requires the existence of an environment variable PANDA\_HOSTS,
+which should contain a space-separated list of hosts.
+Alternatively, the option "--{\bf h} {\em hostfile}"
+specifies a file containing host names.
+
+{\em Prun} accepts the following options:
+\begin{description}
+\item[--{\bf c} {\em directory}]
+This option sets {\em prun}'s idea of the current directory.
+This may be needed to make sure that the path to the directory where the
+binary is executed exists on all hosts.
+\item[--{\bf t} {\em timeout}]
+This option sets the maximum number of timeout checks to {\em timeout}.
+{\em Prun} kills the program when the limit is exceeded.
+The default value for {\em timeout} is 60.
+\item[--{\bf d} {\em delta}]
+This option sets {\em delta} (the timeout check interval). 
+The default value is 10 seconds.
+{\em Prun}
+checks every {\em delta} seconds whether the program has finished.
+\item[--{\bf h} {\em hostfile}]
+This option specifies a file containing host names.
+\item[--{\bf f} {\em first\_host}]
+This option specifies that this call of {\em prun} starts the program on hosts
+numbered from {\em first\_host} upwards. The default value is 0.
+\item[--{\bf l} {\em last\_host}]
+This option specifies that this call of {\em prun} starts the program on hosts
+numbered up to {\em last\_host}. The default value is {\em nr\_cpus}. The options
+--{\bf f} {\em first\_host} and --{\bf l} {\em last\_host} 
+allow parallel execution of
+different binaries, for instance on a heterogeneous system.
+\end{description}
+For example,
+\begin{quote}
+\begin{verbatim}
+prun -h hosts -t 120 -c /usr/proj/orca/examples/asp a.out 4
+\end{verbatim}
+\end{quote}
+will run the a.out binary in /usr/proj/orca/examples/asp with a timeout
+of 20 minutes (checked every 10 seconds), on the first 4 hosts listed in
+the file "hosts".
+
+\subsubsection{On Amoeba}
+
+To run an Orca program using the Panda RTS under Amoeba, it
+must be compiled on Unix using oc\_panda --amoeba.
+The executable can be installed on Amoeba using the
+"ainstall" command:
+\begin{quote}
+\begin{verbatim}
+ainstall a.out /home/<filename>
+\end{verbatim}
+\end{quote}
+Alternatively, when the Orca program is compiled on Amoeba, oc\_panda
+must be used.
+In this case, the --amoeba flag is not needed (but does no harm).
+The program can now be executed by logging in under Amoeba and using
+the
+{\em gax} (U)
+command:
+\begin{quote}
+\verb+gax -p +{\em capability-dir filename nr-cpus} ...
+\end{quote}
+For example, to run a program called
+{\em orca/tsp}
+on three processors whose capabilities are stored in the
+directory
+{\em hosts},
+execute:
+\begin{quote}
+\begin{verbatim}
+gax -p hosts orca/tsp 3
+\end{verbatim}
+\end{quote}
+
+After the number of CPUs, RTS options can be passed to the Panda
+RTS. These options are described in the following
+subsection.
+
+\subsubsection{Panda RTS options}
+
+The Panda RTS recognizes many options, some of which are primarily of
+interest of the developers of the Panda RTS. These options are marked
+with the phrase {\bf [Developers only]}. Some users
+may want to experiment with these options anyway.
+
+A number of the options listed below relate to {\em object
+distribution}. By this we mean the way the RTS places shared objects
+on processors. Objects are either replicated on all processors that
+run an Orca process that references the object, or they are not
+replicated at all. The distribution decisions are taken by the RTS,
+but can be influenced through \verb+Strategy+ calls in Orca programs
+and through command-line options to the RTS (--{\bf no\_strategy},
+--{\bf dynamic}, and --{\bf combined}). Users who want to know eaxctly
+what decisions were taken by the RTS should use --{\bf v}.
+\begin{description}
+\item[--{\bf v}]
+Prints object distribution information. When the
+RTS decides to migrate, replicate, or unreplicate some shared object,
+this is printed on standard output.
+\item[--{\bf no\_strategy}]
+The RTS ignores all \verb+Strategy+ calls made by the Orca program. All
+object distribution decisions are taken by the RTS itself. This is
+used to avoid unnecessary recompilation.
+\item[--{\bf dynamic}]
+Normally, the Panda RTS bases its object distribution decisions on
+compiler-generated information. With this option, the
+compiler-generated information is ignored. Instead, the RTS uses
+runtime statistics to take decisions.  Users that use arrays of shared
+objects should probably use this option or else --{\bf combined} (see below).
+\item[--{\bf combined}]
+With this option, the RTS uses both the compiler-generated information
+and runtime statistics to take its object distribution decisions.
+\item[--{\bf dedicated}]
+Use a dedicated processor to sequence group messages. No Orca
+processes will be run on this processor. Although this option sacrifices one
+processor, it speeds up write operations on replicated objects.
+\item[--{\bf tlevel} {\em level}]
+Only valid when the program was compiled with --{\bf trc}. With this
+option, only events with a trace level greater than {\em level} are
+written to the trace file.
+\item[--{\bf p} {\em replication\_policy}]
+To have the RTS always replicate shared objects,
+this option should be used with {\em replication\_policy} 2. To never
+replicate shared objects, use {\em replication\_policy} 1. Finally,
+{\em replication\_policy} 3 gives the default behavior, where the RTS takes
+all decisions (using compile-time information).
+\item[--{\bf warm\_start} {\em rpc\_flag group\_flag}]
+{\bf [Developers only]}. If {\em rpc\_flag} is nonzero,
+all processors send an RPC to all other 
+processors before the Orca program is started.
+If {\em group\_flag} is nonzero, then all processors send a group message.
+These flags are used to "warm up" the Panda communications.
+The option really only
+makes sense on Amoeba, where it avoids slow startups of Orca programs.
+\item[--{\bf statistics}]
+{\bf [Developers only]} Print group communication statistics.
+\item[--{\bf g} {\em message\_size}]
+{\bf [Developers only]} PB/BB switch. Switch to BB for group messages that
+are larger than {\em message\_size} bytes, otherwise use BB.
+\item[--{\bf threads}]
+{\bf [Developers only]} Use popup threads instead of creating
+continuations.
+\item[--{\bf account}]
+{\bf [Developers only]} This option is used to collect statistics about
+operations. Each processor creates an output file that contains its
+statistics. The statistics tell how many operations, and of what type,
+were performed on shared objects. Some work needs to be done before
+this output is meaningful to non-developers.
+\end{description}
+
+\section{Running an example program}\label{sec:example}
+
+Several example Orca programs are contained in subdirectories
+of {\em \$ORCA/examples}.
+Each subdirectory contains the sources of one Orca program.
+
+We will describe the execution of an example program, for the
+All-pairs Shortest Paths (ASP) problem.
+The sources for this program are in the directory
+{\em \$ORCA/examples/asp}.
+
+\subsection{Running ASP using the Panda RTS, on Amoeba}
+
+To run the ASP
+program under Amoeba, first compile it (under Unix) by typing
+\begin{quote}
+\begin{verbatim}
+oc_panda -amoeba $ORCA/examples/asp/asp.imp
+\end{verbatim}
+\end{quote}
+This creates an {\em a.out} file.
+Next, install this {\em a.out} file under Amoeba by typing
+\begin{quote}
+\begin{verbatim}
+ainstall a.out /home/orca/asp
+\end{verbatim}
+\end{quote}
+(assuming that there is an "orca" directory).
+Next, log in on the Amoeba system.
+You can now start ASP using the
+{\em gax}
+command, for example
+\begin{quote}
+\begin{verbatim}
+gax orca/asp 4
+\end{verbatim}
+\end{quote}
+will run ASP on 4 processors.
+
+\section{Run-time errors}\label{sec:errors}
+
+If the run-time system detects an error, it prints a message
+containing the file name and line number where the error occurred
+(unless file name and line number administration were disabled),
+and an explanation of the error.
+Most error messages speak for themselves.
+A list is given below.
+
+The following error messages exist:
+\begin{itemize}
+\item
+FROM on empty set or bag
+\item
+array bound error
+\item
+assertion failed
+\item
+divide by 0
+\item
+range error in CHR or VAL
+\item
+modulo by $<$= 0
+\item
+local deadlock;
+This error occurs when a non-nested blocking operation is performed on
+a local object, and the operation would block.
+In this case, there is no other process that could change the value of the
+object, so the process is in a deadlock.
+\item
+bad nodename;
+This error occurs when a node of a graph is selected with an incorrect
+nodename.
+\item
+union error;
+This error occurs when a union field is accessed that does not correspond
+with the current union tag value, or if the union is not initialized.
+\item
+illegal cpu number;
+This error occurs in a FORK with a cpu number outside the range 0 .. NCPUS()-1.
+\item
+case error;
+This error occurs in a CASE statement if none of the labels contains the
+case value, and there is no ELSE part.
+\item
+illegal alias;
+This error occurs if a shared parameter is an alias of another shared or
+output parameter.
+\item
+no RETURN from function procedure/operation;
+This error occurs when a function procedure or operation should return
+a value, but does not ("falls through").
+\end{itemize}
+
+Other (RTS dependent) error messages exist, for instance ``out of memory''.
+
+\section{Standard modules and object types}\label{sec:standard}
+
+The specifications for the standard modules and object types can be found
+in the directory 
+{\em \$ORCA/lib/std}.
+Currently, some of the available modules and object types are described
+in the following subsections.
+
+\subsection{InOut}
+
+The {\em InOut} module contains a number of routines for reading and writing
+the values of basic Orca types, on standard input/output.
+For reading, the following routines exist:
+\begin{quote}
+\begin{verbatim}
+FUNCTION ReadChar(c: OUT char);
+FUNCTION ReadInt(i: OUT integer);
+FUNCTION ReadLongInt(i: OUT longint);
+FUNCTION ReadReal(r: OUT real);
+FUNCTION ReadLongReal(r: OUT longreal);
+FUNCTION ReadString(s: OUT string);
+\end{verbatim}
+\end{quote}
+In addition, the user can write his own routines with the help of the
+following routines:
+\begin{quote}
+\begin{verbatim}
+FUNCTION Ahead(): char;
+FUNCTION Eof(): boolean;
+FUNCTION Eoln(): boolean;
+\end{verbatim}
+\end{quote}
+The \verb+Eof+ and \verb+Eoln+ test for end-of-file and end-of-line
+respectively, and \verb+Ahead+ returns the next input character
+without actually accepting it (it does not move the read pointer).
+
+For writing, the following routines exist:
+\begin{quote}
+\begin{verbatim}
+FUNCTION WriteChar(c : char);
+FUNCTION WriteInt(i : integer);
+FUNCTION WriteLongInt(i : longint);
+FUNCTION WriteReal(r : real);
+FUNCTION WriteLongReal(r : longreal);
+FUNCTION WriteString(str: string);
+FUNCTION WriteLn();
+\end{verbatim}
+\end{quote}
+In addition, input and output can be redirected using the following routines:
+\begin{quote}
+\begin{verbatim}
+FUNCTION OpenInputFile(f: string): boolean;
+FUNCTION OpenOutputFile(f: string): boolean;
+FUNCTION CloseInput();
+FUNCTION CloseOutput();
+\end{verbatim}
+\end{quote}
+After a successful call to \verb+OpenInputFile+ the input will be read from
+the file indicated by \verb+f+.
+After calling \verb+CloseInput+, further input will again be read from
+standard input.
+
+There is also a routine
+\begin{quote}
+\begin{verbatim}
+FUNCTION Flush();
+\end{verbatim}
+\end{quote}
+which flushes the currently buffered output. Usually, the output is
+unbuffered or line-buffered when writing on a terminal, but buffered
+when writing on a file.
+
+\subsection{Conversions}
+
+The {\em conversions} module contains some string-to-number and number-to-string routines:
+\begin{quote}
+\begin{verbatim}
+FUNCTION StringToReal(s: string; eaten: OUT integer): longreal;
+FUNCTION StringToInt(s: string; eaten: OUT integer): longint;
+FUNCTION RealToString(r: longreal; p: integer): string;
+FUNCTION IntToString(i: longint): string;
+\end{verbatim}
+\end{quote}
+The StringToXxx routines convert the string \verb+s+. After completion,
+\verb+eaten+ indicates the number of characters actually used in the
+conversion, including leading spaces. Leading spaces are skipped, but the count
+is included in \verb+eaten+. If the conversion fails, \verb+eaten+ is set to 0
+and 0 is returned.
+
+\subsection{Random}
+
+The {\em Random} object type enables the user to draw random numbers.
+There are two operations:
+\begin{quote}
+\begin{verbatim}
+OPERATION val() : integer;
+OPERATION val01() : real;
+OPERATION init(seed : integer);
+\end{verbatim}
+\end{quote}
+The operation \verb+init+ initializes the object.
+Different values for \verb+seed+ give different sequences of random numbers.
+The operation \verb+val+ returns the next number in the random number
+sequence.
+The operation \verb+val01+ returns a random number between 0 and 1.
+If \verb+init+ is not called, a default initialization is chosen.
+
+\subsection{Finish}
+
+The {\em Finish} module is needed for some runtime systems which don't detect when the
+program is finished.
+In this case, the last process alive should call the following routine:
+\begin{quote}
+\begin{verbatim}
+FUNCTION Finish();
+\end{verbatim}
+\end{quote}
+
+\subsection{GenericBin}
+
+The {\em genericBin} generic object type must be instantiated with a type \verb+T+.
+There are two operations:
+\begin{quote}
+\begin{verbatim}
+OPERATION put(e: T);
+OPERATION get(e: OUT T);
+\end{verbatim}
+\end{quote}
+The \verb+put+ operation blocks until the object is empty, and then copies
+\verb+e+ to it.
+The \verb+get+ operation blocks until the object contains something, and
+then takes the contents and puts it in \verb+e+, thereby emptying the
+object.
+
+\subsection{GenericBinJobQueue}
+
+The {\em GenericJobQueue} generic object type implements a queue.
+It must be instantiated with a type \verb+T+.
+Items of type \verb+T+ can be added to the end of the queue, or taken
+from the start of the queue.
+There are three operations:
+\begin{quote}
+\begin{verbatim}
+OPERATION AddJob(job: T);
+OPERATION NoMoreJobs();
+OPERATION GetJob(job: OUT T): boolean;
+\end{verbatim}
+\end{quote}
+The operation \verb+AddJob+ adds an item \verb+job+ of type \verb+T+
+to the queue.
+The operation \verb+GetJob+ blocks until either the queue contains an
+item or \verb+NoMoreJobs+ is called.
+It returns \verb+true+ if an item could be taken from the queue,
+and in this case puts the item in \verb+job+.
+When no more items will be added to the queue, the operation \verb+NoMoreJobs+
+should be called, otherwise \verb+GetJob+ will ultimately block forever.
+
+% Maybe the name for this object is wrong???
+% How about GenericQueue, AddItem, NoMoreItems, GetItem.
+
+\subsection{IntObject}
+
+The {\em IntObject} object type exports the following operations:
+\begin{quote}
+\begin{verbatim}
+OPERATION value(): integer;
+OPERATION assign(v: integer);
+OPERATION min(v: integer);
+OPERATION inc();
+OPERATION dec();
+OPERATION AwaitValue(v: integer);
+\end{verbatim}
+\end{quote}
+The operation \verb+value+ returns the current value of the
+object, \verb+assign+ stores the value \verb+v+ in the object, \verb+min+
+stores the minimum of the object and \verb+v+ in the object, \verb+inc+
+increments the object, \verb+dec+ decrements the object, and \verb+AwaitValue+
+blocks until the object has the value indicated by \verb+v+.
+
+\subsection{PollSequence}
+
+The {\em PollSequence} object type implements a sequence of simple polls.
+If all voters in
+a simple poll say yes, the result of the simple poll is yes; if anyone
+says no, the result is no.
+The following operations are exported:
+\begin{quote}
+\begin{verbatim}
+OPERATION init(n: integer);
+OPERATION vote(iter: integer; YesOrNo: boolean);
+OPERATION AwaitDecision(iter: integer): boolean;
+\end{verbatim}
+\end{quote}
+The operation \verb+init+ initializes the object for \verb+n+ voters.
+The operation \verb+vote+ can be used to vote in the simple poll with
+iteration number \verb+iter+.
+The operation \verb+AwaitDecision+ blocks until the result of the
+simple poll with iteration number \verb+iter+ is known, and returns it.
+Once the result is yes, no more votes will be accepted.
+
+\subsection{RowCollection}
+
+The {\em RowCollection} object type maintains a collection of the following type:
+\begin{quote}
+\begin{verbatim}
+TYPE RowType = ARRAY[integer] OF integer;
+\end{verbatim}
+\end{quote}
+It exports the following operations:
+\begin{quote}
+\begin{verbatim}
+OPERATION init(size: integer);
+OPERATION AddRow(iter: integer; R: RowType);
+OPERATION AwaitRow(iter: integer): RowType;
+\end{verbatim}
+\end{quote}
+The operation \verb+init+ sets the size of the row collection, \verb+AddRow+
+adds the row with iteration number \verb+iter+ to the collection,
+and \verb+AwaitRow+ blocks until the row with iteration number
+\verb+iter+ is available, and then returns it.
+
+% Should this really be a standard object??? Maybe a generic object???
+
+\subsection{Time}
+
+The {\em Time} module exports the following functions:
+\begin{quote}
+\begin{verbatim}
+FUNCTION GetTime() : integer;
+FUNCTION SysMilli() : integer;
+FUNCTION SysMicro() : real;
+FUNCTION Sleep(sec, nanosec: integer);
+\end{verbatim}
+\end{quote}
+The function \verb+GetTime+ returns the time (with respect to an unspecified
+origin) in deciseconds, and \verb+SysMilli+ does the same, but in milliseconds,
+and \verb+SysMicro+ does the same, but in microseconds.
+\verb+Sleep+ suspends the current Orca process for the indicated amount of
+time.
+
+% Should be replaced by GetClock(sec, nanosec: OUT integer) or something like
+% that.
+
+\subsection{Barrier}
+
+The {\em barrier} object type implements a barrier synchronization mechanism.
+It exports an operation and a function:
+\begin{quote}
+\begin{verbatim}
+OPERATION init(n_workers : integer);
+FUNCTION sync(b: SHARED barrier);
+\end{verbatim}
+\end{quote}
+The operation \verb+init+ initializes the object for \verb+n_workers+
+processes. 
+When these processes want to synchronize, they must all call the
+function \verb+sync+, which blocks until it is called \verb+n_workers+
+times, and then releases all threads blocked on it, and then re-initializes
+the barrier.
+(Unfortunately, \verb+sync+ cannot be an operation; internally, it consists
+of two operations that both may block).
+
+\subsection{Unix}
+
+The {\em unix} module contains an interface to some of the more often used
+Unix
+system calls, a.o.:
+\begin{quote}
+\begin{verbatim}
+TYPE iobuf = string;
+FUNCTION open(name: string; mode: integer): integer;
+FUNCTION creat(name: string; mode: integer): integer;
+FUNCTION read(  fildes: integer;
+                buffer: OUT iobuf;
+                nbytes: integer) : integer;
+FUNCTION write( fildes: integer;
+                buffer: iobuf;
+                nbytes: integer): integer;
+FUNCTION close(fildes: integer): integer;
+\end{verbatim}
+\end{quote}
+
+\subsection{Args}\label{mod:args}
+
+The {\em args} module offers a unified way to pass arguments to Orca programs,
+by using the following convention, which all RTSs must obey: all arguments
+after a "--OC" are available to the Orca program.
+The following functions are available:
+\begin{quote}
+\begin{verbatim}
+FUNCTION Argc() : integer;
+FUNCTION Argv(n: integer): string;
+FUNCTION Getenv(s: string): string;
+\end{verbatim}
+\end{quote}
+As an example, for the call
+\begin{quote}
+\begin{verbatim}
+a.out 5 -OC arg1 arg2 arg3
+\end{verbatim}
+\end{quote}
+\verb+Argc()+ will return 4, \verb+Argv(0)+ will return "a.out",
+\verb+Argv(1)+ will return "arg1", et cetera.
+
+\subsection{Math}
+
+The {\em Math} module provides the following functions and constants:
+\begin{quote}
+\begin{verbatim}
+CONST    PI = 3.1415926535;
+CONST    E  = 2.71828183;
+
+FUNCTION sin(x : longreal) : longreal;
+FUNCTION cos(x : longreal) : longreal;
+FUNCTION tan(x : longreal) : longreal;
+
+FUNCTION asin(x : longreal) : longreal;
+FUNCTION acos(x : longreal) : longreal;
+FUNCTION atan(x : longreal) : longreal;
+FUNCTION atan2(y, x : longreal) : longreal;
+
+FUNCTION sinh(x : longreal) : longreal;
+FUNCTION cosh(x : longreal) : longreal;
+FUNCTION tanh(x : longreal) : longreal;
+
+FUNCTION exp(x : longreal) : longreal;
+FUNCTION log(x : longreal) : longreal;
+FUNCTION log10(x : longreal) : longreal;
+FUNCTION pow(x, y : longreal) : longreal;          # x ^ y
+
+FUNCTION sqrt(x : longreal) : longreal;
+
+FUNCTION ceil(x : longreal) : longreal;
+FUNCTION floor(x : longreal) : longreal;
+
+FUNCTION fabs(a : longreal) : longreal;
+
+FUNCTION ldexp(a : longreal; n : integer) : longreal;
+FUNCTION frexp(a : longreal; n : OUT integer) : longreal;
+
+FUNCTION modf(a : longreal; n : OUT longreal) : longreal;
+FUNCTION fmod(a,b : longreal) : longreal;
+
+FUNCTION IntToLongReal(n : integer) : longreal;
+FUNCTION LongRealToInt(r : longreal) : integer;
+FUNCTION LongRealMin(a, b : longreal) : longreal;
+FUNCTION LongRealMax(a, b : longreal) : longreal;
+\end{verbatim}
+\end{quote}
+
+% Other modules/objects???
+
+\section{Writing modules in C}\label{sec:interface}
+
+Sometimes it is needed to write a module in C, for instance to interface
+to a library which is not available for Orca, but is available for C.
+If this module is called
+{\em modnam},
+the user must write a specification module
+{\em modnam.spf}
+which
+contains Orca specifications for all functions that the user wants to write
+in C.
+The
+{\em oc}
+program will compile this specification, because it detects that there
+is no corresponding module implementation in Orca.
+It will produce a 
+{\em modnam.c}
+and a
+{\em modnam.h}
+file for it.
+
+The user must of course also provide the C implementation of these functions.
+These must reside in a .c file (with a different name!) that must
+start with
+\begin{quote}
+\verb+#include <interface.h>+ \\
+\verb+#include "+{\em modnam}\verb+.h"+
+\end{quote}
+Each function {\em f}
+must have a corresponding implementation in C with the name
+\begin{quote}
+\verb+f_+{\em modnam}\verb+__+{\em f}
+\end{quote}
+If the function does not return a value, or it returns a complex type,
+it must be declared
+{\bf void}.
+If it returns a simple type, the following table indicates which type
+to use for each simple Orca type.
+
+\begin{quote}
+\begin{tabular}{|l|l|l|}\hline
+{\bf Orca type} & {\bf C type} & {\bf usual C implementation} \\ \hline
+{\em shortint} & \verb+t_shortint+ & \verb+short+ \\
+{\em integer} & \verb+t_integer+ & \verb+int+ \\
+{\em longint} & \verb+t_longint+ & \verb+long+ \\
+{\em shortreal} & \verb+t_shortreal+ & \verb+float+ \\
+{\em real} & \verb+t_real+ & \verb+double+ \\
+{\em longreal} & \verb+t_longreal+ & \verb+double+ \\
+{\em char} & \verb+t_char+ & \verb+unsigned char+ \\
+{\em enum} & \verb+t_enum+ & \verb+unsigned char+ \\
+{\em boolean} & \verb+t_boolean+ & \verb+unsigned char+ \\ \hline
+\end{tabular}
+\end{quote}
+
+OUT or SHARED parameters are passed by reference (an address is passed),
+IN parameters are passed by value if they have a simple type, otherwise
+they are passed by reference as well.
+(This means that the user has to be careful not to change IN parameters.)
+In addition, if the function returns a complex type, a parameter should be
+added as if it is an OUT parameter.
+
+As a small example, if the user wants to use the
+{\em exp}
+function of C, he could have the following specification module math.spf:
+\begin{quote}
+\begin{verbatim}
+MODULE SPECIFICATION math;
+    FUNCTION exp(x: REAL): REAL;
+END;
+\end{verbatim}
+\end{quote}
+and the following exp.c file:
+\begin{quote}
+\begin{verbatim}
+#include <interface.h>
+#include "math.h"
+
+double exp(double);
+
+t_real f_math__exp(t_real x)
+{
+    return (t_real) exp((double) x);
+}
+\end{verbatim}
+\end{quote}
+
+The user should also explicitly add exp.c to the list of files offered to
+{\em oc}.
+
+\end{document}

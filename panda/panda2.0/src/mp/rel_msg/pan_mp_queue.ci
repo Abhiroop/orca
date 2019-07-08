@@ -1,0 +1,58 @@
+#ifndef __PAN_MP_REL_MSG_QUEUE_CI__
+#define __PAN_MP_REL_MSG_QUEUE_CI__
+
+#include "pan_sys_msg.h"
+
+#include "pan_mp_ports.h"
+#include "pan_mp_tickets.ci"
+
+#include "pan_mp_queue.h"
+
+
+
+STATIC_CI void
+mp_q_enq(mp_ticket_p *q, mp_ticket_p t)
+{
+    t->next = *q;
+    *q = t;
+}
+
+
+STATIC_CI mp_ticket_p
+mp_q_deq(mp_ticket_p *q)
+{
+    mp_ticket_p t;
+
+    if (*q == NULL) {
+	return NULL;
+    }
+
+    t = *q;
+    *q = t->next;
+
+    return t;
+}
+
+
+STATIC_CI void
+mp_q_init(mp_ticket_p *q)
+{
+    *q = NULL;
+}
+
+
+STATIC_CI void
+mp_q_clear(mp_ticket_p *q, void (*clear)(pan_msg_p msg))
+{
+    mp_ticket_p scan;
+
+    while ((scan = mp_q_deq(q)) != NULL) {
+	if (clear != NULL) {
+	    clear(scan->msg);
+	}
+	mp_ticket_clear(scan);
+    }
+}
+
+
+#endif

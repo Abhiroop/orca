@@ -1,0 +1,45 @@
+MODULE IMPLEMENTATION output_solution;
+
+FROM GenTypes IMPORT VecPPCom, configuration;
+FROM CromoVector IMPORT individual, population, DynPopulation;
+
+#
+# chooses the best solution from those proposed by the slaves processes
+# in the Com vector
+#
+FUNCTION choose_solution(Com: SHARED VecPPCom; nb_nodes: integer; config: configuration; solution: SHARED individual);
+	tmppop: population;
+	
+BEGIN
+	tmppop := DynPopulation(nb_nodes, config.nb_individuals);	#!
+	Com[0]$get(tmppop);
+	solution := tmppop[0];
+	FOR i IN 1..config.nb_slaves-1 DO
+		Com[i]$get(tmppop);
+		IF tmppop[0].eval < solution.eval THEN solution := tmppop[0];
+		FI;
+	OD;
+
+END;
+
+#
+# writes a solution (chromozome, fitness and evaluation values)
+# 1 stands for true
+# 0 stands for false
+#
+FUNCTION write_solution(nb_nodes: integer; solution: individual);
+
+BEGIN
+	Write ("Chromosome= ");
+	FOR i IN 0..nb_nodes-1 DO
+	  IF solution.cromozom[i] THEN Write(" 1");
+		ELSE Write(" 0");
+	  FI;
+	OD;
+	WriteLine();
+	WriteLine("Fitness= ", solution.fitness, " Evaluation= ", solution.eval);
+END;
+
+END;
+
+

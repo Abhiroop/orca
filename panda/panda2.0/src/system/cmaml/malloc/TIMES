@@ -1,0 +1,46 @@
+Fri Feb 22 14:38:28 1991
+cc -O  -target sun4 -c  maltest.c		# new version (ceriel, 1990)
+cc -O mal.o log.o phys.o global.o maltest.o check.o -o tst
+time tst -n40000 -r5000022
+n = 40000: 3584000 bytes occupied
+       23.0 real        20.5 user         1.3 sys  
+time tst -n40000 -r5000022
+n = 40000: 3584000 bytes occupied
+       21.7 real        20.3 user         1.2 sys  
+time tst -n40000 -r5000022
+n = 40000: 3584000 bytes occupied
+       26.9 real        12.3 user         1.5 sys  
+
+Fri Feb 22 13:48:28 1991
+cc   -target sun4 -c  maltest.c			# old version (dick, 1986)
+cc  mal.o log.o phys.o global.o maltest.o check.o -o tst
+time tst -n40000 -r5000022
+n = 40000: 3551232 bytes occupied
+       47.0 real        39.3 user         2.0 sys  
+       42.2 real        39.1 user         1.4 sys  
+
+================================================================
+/usr/src/libc/gen/malloc.c	47.0 real        21.8 user         2.3 sys  
+/usr/src/libc/gen/malloc.c	45.0 real        21.5 user         2.6 sys  
+text	data	bss	dec	hex
+556	0	24	580	244	malloc.o
+76800	13312	11560	101672	18d28	main
+
+/user1/dick/mal/hansmalloc.c	47.0 real        17.2 user         2.6 sys  
+/user1/dick/mal/hansmalloc.c	39.0 real        16.8 user         2.6 sys  
+text	data	bss	dec	hex
+1048	0	52	1100	44c	malloc.o
+76800	13312	11588	101700	18d44	main
+
+/user1/dick/mal/malloc.c	51.0 real        20.4 user         2.5 sys  
+/user1/dick/mal/malloc.c	45.0 real        20.6 user         2.1 sys  
+text	data	bss	dec	hex
+1848	72	152	2072	818	malloc.o
+77824	13312	11760	102896	191f0	main
+
+OWNALLOC			36.0 real        16.2 user         2.1 sys  
+OWNALLOC			31.0 real        16.0 user         2.0 sys  
+text	data	bss	dec	hex
+584	212	12	808	328	alloc.o
+76800	13312	11760	101872	18df0	main
+

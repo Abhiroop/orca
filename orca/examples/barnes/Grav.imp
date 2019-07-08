@@ -1,0 +1,151 @@
+MODULE IMPLEMENTATION Grav;
+
+FROM LocalMemory IMPORT LocalMemoryType;
+FROM Types IMPORT NULL;
+FROM vectmath IMPORT NSUB, CLRV, NDIM;
+.ifdef QUADPOLE
+FROM vectmath IMPORT DOTVP, Mul_Sub, MULVSSame, MULMV, SUBVSame, Vectmath;
+.endif
+FROM Math IMPORT sqrt;
+FROM Node IMPORT BODY, CELL, ChangeSummaryArray,
+		 NodeTypeArray;
+FROM GlobalVars	IMPORT tolsq, epssq;
+
+#  compute a single body-body or body-cell interaction
+# (p is a mapped region with a read operation in progress)
+FUNCTION gravsub( p: integer;
+		  Local: SHARED LocalMemoryType;
+                  allnodes: NodeTypeArray);
+    drabs, phii, mor3, r, r1 : real;
+.ifdef QUADPOLE
+    quaddr : Vectmath;			# No need to lift local var
+    dr5inv, phiquad, drquaddr : real;
+.endif
+BEGIN
+    IF p /= Local.pmem THEN
+	r := 0.0;
+	FOR i IN 0 .. NDIM-1 DO
+		r1 := allnodes[p].pos[i] - Local.pos0[i];
+		Local.dr[i] := r1;
+		r +:= r1 * r1;
+	OD;
+	Local.drsq := r;
+    FI;
+
+    Local.drsq +:= epssq;
+    drabs       := sqrt( Local.drsq);
+    phii        := allnodes[p].mass / drabs;
+    Local.phi0 -:= phii;
+    mor3        := phii / Local.drsq;
+    FOR i IN 0 .. NDIM-1 DO
+	Local.acc0[i] +:= Local.dr[i] * mor3;
+    OD;
+
+    IF allnodes[p].n.type /= BODY THEN	#  a body-cell/leaf interaction 
+	Local.mynbcterm +:= 1;
+.ifdef QUADPOLE
+	    dr5inv           := 1.0/( Local.drsq * Local.drsq * drabs);
+	    MULMV( quaddr, allnodes[p].quad,  Local.dr);
+	    drquaddr         := DOTVP( Local.dr, quaddr);
+	    phiquad          := -0.5 * dr5inv * drquaddr;
+	    Local.phi0      +:= phiquad;
+	    phiquad          := 5.0 * phiquad / Local.drsq;
+	    Mul_Sub( Local.acc0, Local.dr, phiquad);
+
+	    MULVSSame( quaddr, dr5inv);   
+	    SUBVSame( Local.acc0, quaddr);
+.endif
+    ELSE			#  a body-body interaction 
+	Local.myn2bterm +:= 1;
+    FI;
+END;
+
+
+
+#  recursive routine to do hackwalk operation
+# (n is a mapped region with no operations in progress) 
+
+FUNCTION walksub( n:integer; dsq: real; 
+                  Local: SHARED LocalMemoryType;
+                  allnodes: NodeTypeArray);
+    nn, p: integer;
+    r, r1: real;
+BEGIN
+    #SUBDIVP: decide if a node should be opened
+    # side effects: sets pmem, dr, and drsq
+    #(n is a mapped region with a read operation in progress)
+    r := 0.0;
+    FOR i IN 0..NDIM-1 DO
+	r1 := allnodes[n].pos[i] - Local.pos0[i];
+	Local.dr[i] := r1;
+	r +:= r1 * r1;
+    OD;
+    Local.drsq := r;
+    Local.pmem := n;
+    IF tolsq * Local.drsq < dsq THEN
+       IF allnodes[n].n.type = CELL THEN
+	   dsq /:= 4.0;
+           FOR i IN 0..NSUB-1 DO
+	       nn := allnodes[n].n.c.subp[i];
+	       IF nn /= NULL THEN
+        	  walksub( nn, dsq, Local, allnodes);
+               FI;
+           OD;
+       ELSE
+           FOR i IN 0..allnodes[n].n.l.num_bodies-1 DO
+	       p := allnodes[n].n.l.bodyp[i];
+	       IF p /= Local.pskip THEN
+	            gravsub( p,  Local, allnodes);
+               ELSE
+	            Local.skipself := true;
+               FI;
+            OD;
+      FI;
+  ELSE
+      gravsub( n, Local, allnodes);
+  FI;
+END;
+
+
+#  walk the tree opening cells too close to a given point
+
+
+FUNCTION hackwalk( root: integer; rsize: real;
+		   Local: SHARED LocalMemoryType;
+		   allnodes: NodeTypeArray);
+BEGIN
+  walksub( root, rsize * rsize, Local, allnodes);
+END;
+
+
+# evaluate grav field at a given particle
+# (p is a mapped region with a write operation in progress; write gets
+# terminated, but new write gets started before returning)
+
+FUNCTION hackgrav( pidx, p: integer; Local: SHARED LocalMemoryType;
+                   allnodes: NodeTypeArray;
+		   rsize: real;
+		   root: integer;
+		   updates: SHARED ChangeSummaryArray
+		);
+BEGIN
+    Local.pskip := p;
+
+    Local.pos0 := allnodes[p].pos;
+    Local.phi0 := 0.0;
+    CLRV( Local.acc0);
+    Local.myn2bterm := 0;
+    Local.mynbcterm := 0;
+    Local.skipself := false;
+    hackwalk(root, rsize, Local, allnodes);
+
+    updates[pidx].phi := Local.phi0;
+    updates[pidx].acc := Local.acc0;
+.ifdef QUADPOLE
+    updates[pidx].cost := Local.myn2bterm + NDIM * Local.mynbcterm;
+.else
+    updates[pidx].cost := Local.myn2bterm + Local.mynbcterm;
+.endif
+END;
+
+END;

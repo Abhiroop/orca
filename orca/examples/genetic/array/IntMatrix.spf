@@ -1,0 +1,10 @@
+MODULE SPECIFICATION IntMatrix;
+
+FROM BoolVector IMPORT BoolMatrix;
+
+TYPE IntMatrix = ARRAY [integer, integer] OF integer;
+
+FUNCTION DynIntMatrix (Nrow: integer; Ncol: integer): IntMatrix;
+FUNCTION MakeAdjMatrix (G: BoolMatrix; nb_nodes: integer; A: SHARED IntMatrix);
+
+END;

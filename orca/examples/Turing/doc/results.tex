@@ -1,0 +1,273 @@
+\section{Experiences and Results}
+
+The Turing Ring program described in Section \ref{sImpTur} was tested
+using the Unix run-time system and run on the Amoeba system using
+different numbers of processors. While the work was in progress, Panda
+for Amoeba was still being developed. Therefore the program has not yet
+been used with that system.
+
+Programming in Orca proved to be relatively easy.
+The syntax could be learned quickly because of the language's similarity
+to Pascal and Modula-2.
+A little more effort was required to parallelise the
+problem using shared variables, but the model is clean and easy to
+understand. The dynamic arrays used in Orca are a bit puzzling, but
+come in very handy because of the lack of functions to allocate memory
+at will (like C's {\tt malloc}).
+
+Debugging the program sometimes was difficult, mainly because no
+debugger programs exist. The only way to gain insight into the programs
+behaviour was to write values to the standard output. But since
+processors may work in parallel, output from different
+processors can be mixed, which can be confusing.
+
+\subsection{Re-designing and Tuning}
+The early versions of the Turing Ring program included a simple
+graphical interface to check the results. The graphical functions were
+written in C and made available to Orca by a specification module.
+Since the graphical module used a callback mechanism this was
+difficult to use. A graphical module has been added to 
+Orca's standard libraries now.
+
+In the current program, the workers fill their own part
+of the ring using the same parameters for each cell.
+A more general way to fill the ring with data was considered, making
+it possible to fill the ring with arbitrary data. This could either be
+implemented by having the main process fill the ring with data
+provided by the user, or have the worker process read in data some
+way. The first solution would cause high startup costs, since the ring
+would have to be shared with the workers. The second solution would be
+difficult to implement cleanly, since many workers would have to read
+data from one source.
+
+A couple of small problems were encountered during implementation. One
+had to do with memory allocation. If a worker process does not know how
+many cells it will end up with (due to load balancing,) how much
+memory should it allocate for it?
+This was simply solved by having it allocate enough memory to store
+the whole ring. The Amoeba processors currently have enough memory to
+store thousands of cells, so that does not impose practical constraints on
+the program.
+
+The link object is the most frequently used shared object in the
+program. During each iteration, the migrating animals are written to
+the link and then read by the neighbouring CPU. Furthermore, the load
+balancing negotiations write some data to the link. Initially the link
+object contained one read operation and one write operation for each
+data element it contains. However, some write operations (e.g.\
+writing the migrating predators and writing the migrating prey) always
+take place one after the other. As explained in Section
+\ref{sOrcaImp}, every write operation requires a
+point-to-point message and a broadcast. Combining the two write
+operations into one operation thus reduces network traffic by a
+factor of two. 
+
+All write operations which always were executed one after the other
+were combined. This reduced the execution time spent in communication
+by 30\%. Further optimisation would be possible by writing single
+operations for every set of operations which are frequently used together.
+This however is difficult to implement cleanly, since it implies
+operations are written which perform completely unrelated tasks.
+Furthermore, the performance gain is system dependent.
+
+Optimisation by combining operations could be done with read operations
+as well, although this only yields speedup in case the run-time 
+system decides not to replicate the link structures. Since this is not
+the case on the Amoeba run-time system, this has not yet been implemented.
+
+\subsection{Performance Results}
+
+The program was run on the Amoeba processor pool, which consists of 80
+SPARC~processors. Different problem sizes were used on different
+numbers of processors; the number of iterations was kept the same (1000). 
+
+\begin{figure}[p]
+\epsfxsize=\textwidth
+\epsfbox{serial.eps}
+\caption{Execution time for 1000 iterations of the serial Orca
+program}
+\label{fSerial}
+\end{figure}
+
+Figure \ref{fSerial} shows the execution time for different problem
+sizes of the serial Orca program discussed in Section
+\ref{sImpTur}. 
+The execution time is directly proportional to the number of
+cells which have to be processed. This is reasonable since the amount
+of calculation to be done depends on the number of cells in the ring,
+provided the populations of the ring are more or less stable. For all
+measurements, parameters were used which yielded such stable behaviour
+most of the time. The parameters are shown in Figure \ref{fParamsUsed}.
+
+
+\begin{figure}[p]
+\begin{center}
+\begin{tabular}{|l|l|}
+	\hline
+	TimeStep & 0.0001 \\
+	\hline
+	PredPop & 10 \\
+	\hline
+	PredDeathA & 1.3090 \\
+	\hline
+	PredDeathB & 0.250 \\
+	\hline
+	PredBirth & 0.220 \\
+	\hline
+	PredMigrate & 0.1 \\
+	\hline
+	PreyPop & 10 \\
+	\hline
+	PreyDeathA & 0.6545 \\
+	\hline
+	PreyDeathB & 0.130 \\
+	\hline
+	PreyBirth & 0.125 \\
+	\hline
+	PreyMigrate & 0.1 \\
+	\hline
+\end{tabular}
+\end{center}
+\caption{Parameters for the Turing Ring}
+\label{fParamsUsed}
+\end{figure}
+
+\begin{figure}[p]
+\epsfxsize=\textwidth
+\epsfbox{extime.eps}
+\caption{Execution time for 1000 iterations for different numbers of
+processors}
+\label{fExTime}
+\end{figure}
+
+The execution time of the parallel program using different numbers of
+processors is shown in Figure \ref{fExTime}.
+To test the consistency of the results the program was run 10
+times on 10, 15 and 20 processors. This way the variance between runs
+was determined. Figure \ref{fScatter} shows a scatter plot of these
+runs. The standard deviation of the executions time is less than
+$1/10$ of the mean.
+
+\begin{figure}[p]
+\epsfxsize = \textwidth
+\epsfbox{scatter.eps}
+\caption{Scatter plot using 10, 15 and 20 processors}
+\label{fScatter}
+\end{figure}
+
+Note that for small problem sizes, adding processors adds to the
+execution time. For larger problems, the execution time goes down till
+a certain number of processors is reached. Then it goes up again.
+To analyse these results, some definitions are introduced
+here.
+
+The {\em speedup} ${\cal S}$ achieved by running a program on more than one
+processor is defined as follows:
+\[
+        {\cal S} = \frac{\tau_1}{\tau_{\cal P}}
+\]
+where $\tau_1$ is the time to run the program on one processor and
+$\tau_{\cal P}$ the time to run it on ${\cal P}$ processors.
+
+Perfect speedup is achieved if a program executes twice as fast when the
+number of processors is doubled. Linear speedup is achieved if the
+speedup is 
+proportional to the number of processors, although the ratio is not
+necessarily 1.
+
+\begin{figure}[p]
+\epsfxsize=\textwidth
+\epsfbox{speedup.eps}
+\caption{Speedup for different job sizes}
+\label{fSpeedup}
+\end{figure}
+
+The speedup curves for different problem sizes are shown in Figure
+\ref{fSpeedup}. $\tau_1$ is taken the execution time of the serial Orca program.
+The parallel Orca program cannot be run on only one processor, since the
+single link structure then is passed to the worker twice (aliasing),
+which is not allowed in Orca.
+
+The reason perfect speedup was not achieved, is that
+some time is spent in communication between processors during each
+iteration, which depends on the number of processors used.  Each
+processor spends a fixed time in communication during each iteration, to
+exchange migrating animals and load balancing information with its
+neighbours. All processors want to use the network at nearly the same time
+(if the workload is balanced well), but since an Ethernet is used
+(which is a bus architecture) the communication is serialised. Adding
+one processor thus adds to the communication time, which
+reduces the speedup ratio. At a certain number of processors the
+speedup curves drop, because the performance penalty due to
+communication is then larger than the performance gained by better
+parallelism. Note that the performance penalty for
+communication depends only on the number of processors used: therefore
+the speedup is closer to linear if larger problems are simulated.
+The time spent
+in calculating new generations on each processor then takes a larger
+portion of the total time.
+
+The {\em efficiency} of a program is defined as
+\[
+        \eta = \frac{\tau_1}{{\cal P}\tau_{\cal P}}
+\]
+where $\tau_1$ is the time to run on one
+processor and $\tau_{\cal P}$ is the time to run on ${\cal P}$ processors
+as before. It is a measure of hardware utilisation, as it compares the
+effective time spent on calculating results and the overhead due
+to communication. Figure \ref{fEfficiency} shows that the
+efficiency of the program drops for a particular problem size as
+processors are added. This is because of the sequentialisation of
+communication: the processors use the Ethernet one at a time. However, if the
+problem size becomes larger, for any number of processors the efficiency 
+goes up.
+This explains why the speedup curve for the largest problem size
+measured goes up till 20 processors, while those for the smaller
+problems start dropping for a smaller number of processors.
+Figure \ref{fOptimal} shows the optimal number of processors for
+different problem sizes.
+
+\begin{figure}[p]
+\epsfxsize=\textwidth
+\epsfbox{effic.eps}
+\caption{Efficiency for different problem sizes}
+\label{fEfficiency}
+\end{figure}
+
+\begin{figure}[p]
+\epsfxsize=\textwidth
+\epsfbox{optimal.eps}
+\caption{Optimal number of processors for different problem sizes}
+\label{fOptimal}
+\end{figure}
+
+\begin{figure}[p]
+\begin{center}
+\begin{tabular}{|l|r|r|}
+\hline
+15 processors	& balanced load 	& unbalanced load \\
+\hline
+normal program	& 173			& 203 \\
+\hline
+no load balancing & 171			& 389 \\
+\hline
+\end{tabular}
+\end{center}
+\caption{Execution times for 1000 cells}
+\label{fNoLoadBal}
+\end{figure}
+
+To see if the load balancing algorithm works well, the program was run
+with 1000 cells on 15 processors, but
+with a high initial load on one processor (predator and prey
+population multiplied by 10 in every cell on that processor). The
+results (Figure \ref{fNoLoadBal}) show that 
+the execution time went up by 17\%, since it took many generations to
+redistribute the load.
+
+Then the load balancing functions were removed from the program and it
+was tested with balanced and unbalanced input. With balanced input the
+performance was the same as for the original program, so the load
+balancing does not impose a large performance penalty. With unbalanced
+input the execution time was more than doubled. The load balancing
+strategy thus improves the performance of the program considerably.

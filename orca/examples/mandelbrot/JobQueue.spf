@@ -1,0 +1,19 @@
+OBJECT SPECIFICATION JobQueue;
+#
+# Program:	Mandelbrot
+# File:		JobQueue.spf
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	copy of generic std jobqueue module.
+#
+
+FROM Job IMPORT job_t;
+
+	OPERATION Init(); # (re-)init the object
+
+	OPERATION AddJob(job: job_t); # add a job to the tail of the queue
+	OPERATION NoMoreJobs(t: integer);  # invoked when no more jobs will be added
+	OPERATION GetJob(job: OUT job_t; t: OUT integer): boolean;
+		# Fetch a job from the head of the queue. This operation
+		# returns false when the queue NoMoreJobs() has been invoked;
+		# It then also returns a time in milliseconds in 't' (hack).
+END;

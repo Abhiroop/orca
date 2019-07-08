@@ -1,0 +1,15 @@
+echo 'newgraph border clip X 3.8'
+echo 'xaxis min 0 max 35 label : number of CPUs'
+echo 'yaxis min 0 label : speedup'
+echo 'newcurve linetype solid marktype none'
+echo 'pts '
+cat ntr.tp.spd
+echo 'newcurve linetype dotted marktype circle'
+echo 'pts '
+cat ntr.2.spd
+echo 'newcurve linetype dashed marktype diamond'
+echo 'pts '
+cat ntr.4.spd
+echo 'newcurve linetype longdash marktype triangle'
+echo 'pts '
+cat ntr.8.spd

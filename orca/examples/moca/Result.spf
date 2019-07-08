@@ -1,0 +1,44 @@
+MODULE SPECIFICATION Result;
+
+IMPORT	VarObject;
+IMPORT	RandObject;
+FROM	Common	IMPORT	IntKinsType, RealKinsType, RealTableType,
+			IntKind2Type, RealKind2Type, CombiType,
+			IntRecordType, RealRecordType, ConstType;
+
+##
+## For the clusters containing electrons after max. time-period :
+## remove all remaining elements (conditionally).
+##
+FUNCTION Remove(GLOB        : SHARED VarObject;
+		CNST        : ConstType;
+		Nion0, NCPU : integer;
+		FEXM        : real;
+		NRREAC      : SHARED integer;
+		ESCC        : SHARED real;
+		FEX         : RealTableType;
+		NRECORD     : SHARED IntRecordType;
+		TRECORD     : SHARED RealRecordType);
+
+
+##
+## Calculate results and print to screen and file.
+##
+FUNCTION Result(CNST                 : ConstType;
+		ifield, irep, itrack : integer;
+		AD                   : real;
+		SEED, NRREAC, ISER   : SHARED integer;
+		ESCC, SUMES,
+		SUMESSQ, pteav, sfav : SHARED real;
+		FEX                  : RealTableType;
+		NRECORD              : SHARED IntRecordType;
+		TRECORD              : SHARED RealRecordType;
+		PR                   : SHARED CombiType;
+		IKIN                 : SHARED IntKinsType;
+		INT                  : SHARED IntKind2Type;
+		AKT, SUMK            : SHARED RealKinsType;
+		AT, SUM              : SHARED RealKind2Type;
+		OutFlag1, OutFlag2   : SHARED boolean;
+		RAND                 : SHARED RandObject);
+
+END;

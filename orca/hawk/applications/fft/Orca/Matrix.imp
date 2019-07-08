@@ -1,0 +1,82 @@
+OBJECT IMPLEMENTATION Matrix[integer n..N];
+  FROM global IMPORT w, p;
+  FROM InOut IMPORT OpenInputFile, CloseInput;
+
+  ar, ai:	real;
+
+OPERATION Initial_A(fn: string): boolean;
+BEGIN
+	IF NOT OpenInputFile(fn) THEN
+		RETURN false;
+	FI;
+	FOR i IN n..N DO
+		Read(ar[i], ai[i]);
+	OD;
+	CloseInput();
+	RETURN true;
+END;
+
+PARALLEL OPERATION[ind] A_computation(kl1: integer);
+  p, x, u, u2, y: integer;
+BEGIN
+	p := ind >> kl1;
+	IF (p & 1) = 1 THEN
+		x := -1;
+		u := ind;
+		u2 := ind - (1 << kl1);
+	ELSE
+		x := 1;
+		u := ind + (1 << kl1);
+		u2 := ind;
+	FI;
+	y := p >> 1;
+	IF x = -1 THEN
+		ar := ar[u2] - (w[y].wr * ar[u] - w[y].wi * ai[u]);
+		ai := ai[u2] - (w[y].wr * ai[u] + w[y].wi * ar[u]);
+	ELSE
+		ar := ar[u2] + (w[y].wr * ar[u] - w[y].wi * ai[u]);
+		ai := ai[u2] + (w[y].wr * ai[u] + w[y].wi * ar[u]);
+	FI;
+END;
+
+FUNCTION DepsForComp(A: SHARED Matrix; kl1: integer; nparts: integer);
+  i1: integer;
+  off: integer;
+  sz: integer;
+  other: integer;
+BEGIN
+# expirimental version, with knowledge about the partitioning
+# All elements from a partition have "the other" elements in the
+# same partition because all partitions have the same length.
+# The other assumption is that off is either a dividor or a multiple
+# of the partition size.
+	off := 1 << kl1;
+	sz := (UB(A) - LB(A) + 1) / nparts;
+	A$$clear_dependencies(A_computation);
+	i1 := LB(A);
+	FOR i IN 1 .. nparts DO
+		other := i1 ^ off;
+		A$$add_dependency(A_computation, i1, other);
+		i1 +:= sz;
+	OD;
+#	FOR i IN LB(A) .. UB(A) DO
+#		p := i >> kl1;
+#		IF (p & 1) = 1 THEN
+#			p := i - off;
+#		ELSE
+#			p := i + off;
+#		FI;
+#		A$$add_dependency(A_computation, i, p);
+#	OD;
+	A$$set_dependencies(A_computation);
+END;
+
+OPERATION Get_Print_A(n: integer);
+BEGIN
+	FOR i IN n..N DO
+		WriteLine("ar[", i, "] = ", ar[p[i]],
+			  ", ai[", i, "] = ", ai[p[i]]);
+	OD;
+END;
+
+END;

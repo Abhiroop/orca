@@ -1,0 +1,57 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION ForceEnergy;
+
+IMPORT	barrier;
+IMPORT	LongRealObject;
+FROM	GlobalType	IMPORT	GlobalObject;
+FROM	Common		IMPORT	OrderType, AllCpuDataType;
+FROM	VarObject	IMPORT	VarType;
+
+
+
+### Calculate the intra-molecular force/mass acting on each atom
+#
+FUNCTION IntraForces(Data   : SHARED GlobalObject;
+		     Vir    : OUT longreal;
+		     NrMols : integer);
+
+FUNCTION DoIntraForces(Atom   : SHARED VarType;
+		       Vir    : OUT longreal;
+		       NrMols : integer);
+
+
+### Compute inter-molecular forces
+#
+FUNCTION InterForces(Data    : SHARED GlobalObject;
+		     TVIR    : SHARED LongRealObject;
+		     Vir     : longreal;
+		     StartMol, NrMols, NMOL, NrParts  : integer;
+		     BOXH, BOXL, REF1, CUT2, FHM, FOM : longreal;
+		     Dest : OrderType);
+
+FUNCTION DoInterForces(Atom   : SHARED VarType;
+                       TmpVir : OUT longreal;
+                       AllVal : OUT AllCpuDataType;
+                       AllPos : AllCpuDataType;
+                       StartMol, NrMols, NMOL, NrParts, me : integer;
+                       BOXH, BOXL, REF1, CUT2 : longreal;
+                       Dest : OrderType);
+
+### Calculate the potential energy of the system.
+#
+FUNCTION PotEnergy(Data              : SHARED GlobalObject;
+		   Barrier           : SHARED barrier;
+		   POTA, POTR, POTRF : SHARED LongRealObject;
+		   StartMol, NrMols, NMOL, NrParts : integer;
+		   CUTOFF, CUT2, REF1, BOXH, BOXL  : longreal);
+
+FUNCTION DoPotEnergy(Atom : SHARED VarType;
+                     AllPos : AllCpuDataType;
+                     LPOTA, LPOTR, LPTRF : OUT longreal;
+                     StartMol, NrMols, NMOL : integer;
+                     CUTOFF, CUT2, REF1, BOXH, BOXL  : longreal);
+
+END;

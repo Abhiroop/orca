@@ -1,0 +1,137 @@
+OBJECT IMPLEMENTATION Scheduler;
+#
+# Program:	Mandelbrot
+# File:		Scheduler.imp
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	Job manager for the workers.
+#		Manages interaction: Controller => Workers.
+#
+#
+
+FROM Job IMPORT request_t, job_t;
+
+CONST MAX_JOB_SIZE = 7000; # MAX_JOB_SIZE + WIDTH should be < MES_SIZE 
+# CONST MAX_JOB_SIZE = 30000; # MAX_JOB_SIZE + WIDTH should be < MES_SIZE 
+CONST MIN_JOB_SIZE = 1000; # smallest jobsize for which the parrallelism
+		 	   # still outweighs the communication costs.
+
+	work_ptr, work_size, n_workers, n_resting : integer;
+	continue, done: boolean;
+	req_data : request_t;
+
+
+
+OPERATION LastRequest(r: OUT request_t): boolean;
+BEGIN
+	GUARD (done) 
+	DO
+		RETURN true;
+	OD;
+	GUARD ((NOT done) AND (work_ptr < work_size))
+	DO
+		r := req_data;
+		n_resting -:= 1;
+		continue := true;
+		RETURN false;
+	OD;
+END;
+
+
+
+
+OPERATION NewJob(job: OUT job_t): boolean;
+	size: integer;
+BEGIN
+
+	IF (work_ptr < work_size) THEN
+		# Guided Self Scheduling of job size
+		size := (work_size-work_ptr)/n_workers;
+
+		# Now, avoid the Achilles&turtle semantics
+		IF (size < MIN_JOB_SIZE) THEN
+			IF ((work_size-work_ptr) < 2*MIN_JOB_SIZE) THEN
+				size := work_size - work_ptr;
+			ELSE
+				size := MIN_JOB_SIZE;
+			FI;
+		# The following because some systems lack fragmentation:
+		ELSIF (size > MAX_JOB_SIZE) THEN
+			size := MAX_JOB_SIZE;
+		FI;
+
+		# Finally, make sure that you're having entire scanlines
+		size := (1+(size-1)/req_data.width)*req_data.width;
+
+		# Use this size to adapt the work pointer
+		job.start := work_ptr;
+		job.size := size;
+		work_ptr +:= size;
+		RETURN true; 	
+	ELSE
+		n_resting +:= 1;
+		RETURN false; 	
+	FI;
+END;
+
+
+
+
+OPERATION AllIdle();
+BEGIN
+	GUARD (continue AND (n_resting = n_workers)) DO OD;
+END;
+
+
+
+
+
+OPERATION GiveWork(r: IN request_t);
+# used by the controller to announce the type of work 2b done 
+BEGIN
+	req_data  := r;	
+	work_ptr  := 0;
+	work_size := req_data.width * req_data.height;
+	continue := false;
+END;
+
+
+
+
+OPERATION NoMoreWork();
+# used by the controller to announce that no more work needs to be done.
+BEGIN
+	done := true;
+END;
+
+
+
+OPERATION Init(n: IN integer);
+BEGIN
+	work_ptr  := 0;
+	work_size := 0;
+	n_workers := n;
+	n_resting := 0;
+	done := false;
+	continue := true;
+END;
+
+
+
+
+FUNCTION GetWork(work : SHARED Scheduler; 
+		job: OUT job_t;
+		r: SHARED request_t): boolean;
+BEGIN
+	REPEAT
+		# try to get work on the current request
+		IF (work$NewJob(job)) THEN
+			RETURN true;
+		FI;
+	UNTIL (work$LastRequest(r)); # block for a new request
+
+	# there is no more work
+	RETURN false;
+END;
+
+
+END;

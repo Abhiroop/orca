@@ -1,0 +1,26 @@
+OBJECT IMPLEMENTATION MatrixObject[integer I1..I2,integer J1..J2];
+    m: real;
+
+TYPE RealMatrix = ARRAY[integer,integer] of real;
+
+FUNCTION RealSum(r1, r2: SHARED real);
+BEGIN r1 +:= r2; END;
+
+OPERATION PrintMatrix();
+BEGIN
+    FOR i IN I1..I2 DO
+        FOR j IN J1..J2 DO Write(m[i,j], " "); OD;
+        WriteLine();
+    OD;
+END;
+
+PARALLEL OPERATION[i,j] transpose();
+BEGIN m[i,j] := m[j,i]; END;
+
+PARALLEL OPERATION[i,j] sum(): REDUCE real WITH RealSum;
+BEGIN RETURN m[i,j]; END;
+
+PARALLEL OPERATION[i,j] ReadMatrix(): GATHER RealMatrix;
+BEGIN RETURN m[i,j]; END;
+
+END;

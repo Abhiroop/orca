@@ -1,0 +1,40 @@
+MODULE IMPLEMENTATION generator;
+
+	FROM Finish IMPORT Finish;
+	FROM args IMPORT Argc, Argv;
+	IMPORT Random;
+	FROM conversions IMPORT StringToInt;
+	FROM Time IMPORT GetTime;
+
+	CONST prob = 0.1;
+
+PROCESS OrcaMain();
+	# local data of the Main
+	nb_nodes: integer;
+	dummy: integer;
+	r: Random;
+	seed: integer;
+
+BEGIN
+	IF Argc() /= 3 THEN
+	  WriteLine("Usage: ", Argv(0), " number of graph nodes");
+	  RETURN;
+	FI;
+	nb_nodes := StringToInt(Argv(2), dummy);
+	WriteLine(Argv(2));
+	seed := GetTime();
+	r$init(seed);
+	FOR i IN 0..nb_nodes-1 DO
+		FOR j IN 0..nb_nodes-1 DO
+			IF r$val01() < prob THEN 
+				Write (" 1");
+			ELSE
+				Write (" 0");
+			FI;
+		OD;
+	OD;
+		WriteLine();
+		Finish();
+	END;
+END;
+

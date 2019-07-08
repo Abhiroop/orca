@@ -1,0 +1,16 @@
+OBJECT IMPLEMENTATION sema;
+	semph:integer;
+
+	OPERATION Pass();
+	BEGIN
+		GUARD semph=1 DO semph:=0; OD;
+	END; # OPERATION Pass
+
+	OPERATION Free();
+	BEGIN
+		semph:=1;
+	END;
+
+BEGIN
+	semph:=1;
+END;

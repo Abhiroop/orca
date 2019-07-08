@@ -1,0 +1,68 @@
+MODULE IMPLEMENTATION timenoup;
+	IMPORT IntObject;
+	FROM Time IMPORT SysMilli, PrintTime;
+	FROM Finish IMPORT Finish;
+
+	FUNCTION GoUseX(X: SHARED IntObject);
+		i,j,k: integer;
+	BEGIN
+		FOR i IN 1..10 DO
+			FOR j IN 1..10 DO
+				k := X$value();
+			OD;
+		OD;
+	END;
+
+	FUNCTION GoCompute(go: SHARED IntObject);
+		i,j: integer;
+		k: IntObject;
+	BEGIN
+		FOR i IN 1..100000 DO	# 500000 for sparc
+			FOR j IN 1..10 DO
+				k$assign(i + j + 1985);
+			OD;
+			k$assign(go$value());	# give grp_listener a chance
+		OD;
+	END;
+
+	# Description of slave processes.
+	PROCESS slave(X, go: SHARED IntObject);
+		start, stop: integer;
+	BEGIN
+		start := SysMilli();
+		go$inc();
+		GoCompute(go);
+		stop := SysMilli();
+		IF go$value() > 0 THEN
+			WriteLine("slave: communication not finished yet");
+		FI;
+		PrintTime("TimeNoUp", stop-start);
+		GoUseX(X);	# fool optimizer
+		go$AwaitValue(0);
+		go$inc();
+	END;
+
+	FUNCTION GoUpdate(X: SHARED IntObject);
+		i: integer;
+	BEGIN
+		WriteLine("GoUpdate start");
+		FOR i IN 1..10000 DO
+			X$assign(i);
+		OD;
+		WriteLine("GoUpdate end");
+	END;
+
+
+	# Description of master process
+	PROCESS OrcaMain();
+		X, go: IntObject;
+	BEGIN
+		go$assign(0);
+		FORK slave(X, go) ON(1);
+		go$AwaitValue(1);
+		# GoUpdate(X);
+		go$assign(0);
+		go$AwaitValue(1);
+		Finish();
+	END;
+END;

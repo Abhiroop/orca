@@ -1,0 +1,36 @@
+MODULE SPECIFICATION SetUp;
+
+IMPORT	VarObject;
+IMPORT	RandObject;
+FROM	Common	IMPORT	IntKinsType, RealKinsType, IntKind2Type,
+			RealKind2Type, CombiType, ConstType;
+
+##
+## Main initialization.
+##
+FUNCTION MainInit(CNST : SHARED ConstType) : boolean;
+
+
+##
+## Some extra initializations.
+##
+FUNCTION TrackInit(CNST                     : ConstType;
+		   itrack                   : integer;
+		   ISER                     : OUT integer;
+		   AD, ESCC, SUMES, SUMESSQ : OUT real;
+		   PR                       : OUT CombiType;
+		   IKIN                     : OUT IntKinsType;
+		   INT                      : OUT IntKind2Type;
+		   SUMK                     : OUT RealKinsType;
+		   SUM                      : OUT RealKind2Type);
+
+##
+## Initialization of 'GLOB' (fill it with positions of all elements).
+##
+FUNCTION DoInit(GLOB                : SHARED VarObject;
+	        CNST                : ConstType;
+	        NION0, itrack       : integer;
+	        NRP, NRE, IDX, SEED : OUT integer;
+	        RAND                : SHARED RandObject);
+
+END;

@@ -1,0 +1,24 @@
+.ds CH
+.nr PS 20
+.nr VS 14
+.TL
+.sp 2
+Parallel Recognition Algorithms for Context-Free Grammars
+.nr PS 12
+.AU
+A.J.M. Verbeek
+.AI
+Dept. of Mathematics and Computer Science
+Vrije Universiteit,
+Amsterdam, The Netherlands.
+.sp 2
+20 April 1994
+
+.LP
+.sp 15
+.DS
+Supervisor:     Dr. Ir. H. E. Bal 
+.DE
+.sp 1
+.LP
+.bp

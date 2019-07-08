@@ -1,0 +1,26 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+#========================================================================
+# == File:      VTypes.spf					       ==
+# == Program:   Orca<->Vogle interface				       ==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994       ==
+# == Contains:  Type and constant definitions			       ==
+#========================================================================
+
+MODULE SPECIFICATION VTypes;
+
+CONST 	BLACK 	= 0;			# color index for black
+CONST 	RED	= 1;			# color index for red
+CONST 	GREEN 	= 2;			# color index for green
+CONST	YELLOW 	= 3;			# color index for yellow
+CONST	BLUE	= 4;			# color index for blue
+CONST	MAGENTA = 5;			# color index for magenta
+CONST   CYAN 	= 6;			# color index for cyan
+CONST   WHITE	= 7;			# color index for white
+
+
+CONST   DEF_CIRCLE_SEGS = 32;		# nr of line segments making up a circle
+
+END;

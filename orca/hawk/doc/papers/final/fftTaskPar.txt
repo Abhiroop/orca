@@ -1,0 +1,18 @@
+PROCESS TaskParallelWorker(firstMatrix, lastMatrix: integer);
+    A: ComplexMatrix[1..N, 1..N];   # matrix of complex numbers
+BEGIN
+    FOR i IN firstMatrix .. lastMatrix DO
+        readMatrix(i, A);           # initialize matrix A
+        seq2Dfft(A);                # do sequential 2D-FFT
+    OD;
+END;
+
+PROCESS TaskParallelMaster(Nmatrices, Ncpus: integer);
+    S: integer;                     # number of matrices per worker
+BEGIN
+    S := Nmatrices/Ncpus;           # assume Nmatrices is a multiple of Ncpus
+    FOR i IN 0 .. Ncpus-1 DO
+        # fork a worker on CPU i, give it a subrange of all matrices
+        FORK TaskParallelWorker(i*S, (i+1)*S-1) ON(i);
+    OD;
+END;

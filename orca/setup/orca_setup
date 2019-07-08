@@ -1,0 +1,184 @@
+#!/bin/sh
+
+case $0 in
+*/orca_setup)
+	DIR=`expr $0 : '\(.*\)/orca_setup'`
+	;;
+orca_setup)	DIR=.
+	;;
+esac
+
+if echo 'a\c' | grep 'c' >/dev/null ; then
+	: We have BSD-like echo command.
+	E_FLAG='-n'
+	E_SFX=''
+else
+	: We have SystemV-like echo command.
+	E_FLAG=''
+	E_SFX='\c'
+fi
+export E_FLAG E_SFX
+
+if [ -f macros ]
+then
+	. macros
+fi
+
+while :
+do
+	echo $E_FLAG "Please give the root of the Orca tree: [$ORCA_HOME] $E_SFX"
+	if read ANS
+	then	echo
+	else	echo "Sorry, got EOF when reading your answer"
+		exit 1
+	fi
+	case $ANS in
+	'') 	ANS="$ORCA_HOME" ;;
+	esac
+	ORCA_HOME="$ANS"
+	case $ORCA_HOME in
+	/*)	if [ -d $ORCA_HOME ]
+		then	break
+		else	echo "cannot find $ORCA_HOME; try again"
+		fi
+		;;
+	*)	echo "$ORCA_HOME is not an absolute path; try again"
+		;;
+	esac
+done
+case $TARGET in
+'')	TARGET=$ORCA_HOME
+	;;
+esac
+
+while :
+do
+	echo $E_FLAG "Please give the root of a target tree, where binaries
+and libraries will reside: [$TARGET] $E_SFX"
+	if read ANS
+	then	echo
+	else	echo "Sorry, got EOF when reading your answer"
+		exit 1
+	fi
+	case $ANS in
+	'') 	ANS="$TARGET" ;;
+	esac
+	TARGET="$ANS"
+	case $TARGET in
+	/*)	if mkdir -p $TARGET
+		then
+			break
+		else
+			echo "Could not create $TARGET. Please try again"
+		fi
+		;;
+	*)	echo "$TARGET is not an absolute path; try again"
+		;;
+	esac
+done
+
+while :
+do
+	echo $E_FLAG "Please give the root of the panda tree: [$PANDA_PROJ] $E_SFX"
+	if read ANS
+	then	echo
+	else	echo "Sorry, got EOF when reading your answer"
+		exit 1
+	fi
+	case $ANS in
+	'') 	ANS="$PANDA_PROJ" ;;
+	esac
+	PANDA_PROJ="$ANS"
+	case $PANDA_PROJ in
+	/*)	if [ -d $PANDA_PROJ ]
+		then
+			break
+		else
+			echo "Could not find $PANDA_PROJ. Please try again"
+		fi
+		;;
+	*)	echo "$PANDA_PROJ is not an absolute path; try again"
+		;;
+	esac
+done
+
+while :
+do
+	echo $E_FLAG "Please give the root of the Amoeba tree: [$AMOEBA_HOME] $E_SFX"
+	if read ANS
+	then	echo
+	else	echo "Sorry, got EOF when reading your answer"
+		exit 1
+	fi
+	case $ANS in
+	'') 	ANS="$AMOEBA_HOME" ;;
+	esac
+	AMOEBA_HOME="$ANS"
+	case $AMOEBA_HOME in
+	/*)	if [ -d $AMOEBA_HOME ]
+		then
+			break
+		else
+			echo "Could not find $AMOEBA_HOME. Please try again"
+		fi
+		;;
+	*)	echo "$AMOEBA_HOME is not an absolute path; try again"
+		;;
+	esac
+done
+
+echo $E_FLAG "Which runtime systems do you want to install? [$RTSNAMES] $E_SFX"
+if read ANS
+then	echo
+else	echo "Sorry, got EOF when reading your answer"
+	exit 1
+fi
+case $ANS in
+'') 	ANS="$RTSNAMES" ;;
+esac
+RTSNAMES="$ANS"
+
+echo $E_FLAG "On which platforms? [$PLATFORMS] $E_SFX"
+if read ANS
+then	echo
+else	echo "Sorry, got EOF when reading your answer"
+	exit 1
+fi
+case $ANS in
+'') 	ANS="$PLATFORMS" ;;
+esac
+PLATFORMS="$ANS"
+
+echo '#!/bin/sh' > INSTALL
+echo "ORCA_HOME=\"$ORCA_HOME\"" >> INSTALL
+echo "PANDA_PROJ=\"$PANDA_PROJ\"" >> INSTALL
+echo "AMOEBA_HOME=\"$AMOEBA_HOME\"" >> INSTALL
+echo "TARGET=\"$TARGET\"" >> INSTALL
+echo "RTSNAMES=\"$RTSNAMES\"" >> INSTALL
+echo "PLATFORMS=\"$PLATFORMS\"" >> INSTALL
+echo "ORCA_HOME=\"$ORCA_HOME\"" > macros
+echo "PANDA_PROJ=\"$PANDA_PROJ\"" >> macros
+echo "AMOEBA_HOME=\"$AMOEBA_HOME\"" >> macros
+echo "TARGET=\"$TARGET\"" >> macros
+echo "RTSNAMES=\"$RTSNAMES\"" >> macros
+echo "PLATFORMS=\"$PLATFORMS\"" >> macros
+
+cat $DIR/detect_sys >> INSTALL
+cat $DIR/build_target >> INSTALL
+cat $DIR/build_conf >> INSTALL
+cat $DIR/build_makes >> INSTALL
+cat $DIR/build_bins >> INSTALL
+cat $DIR/build_libs >> INSTALL
+cat $DIR/build_docs >> INSTALL
+
+echo 'chmod -Rf g-w $TARGET' >> INSTALL
+
+chmod +x INSTALL
+
+echo "
+A shell-script called 'INSTALL' has been created. Running it installs
+Orca. Note that this may take a long time, so run it in the background,
+with its output redirected, f.i.:
+	sh INSTALL > INSTALL.out 2>&1 &
+"
+exit 0

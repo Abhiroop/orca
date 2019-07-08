@@ -1,0 +1,581 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION DynPartAlg;
+ ######  Parallel implementation of the CYK algorithm. #######
+ # The overall datastructure consists of a (triangular) table of sets of
+ # leftsides of productions of which every process contains a different
+ # vertical strip.
+ # A process is divided up in stages each of which is divided up again
+ # in a number of substages. In every substage a triangular or diamond
+ # shaped part of the vertical strip is calculated and shared through
+ # a diagonal strip with the process on the leftside. A process is 
+ # (temporarily) finished after it has worked through its number of 
+ # substages. If it is not the last stage the overall information is
+ # repartitioned over all processes.
+
+
+        IMPORT IntObject, Grammar;
+	FROM CYKtypes IMPORT ProdSet, ColProdSet, Strip;
+	FROM Time     IMPORT SysMilli, PrintTime;
+	FROM Finish   IMPORT Finish;
+	FROM unix     IMPORT ReadString, open, close;
+
+        OBJECT Transfer  = NEW GenericBin(Strip);
+
+        CONST MAXCPU     = 128;
+	CONST MAXMSG     = 26000;
+
+ # Number of bytes a datastructure occupies in marshalled form.
+        CONST MARSHSET   = 4;
+        CONST MARSHCHAR  = 1;
+        CONST MARSHINT   = 4;
+        CONST MARSHARRAY = 16;
+
+FUNCTION PrintSet (Set : ProdSet);
+BEGIN
+        FOR elt IN Set DO
+            Write (elt, " ");
+        OD;
+        WriteLine();
+END;
+
+
+
+FUNCTION ComputeBlock (VertStrip, DiagStrip : SHARED Strip; 
+	     grammar : Grammar; Start, NrCols : integer);
+ # ComputeBlock computes diamond shaped part of a strip.
+
+        k, l, EltSize : integer;
+
+BEGIN
+        k := 1;
+        l := 1;
+        FOR j IN Start..(Start + 2*NrCols - 2) DO
+            FOR i IN 1..l DO
+              IF k = 1 THEN         # compute upper half of block.
+                    VertStrip[NrCols-l+i].elt[j] := grammar$ProdsOfStr( 
+                             VertStrip[NrCols-l+i].elt, DiagStrip[i].elt, j-1);
+                    DiagStrip[i].elt[j]         := VertStrip[NrCols-l+i].elt[j];
+		    EltSize := SIZE(DiagStrip[i].elt[j])*MARSHCHAR+MARSHSET;
+		    VertStrip[NrCols-l+i].size +:= EltSize;
+		    DiagStrip[i].size          +:= EltSize;
+              ELSE                  # compute lower half of block.
+                    VertStrip[i].elt[j]         := grammar$ProdsOfStr(
+			     VertStrip[i].elt, DiagStrip[NrCols-l+i].elt,j-1);
+                    DiagStrip[NrCols-l+i].elt[j] := VertStrip[i].elt[j];
+		    EltSize := SIZE(VertStrip[i].elt[j])*MARSHCHAR+MARSHSET;
+		    VertStrip[i].size          +:= EltSize;
+		    DiagStrip[NrCols-l+i].size +:= EltSize;
+              FI;
+            OD;
+            IF l = NrCols THEN k := -1; FI;
+            l +:= k;
+        OD;
+END;
+
+
+
+FUNCTION CompFirstBlock (FirstStage : boolean; Start, NrCols : integer;
+             VertStrip, DiagStrip : SHARED Strip; grammar : Grammar);
+ # CompFirstBlock computes the first (triangular) block of a strip.
+
+	k, EltSize : integer;
+
+BEGIN
+	IF FirstStage THEN k := 1; ELSE k := 0; FI;
+
+	FOR j IN Start..(NrCols+Start-1-k) DO
+	    FOR i IN 1..(NrCols-k) DO
+	        VertStrip[i].elt[j] := grammar$ProdsOfStr (VertStrip[i].elt,
+                              DiagStrip[i+k].elt, j-1);
+		DiagStrip[i+k].elt[j] := VertStrip[i].elt[j];
+		EltSize := SIZE(VertStrip[i].elt[j])*MARSHCHAR+MARSHSET;
+		VertStrip[i].size   +:= EltSize;
+		DiagStrip[i+k].size +:= EltSize;
+	    OD;
+	    k +:= 1;
+	OD;
+END;
+
+
+
+FUNCTION CompLastBlock (Start, NrCols : integer;
+	     VertStrip, DiagStrip : SHARED Strip; grammar : Grammar);
+ # CompLastBlock computes the last (triangular) block of a strip.
+
+	k, EltSize : integer;
+
+BEGIN
+	k := 1;
+	FOR j IN Start..(Start+NrCols-2) DO
+	    FOR i IN 1..k DO
+		VertStrip[NrCols-k+i].elt[j] := grammar$ProdsOfStr(
+		         VertStrip[NrCols-k+i].elt, DiagStrip[i].elt, j-1);
+		DiagStrip[i].elt[j] := VertStrip[NrCols-k+i].elt[j];
+		EltSize := SIZE(DiagStrip[i].elt[j])*MARSHCHAR+MARSHSET;
+		VertStrip[NrCols-k+i].size +:= EltSize;
+		DiagStrip[i].size          +:= EltSize;
+	    OD;
+	    k +:= 1;
+	OD;
+END;
+
+
+FUNCTION CpAndSend (lb, ub : integer; DiagStrip : Strip; ToLeft : SHARED Transfer;
+             Time : OUT integer);
+ # CpAndSend copies a part of a diagonal strip of at most 32
+ # Kbytes in LocalStrip and sends it to its left neighbour.
+
+
+	LocalStrip : Strip[lb..ub];
+        Start, Stop : integer;
+
+BEGIN
+Start := 0;
+	FOR i IN lb..ub DO
+	    LocalStrip[i].elt  := DiagStrip[i].elt;
+	    LocalStrip[i].size := DiagStrip[i].size;
+Start +:= LocalStrip[i].size;
+	OD;
+#WriteLine ("CpAndSend heeft nu ", Start, " bytes verzonden!");
+        Start := SysMilli ();
+	ToLeft$put(LocalStrip);
+        Stop := SysMilli ();
+        Time := Stop-Start;
+END;
+
+
+
+FUNCTION Send (To : SHARED Transfer; DiagStrip : Strip; lb, ub : integer;
+	     TotalTime : OUT integer);
+ # Send transfers a half of a diagonal strip to the processor on its left
+ # in parts of at most 32 Kbytes.
+
+
+	LowBound, TotalSize, Time : integer;
+
+BEGIN
+	TotalTime := 0;
+	LowBound  := lb;
+	TotalSize := 0;
+
+	FOR i IN lb..ub DO
+	    IF (TotalSize+DiagStrip[i].size) <= MAXMSG THEN
+		TotalSize +:= DiagStrip[i].size;
+	    ELSE   # Send piece of at most 32 Kbytes.
+		CpAndSend (LowBound, i-1, DiagStrip, To, Time);
+                TotalTime +:= Time;
+		LowBound := i;
+		TotalSize := DiagStrip[i].size;
+	    FI;
+	OD;  # There is always only half of DiagStrip to send.
+	    CpAndSend (LowBound, ub, DiagStrip, To, Time);
+            TotalTime +:= Time;
+END;
+
+
+
+
+FUNCTION Receive (From : SHARED Transfer; NrCols : integer; DiagStrip : OUT Strip[1..NrCols];
+ # Receive receives a diagonal strip. Its bounds are converted to
+ # 1 and NrCols.
+             TotalTime : OUT integer);
+
+	LocalStrip : Strip;
+	lb, ub     : integer;
+	Start, Stop : integer;
+
+BEGIN
+	TotalTime := 0;
+	Start := SysMilli ();
+	From$get(LocalStrip);
+	Stop  := SysMilli ();
+	TotalTime +:= (Stop-Start);
+	lb := LB(LocalStrip);
+	ub := UB(LocalStrip);
+	FOR i IN lb..ub DO
+	    DiagStrip[i-(lb-1)].elt  := 
+		LocalStrip[i].elt;
+	    DiagStrip[i-(lb-1)].size := 
+		LocalStrip[i].size;
+	OD;
+	WHILE ub < (NrCols+lb-1) DO
+	    Start := SysMilli ();
+	    From$get(LocalStrip);
+	    Stop  := SysMilli ();
+	    TotalTime +:= (Stop-Start);
+	    ub := UB(LocalStrip);
+	    FOR i IN LB(LocalStrip)..ub DO
+		DiagStrip[i-(lb-1)].elt  := LocalStrip[i].elt;
+		DiagStrip[i-(lb-1)].size := LocalStrip[i].size;
+	    OD;
+	OD;
+END;
+
+
+
+FUNCTION CpAndEnlarge (ub : integer; LocalCol : ColProdSet; DiagCol : OUT ColProdSet[1..ub]);
+ # CpAndEnlarge copies the old column in the enlarged new one.
+
+BEGIN
+	FOR i IN 1..UB(LocalCol) DO
+	    DiagCol[i] := LocalCol[i];
+	OD;
+END;
+
+
+FUNCTION SubStageRec (TauthStage : boolean; FromRight : SHARED Transfer;
+	     NrCols : integer; DiagStrip : OUT Strip[1..NrCols]; Time : OUT integer);
+ # SubStageRec receives a diagonal strip and enlarges DiagStrip so that
+ # it is large enough to contain also the next block.
+
+	LocalStrip : Strip;
+
+BEGIN
+	Receive (FromRight, NrCols, LocalStrip, Time);
+	FOR i IN 1..NrCols DO
+	    IF TauthStage THEN  # All columns get the same size.
+		CpAndEnlarge (SIZE(LocalStrip[NrCols].elt), LocalStrip[i].elt, DiagStrip[i].elt);
+	    ELSE 
+		CpAndEnlarge (SIZE(LocalStrip[i].elt)+NrCols, LocalStrip[i].elt, DiagStrip[i].elt); 
+	    FI;
+	    DiagStrip[i].size := LocalStrip[i].size;
+	OD;
+END;
+
+
+
+FUNCTION DoSubStages (Start : SHARED integer;
+	     NrCols, NrSubStages, Tau : integer; 
+	     VertStrip, DiagStrip : SHARED Strip; 
+	     ToLeft, FromRight : SHARED Transfer; 
+	     leftok, FirstStage : boolean;
+	     grammar : Grammar; TotalTime : OUT integer);
+ # DoSubStages handles the substages of a stage.
+
+	Time : integer;
+
+BEGIN
+	TotalTime := 0;
+	FOR SubStage IN 1..NrSubStages DO
+	    IF SubStage = 1 THEN 
+                CompFirstBlock (FirstStage, Start, NrCols, VertStrip, DiagStrip, grammar);
+		IF NOT FirstStage THEN Start +:= 1; FI;
+	    ELSIF SubStage = Tau + 1 THEN CompLastBlock (Start, NrCols,
+                                                 VertStrip, DiagStrip, grammar);
+	    ELSE 
+	        ComputeBlock(VertStrip, DiagStrip, grammar, Start, NrCols);
+	        Start +:= NrCols;
+	    FI;
+		# Communicate the diagonal strip.
+	    IF SubStage /= Tau + 1 THEN 
+		IF leftok  THEN 
+                    Send (ToLeft, DiagStrip, 1, NrCols, Time);
+		    TotalTime +:= Time; FI;
+		IF SubStage < NrSubStages THEN 
+		    SubStageRec (SubStage = Tau, FromRight, NrCols, DiagStrip, Time);
+		    TotalTime +:= Time; FI;
+	    FI;
+	OD;
+END;
+
+
+
+FUNCTION TwoLog (n : integer) : integer;
+    # TwoLog calculates the 2log of n. It rounds off downwards 
+    # to the nearest integer.
+
+	j : integer;
+
+BEGIN
+	j := 0;
+	WHILE n /= 1 DO
+	    n /:= 2;
+	    j +:= 1;
+	OD;
+	RETURN j;
+END;
+
+
+FUNCTION TwoPower (n : integer) : integer;
+ # TwoPower calculates 2**n.
+
+	k : integer;
+
+BEGIN
+	k := 1;
+	FOR j IN 1..n DO
+	     k *:= 2;
+	OD;
+	RETURN k;
+END;
+
+
+FUNCTION InitStrip (lb, ub : integer; Column : OUT ColProdSet[lb..ub];
+             Letter : char; grammar : Grammar; size : OUT integer);
+ # InitStrip determines the length of the column and number of bytes the
+ # column with one array element occupies.
+
+
+BEGIN
+        Column[1] := grammar$ProdsOfLetter(Letter);
+        size      := SIZE(Column[1])*MARSHCHAR+MARSHSET+MARSHSET+MARSHARRAY+MARSHINT;
+END;
+
+
+
+FUNCTION InitStrips (NrCols, ColLength, CpuNr, Tau : integer; 
+             VertStrip, DiagStrip : OUT Strip[1..NrCols];
+	     InputString : string; grammar : Grammar);
+ # InitStrips determines sizes of the vertical and diagonal strips.
+
+	SizeString : integer;
+
+BEGIN
+	SizeString := SIZE(InputString);
+
+	IF NrCols = 1 THEN  # There are as many Workers as columns in the strip.
+	    InitStrip (1, SizeString-CpuNr, VertStrip[1].elt, 
+                       InputString[CpuNr+1], grammar, VertStrip[1].size);
+	    InitStrip (1, 1, DiagStrip[1].elt, InputString[CpuNr+1], 
+		       grammar, DiagStrip[1].size);
+	ELSIF NrCols = SizeString THEN   # There is only one Worker.
+	    FOR i IN 1..NrCols DO
+		InitStrip (1, SizeString-i+1, VertStrip[i].elt, InputString[i], 
+			   grammar, VertStrip[i].size);
+		InitStrip (1, i, DiagStrip[i].elt, InputString[i], grammar, 
+                           DiagStrip[i].size);
+	    OD;
+	ELSE
+	    FOR i IN 1..NrCols DO
+		IF CpuNr < Tau THEN
+		    InitStrip (1, ColLength, VertStrip[i].elt, 
+                       InputString[CpuNr*NrCols+i], grammar, VertStrip[i].size);
+		ELSE
+		    InitStrip (1, ColLength-((CpuNr-Tau)*NrCols+i-1), VertStrip[i].elt, 
+		       InputString[CpuNr*NrCols+i], grammar, VertStrip[i].size);
+		FI;
+		InitStrip (1, i, DiagStrip[i].elt, InputString[CpuNr*NrCols+i], 
+			   grammar, DiagStrip[i].size);
+	    OD;
+	FI;
+END;
+
+
+
+FUNCTION Repartition (NrCols, ColLength, CpuNr, Tau : integer; 
+	     FirstCpu, sendok, recok, LastStage : boolean;
+	     VertStrip, DiagStrip : SHARED Strip;
+             To2i, To2iPlus1, Fromi : SHARED Transfer; TotalTime : OUT integer);
+ # Repartition handles the repartition phase. If appropriate, sends and receives
+ # vertical and diagonal strips.
+
+	LocalVert, LocalDiag : Strip[1..NrCols];
+	LocalCol             : ColProdSet;
+	Time                 : integer;
+
+BEGIN
+	TotalTime := 0;
+	IF sendok THEN 
+            IF NOT FirstCpu THEN  # Worker 0 doesnot send to itself.
+                Send (To2i, VertStrip, 1, NrCols, Time); 
+	        TotalTime +:= Time;
+                Send (To2i, DiagStrip, 1, NrCols, Time); 
+	        TotalTime +:= Time;
+	    FI;
+            Send (To2iPlus1, VertStrip, NrCols+1, 2*NrCols, Time); 
+	    TotalTime +:= Time;
+	    Send (To2iPlus1, DiagStrip, NrCols+1, 2*NrCols, Time); 
+	    TotalTime +:= Time;
+	FI;
+        IF recok THEN 
+	    Receive (Fromi, NrCols, VertStrip, Time); 
+	    TotalTime +:= Time;
+	    Receive (Fromi, NrCols, DiagStrip, Time);
+	    TotalTime +:= Time;
+        ELSE # Worker 0 doesnot receive from itself.
+	    FOR i IN 1..NrCols DO
+		LocalVert[i] := VertStrip[i]; LocalDiag[i] := DiagStrip[i];
+	    OD;
+	    VertStrip := LocalVert; DiagStrip := LocalDiag;
+        FI;
+	FOR i IN 1..NrCols DO
+	    LocalCol := VertStrip[i].elt;
+	    IF LastStage THEN
+		CpAndEnlarge (ColLength-CpuNr, LocalCol, VertStrip[i].elt);
+	    ELSIF CpuNr < Tau THEN
+		CpAndEnlarge (ColLength, LocalCol, VertStrip[i].elt);
+	    ELSE
+		CpAndEnlarge (ColLength-((CpuNr-Tau)*NrCols+i-1), LocalCol, VertStrip[i].elt);
+	    FI;
+	    LocalCol := DiagStrip[i].elt;
+	    CpAndEnlarge (SIZE(DiagStrip[i].elt)+NrCols, LocalCol, DiagStrip[i].elt);
+	OD;
+END;
+
+
+
+PROCESS Worker (CpuNr, NrCpus, Tau, SizeString : integer; 
+	    InputString : string; 
+	    WorkersActive, Cnt : SHARED IntObject; 
+            ToLeft, FromRight, To2i, To2iPlus1, Fromi : SHARED Transfer;
+	    grammar : Grammar);
+    # Each worker computes a part of the CYK table. Every stage it
+    # is a different part of that table because of the repartitioning.
+    # Replies with "Yes" if InputString is in the language generated
+    # by Grammar.
+
+	leftok, sendok, recok : boolean;
+	NrSubStages, NrStages, ColLength, Stage, Start, NrCols : integer;
+	StaticTime, DynamicTime, Time, StartTime, StopTime : integer;
+	VertStrip, DiagStrip : Strip;
+
+BEGIN
+#WriteLine ("Inside Worker Nr: ", CpuNr);
+	Cnt$inc();
+	Cnt$AwaitValue(NrCpus);
+	StaticTime  := 0;
+	DynamicTime := 0;
+	StartTime := SysMilli ();
+	leftok  := (CpuNr > 0);         # Does the worker have a left neighbour?
+	sendok  := (CpuNr < (NrCpus-Tau)); # Is there a receiving Worker?
+	recok   := (CpuNr > 0);         # All Worker except for 0 receive.
+	NrCols  := SizeString/NrCpus;   # Determine strip width
+
+					# Determine strip length.
+	IF NrCpus = SizeString THEN ColLength := SizeString;
+	                       ELSE ColLength := SizeString - Tau*NrCols; FI;
+	IF CpuNr >= (NrCpus-Tau) THEN NrSubStages := NrCpus - CpuNr;
+			         ELSE NrSubStages := Tau + 1; FI;
+	IF NrCpus = 1 THEN NrStages := 1;
+		      ELSE NrStages := TwoLog (NrCols) + 1; FI;
+	
+	InitStrips (NrCols, ColLength, CpuNr, Tau, VertStrip, DiagStrip, 
+	    InputString, grammar);
+
+	Stage := 1;
+	Start := 2;			# Where are we in the strip.
+
+	WHILE Stage < NrStages DO
+	    DoSubStages (Start, NrCols, NrSubStages, Tau, VertStrip,
+                DiagStrip, ToLeft, FromRight, leftok, Stage = 1, grammar, Time);
+	    StaticTime +:= Time;
+
+	    Start := ColLength+1;
+	    Stage  +:= 1;   NrCols  /:= 2;
+	    IF Stage /= NrStages THEN ColLength +:= SizeString/TwoPower (Stage); 
+				 ELSE ColLength := SizeString; FI;
+	    Repartition (NrCols, ColLength, CpuNr, Tau, CpuNr = 0, sendok, 
+	        recok, Stage=NrStages, VertStrip, DiagStrip, To2i, To2iPlus1, 
+		Fromi, Time);
+	    DynamicTime +:= Time;
+	OD;
+		# No more repartitioning needed.
+	Tau         := NrCpus;
+	NrSubStages := NrCpus - CpuNr;
+	
+		# Last stage!
+	DoSubStages (Start, NrCols, NrSubStages, Tau, VertStrip, 
+            DiagStrip, ToLeft, FromRight, leftok, Stage = 1, grammar, Time);
+	StaticTime +:= Time;
+	StopTime := SysMilli ();
+
+WriteLine ("Worker ", CpuNr, " Static: ", StaticTime, " Dynamic: ", DynamicTime," TotalTime: ", StopTime-StartTime);
+IF CpuNr =0 THEN PrintSet (VertStrip[1].elt[SizeString]);
+FI;
+
+	IF CpuNr = 0 THEN 
+	    IF 'S' IN VertStrip[1].elt[SizeString] THEN WriteLine ("Yes");
+				  	           ELSE WriteLine ("No");
+	    FI;
+	FI;
+
+	WorkersActive$dec();
+END;
+
+
+
+FUNCTION Minimum (k, l, m : integer) : integer;
+    # Minimum determines minimum value of three integers.
+
+BEGIN
+	IF k > l THEN k := l; FI;
+	IF k > m THEN k := m; FI;
+	RETURN (k);
+END;
+
+
+
+FUNCTION DetNrCpus (SizeString, AvailCpus, MaxCpus : integer) : integer;
+    # Calculates nearest integer that is a power of two smaller than
+    # the minimum of SizeString, AvailCpus and MaxCpus.
+
+BEGIN
+	RETURN (TwoPower (TwoLog (Minimum (SizeString, AvailCpus, MaxCpus))));
+END;
+
+
+
+FUNCTION ReadStr () : string;
+ # ReadStr reads a string from the file cyk.string.
+
+	n, fd       : integer;
+	InputString : string;
+
+BEGIN
+	fd := open ("cyk.string", 0);
+	InputString := ReadString (fd);
+	n := close (fd);
+	ASSERT (n = 0);               # Everything ok?
+	RETURN InputString;
+END;
+
+
+
+PROCESS OrcaMain ();
+        StageInfo, SubStageInfo  : ARRAY [integer 0..MAXCPU] OF Transfer;
+        InputString              : string;
+        NrCpus, SizeString, Tau, 
+	receiver1, receiver2     : integer;
+        WorkersActive, Cnt       : IntObject;
+	start, stop              : integer;
+	grammar                  : Grammar;
+
+BEGIN
+        InputString := ReadStr ();
+	SizeString  := SIZE (InputString);
+        NrCpus      := DetNrCpus(SizeString, NCPUS(), MAXCPU);
+	Tau         := NrCpus/2;  # Repartition after tau slaves have stopped.
+        WorkersActive$assign(NrCpus);
+WriteLine ("# cpus: ", NrCpus, " # letters in parsestring: ", SizeString);
+	Cnt$assign(0);
+
+	FOR CpuNr IN 0..NrCpus-1 DO
+                       # Above NrCpus-1 there is no process to send to.
+	    receiver1 := (2*CpuNr)    %NrCpus; 
+	    receiver2 := (2*CpuNr + 1)%NrCpus;
+                                    # Avoid alias.
+	    IF CpuNr = 0 THEN receiver1 := MAXCPU - 1; FI;
+	    IF CpuNr = NrCpus-1 THEN receiver2 := MAXCPU; FI;
+
+	    FORK 
+	    Worker (CpuNr, NrCpus, Tau, SizeString, InputString,
+	        WorkersActive, Cnt, 
+		SubStageInfo[CpuNr], SubStageInfo[CpuNr+1],
+                StageInfo[receiver1], StageInfo[receiver2], 
+                StageInfo[CpuNr], grammar)
+            ON CpuNr;
+	OD;
+
+	Cnt$AwaitValue(NrCpus);
+	start := SysMilli ();
+        WorkersActive$AwaitValue(0); # If all the workers are ready, stop.
+	stop  := SysMilli ();
+				     # How long did it take?
+	PrintTime("CYK, dynamic partitioning", stop-start);
+	Finish ();		     # Terminate program.
+END;
+
+END;   # End of module parCYK.

@@ -1,0 +1,12 @@
+!File: debugcst.h
+#define DEBUG			/* perform various self-tests		*/
+#undef PURIFY			/* define when using Purify		*/
+#ifndef DEBUG
+#define NDEBUG
+#endif
+
+
+!File: locking.h
+#undef LOCKING			/* define if you want db locking */
+
+

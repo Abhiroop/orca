@@ -1,0 +1,182 @@
+OBJECT IMPLEMENTATION task_graph_obj;
+
+FROM ParamRes IMPORT result_t, WriteResult;
+
+TYPE task_graph_ptr   = NODENAME OF task_graph;
+TYPE task_graph       = GRAPH   id_counter : integer;   # make task ids
+				root : task_graph_ptr;
+			NODES   prt : task_graph_ptr;	# parent id
+				ch  : integer;		# child number
+				p   : integer;		# cpu of task
+				wc  : integer;		# wait count
+				res : result_t;		# results of task
+				chs : ARRAY[integer 0 .. 1] OF task_graph_ptr;
+				id  : integer;          # id for printing
+			END;
+
+G : task_graph;
+
+
+FUNCTION nil_task() : task_t;
+BEGIN
+    RETURN NIL;
+END;
+
+
+FUNCTION is_nil_task(task   : task_t) : boolean;
+BEGIN
+    RETURN task = NIL;
+END;
+
+
+FUNCTION do_print(G    : SHARED task_graph;
+		  task : task_t);
+BEGIN
+    IF task = NIL THEN
+	Write("NIL");
+    ELSE
+	Write(G[task].id);
+    FI;
+END;
+
+
+FUNCTION print_fam(G    : SHARED task_graph;
+		   task : task_t);
+
+BEGIN
+    do_print(G, task);
+    FOR i IN 0 .. 1 DO
+	IF G[task].chs[i] /= NIL THEN
+	    print_fam(G, G[task].chs[i]);
+	FI;
+    OD;
+END;
+
+
+OPERATION set_result(task   : task_t;
+		     result : result_t);
+BEGIN
+    G[task].res := result;
+END;
+
+
+OPERATION set_cpu(task : task_t;
+		  cpu  : integer);
+BEGIN
+    G[task].p := cpu;
+END;
+
+
+OPERATION inc_wait_count(task : task_t);
+BEGIN
+    G[task].wc +:= 1;
+END;
+
+
+OPERATION set_wait_count(task : task_t;
+			 n    : integer);
+BEGIN
+    G[task].wc := n;
+END;
+
+
+OPERATION child_result(task      : task_t;
+		       child_num : integer;
+		       result    : OUT result_t);
+BEGIN
+    result := G[G[task].chs[child_num]].res;
+    # Write("Going to delete task");
+    # do_print(G, G[task].chs[child_num]);
+    # Write(" result = "); WriteResult(result); WriteLine();
+    DELETENODE(G, G[task].chs[child_num]);
+    G[task].chs[child_num] := NIL;
+END;
+
+
+OPERATION wait_count(task : task_t) : integer;
+BEGIN
+    RETURN G[task].wc;
+END;
+
+
+OPERATION name(task : task_t) : integer;
+BEGIN
+    RETURN G[task].id;
+END;
+
+
+OPERATION cpu(task : task_t) : integer;
+BEGIN
+    RETURN G[task].p;
+END;
+
+
+OPERATION notify(task : task_t);
+BEGIN
+    G[task].wc -:= 1;
+END;
+
+
+OPERATION mkroot(task : OUT task_t; root_cpu: integer);
+
+BEGIN
+    task        := ADDNODE(G);
+    G.root      := task;
+    G[task].prt := nil_task();
+    G[task].ch  := 0;
+    G[task].wc  := 0;
+    G[task].id  := G.id_counter;
+    FOR i IN 0 .. 1 DO
+	G[task].chs[i] := NIL;
+    OD;
+    G.id_counter +:= 1;
+    G[task].p := root_cpu;
+END;
+
+
+OPERATION new(task      : OUT task_t;
+	      parent    : task_t;
+	      child_num : integer);
+
+BEGIN
+    task        := ADDNODE(G);
+    G[task].prt := parent;
+    IF is_nil_task(parent)
+    THEN G.root := task;
+    ELSE G[parent].chs[child_num] := task;
+	 G[parent].wc +:= 1;
+    FI;
+    G[task].ch  := child_num;
+    G[task].wc  := 0;
+    G[task].id  := G.id_counter;
+    FOR i IN 0 .. 1
+    DO G[task].chs[i] := NIL;
+    OD;
+    G.id_counter +:= 1;
+END;
+
+
+OPERATION await(task    : task_t);
+BEGIN
+    GUARD G[task].wc = 0 DO
+	RETURN;
+    OD;
+END;
+
+
+OPERATION print(task : task_t);
+BEGIN
+    do_print(G, task);
+END;
+
+
+OPERATION print_all();
+
+BEGIN
+    print_fam(G, G.root);
+END;
+
+
+BEGIN
+    G.id_counter := 0;
+END;

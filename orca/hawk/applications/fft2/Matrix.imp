@@ -1,0 +1,96 @@
+OBJECT IMPLEMENTATION Matrix[integer n..N];
+  FROM global IMPORT w;
+
+  c: Complex_T;
+
+FUNCTION k_log_2(n: integer): integer;
+  k: integer;
+BEGIN
+  k := 0;
+  WHILE n > 1 DO
+	n := n>>1;
+	k +:= 1;
+  OD;
+  RETURN k;
+END;
+
+OPERATION Initialize(data: IN ComplexArray_T);
+
+j: integer;
+
+BEGIN
+	ASSERT(N - n = UB(data) - LB(data));
+
+	FOR i IN LB(data)..UB(data) DO
+		j := n + i - LB(data);
+		c[j] := data[i];
+	OD;
+END;
+
+FUNCTION NewArray(from, to: integer; data: OUT ComplexArray_T[from .. to]);
+BEGIN END;
+
+OPERATION Get(data: OUT ComplexArray_T);
+
+BEGIN
+	NewArray(n, N, data);
+
+	FOR i IN n .. N DO
+		data[i] := c[i];
+	OD;
+END;
+
+# Doesn't work
+PARALLEL OPERATION[ind] Get2(): GATHER ComplexArray_T;
+
+BEGIN
+	RETURN c;
+END;
+
+OPERATION Get3(): ComplexArray_T;
+
+data: ComplexArray_T;
+
+BEGIN
+	NewArray(n, N, data);
+
+	FOR i IN n .. N DO
+		data[i] := c[i];
+	OD;
+
+	RETURN data;
+END;
+
+
+PARALLEL OPERATION[ind] Compute_phase(kl1: IN integer);
+
+p, u, u2, y: integer;
+t1, t2, r: Complex_T;
+
+BEGIN
+	p := ind >> kl1;
+	y := p >> 1;
+
+	IF (p & 1) = 1 THEN
+		u := ind;
+		u2 := ind - (1 << kl1);
+		
+		# TIM: hack to avoid accessing struct elements of PO element
+		t1 := c[u];
+		t2 := c[u2];
+		r.real := t2.real - (w[y].wr * t1.real - w[y].wi * t1.imag);
+		r.imag := t2.imag - (w[y].wr * t1.imag + w[y].wi * t1.real);
+		c := r;
+	ELSE
+		u := ind + (1 << kl1);
+		u2 := ind;
+
+		t1 := c[u];
+		t2 := c[u2];
+		r.real := t2.real + (w[y].wr * t1.real - w[y].wi * t1.imag);
+		r.imag := t2.imag + (w[y].wr * t1.imag + w[y].wi * t1.real);
+		c := r;
+	FI;
+END;
+
+END;

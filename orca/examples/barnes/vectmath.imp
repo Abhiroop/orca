@@ -1,0 +1,339 @@
+MODULE IMPLEMENTATION vectmath;
+
+# include file for vector/matrix operations.
+
+#FROM Math IMPORT sqrt;
+FROM GlobalVars IMPORT dthf;
+
+
+# Vector operations.
+
+FUNCTION  CLRV(v: SHARED Vectmath);     # CLeaR Vector                    
+BEGIN
+    FOR i IN 0..NDIM-1 DO 
+        v[i] := 0.0;  
+    OD;
+END;    
+
+
+FUNCTION Mul_Add( x : SHARED Vectmath; y : Vectmath; z : real);
+BEGIN 
+    FOR i IN 0..NDIM - 1 DO
+        x[i] +:= y[i]*z;
+    OD;
+END;
+
+
+FUNCTION Sub_Mulv( dvel : SHARED Vectmath;x, y : Vectmath);
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+	dvel[i] := dthf * ( x[i] - y[i] );
+    OD;
+END;
+
+
+FUNCTION Addv( cmv, cmr : SHARED Vectmath; vel, pos : Vectmath);
+BEGIN
+    FOR i IN 0..NDIM - 1 DO
+	cmr[i] +:= pos[i];
+	cmv[i] +:= vel[i];
+    OD;
+END;
+
+
+FUNCTION Mul_Sub(x : SHARED Vectmath; y : Vectmath; z : real);
+BEGIN
+    FOR  i IN 0..NDIM-1 DO
+         x[i] -:= (y[i]*z);
+    OD;
+END;
+
+
+FUNCTION ADDV(v: SHARED Vectmath; u, w: Vectmath);          # ADD Vector
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]:= u[i]+w[i];
+    OD;
+END;
+
+
+FUNCTION ADDVSame(v: SHARED Vectmath; w: Vectmath);          # ADD Vector
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]+:= w[i];
+    OD;
+END;
+
+
+FUNCTION SUBV(v:SHARED Vectmath ;u,w: Vectmath);          # SUBstract Vector
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]:=u[i]-w[i];
+    OD;
+END;
+ 
+
+FUNCTION SUBVSame(v:SHARED Vectmath; w: Vectmath);          # SUBstract Vector
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]-:=w[i];
+    OD;
+END;
+ 
+
+FUNCTION MULVS(v:SHARED Vectmath; u: Vectmath; s:real); # MULtiply Vector 
+							# by Scalar 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]:=u[i]*s;
+    OD;
+END;
+
+
+FUNCTION Mulvs( v : SHARED Vectmath; u: Vectmath; s:real); # MULtiply Vector 
+				      # by Scalar 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]:=u[i]*s;
+    OD;
+END;
+
+
+FUNCTION MULVSSame(v:SHARED Vectmath; s:real); # MULtiply Vector 
+				   	   # by Scalar 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]*:=s;
+    OD;
+END;
+
+
+FUNCTION DIVVS(v:SHARED Vectmath; u: Vectmath; s:real); # DIVide Vector 
+							# by Scalar
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]:=u[i]/s;
+    OD;
+END;
+ 
+
+FUNCTION DIVVSSame(v:SHARED Vectmath; s:real); # DIVide Vector 
+					       # by Scalar
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]/:=s;
+    OD;
+END;
+ 
+
+FUNCTION DOTVP(v,u: Vectmath): real;  # DOT Vector Product 
+    s: real;
+BEGIN
+    s := 0.0;
+    FOR i IN 0..NDIM-1 DO
+        s+:= v[i]*u[i];
+    OD;
+    RETURN s;
+END;
+
+
+FUNCTION DOTVPSame(u: SHARED Vectmath): real;  # DOT Vector Product 
+    s: real;
+BEGIN
+    s := 0.0;
+    FOR i IN 0..NDIM-1 DO
+        s+:= u[i]*u[i];
+    OD;
+    RETURN s;
+END;
+
+
+FUNCTION CROSSVP(v:SHARED Vectmath;u,w :Vectmath);       # CROSS Vector Product 
+BEGIN
+    v[0]:= u[1]*w[2]-u[2]*w[1];
+    v[1]:= u[2]*w[0]-u[0]*w[2];
+    v[2]:= u[0]*w[1]-u[1]*w[0];
+END;
+
+
+
+ # Matrix operations.
+ 
+
+FUNCTION CLRM(p:SHARED matrix);                # CLeaR Matrix 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]:=0.0;
+        OD;
+    OD;
+END;
+
+
+FUNCTION SETM(p:SHARED matrix; q : matrix);              # SET Matrix to Identity
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+	    p[i, j] := q[i, j];
+        OD;
+    OD;
+END;
+
+
+FUNCTION SETMI(p:SHARED matrix);              # SET Matrix to Identity
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            IF i=j THEN p[i, j]:=1.0;
+            ELSE p[i, j]:=0.0;
+            FI;
+        OD;
+    OD;
+END;
+
+
+FUNCTION ADDM(p:SHARED matrix;q,r :matrix);           # ADD Matrix
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]:=q[i, j]+r[i, j];
+        OD;
+    OD;
+END;
+
+
+FUNCTION ADDMSame(p:SHARED matrix;r :matrix);           # ADD Matrix
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]+:=r[i, j];
+        OD;
+    OD;
+END;
+
+
+FUNCTION SUBM(p:SHARED matrix; q,r : matrix);           # SUBtract Matrix 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]:=q[i, j]-r[i, j];
+        OD;
+    OD;
+END;
+
+
+FUNCTION SUBMSame(p:SHARED matrix;r : matrix);           # SUBtract Matrix 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]-:=r[i, j];
+        OD;
+    OD;
+END;
+
+
+FUNCTION MULM(p:SHARED matrix; q,r :matrix);          # Multiply Matrix
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]:=0.0;
+            FOR k IN 0..NDIM-1 DO
+                p[i, j]+:=q[i, k]*r[k, j];
+            OD;
+        OD;
+    OD;
+END;
+
+
+FUNCTION MULMS(p:SHARED matrix;q:matrix;s:real);   # MULtiply Matrix by Scalar 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]:=q[i, j]*s;
+        OD;
+    OD;
+END;
+
+
+FUNCTION MULMSSame(p:SHARED matrix;s:real);   # MULtiply Matrix by Scalar 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]*:=s;
+        OD;
+    OD;
+END;
+
+
+FUNCTION MULMV(v:SHARED Vectmath;p: matrix;u: Vectmath);
+                                             # MULtiply Matrix by Vector 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]:=0.0;
+        FOR j IN 0..NDIM-1 DO
+            v[i]+:=p[i, j]*u[j];
+        OD;
+    OD;
+END;
+
+
+FUNCTION OUTVP(p:SHARED matrix;v,u: Vectmath); # OUTer Vector Product
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]:=v[i]*u[j];
+        OD;
+    OD;
+END;
+
+
+FUNCTION OUTVPSame(p:SHARED matrix;v: Vectmath); # OUTer Vector Product
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        FOR j IN 0..NDIM-1 DO
+            p[i, j]:=v[i]*v[j];
+        OD;
+    OD;
+END;
+
+
+ # Misc. impure operations.
+
+
+FUNCTION SETVS(v:SHARED Vectmath;s:real);    # SET Vector to Scalar 
+BEGIN
+   FOR i IN 0..NDIM-1 DO
+        v[i]:=s;
+    OD;
+END;
+
+
+FUNCTION ADDVS(v:SHARED Vectmath;u: Vectmath;s:real);   # ADD Vector and Scalar 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]:=u[i]+s;
+    OD;
+END;
+
+
+FUNCTION ADDVSSame(v:SHARED Vectmath;s:real);   # ADD Vector and Scalar 
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+        v[i]+:=s;
+    OD;
+END;
+
+
+FUNCTION PRTV(vec:Vectmath);      # PRinT Vector
+BEGIN
+    Write("[");
+    FOR i IN 0..NDIM-2 DO
+        Write(vec[i]);
+	Write(",");
+    OD;
+    Write(vec[NDIM - 1]);
+    Write("]");
+END;
+
+
+END;

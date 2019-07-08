@@ -1,0 +1,41 @@
+OBJECT IMPLEMENTATION SharedInt;
+
+	x: integer;
+
+	OPERATION value(): integer;
+	BEGIN
+		RETURN x;
+	END;
+
+	OPERATION assign(v: integer);
+	BEGIN
+		x := v;
+	END;
+
+	OPERATION min(v: integer);
+	BEGIN
+		GUARD v < x DO
+			x := v;
+		OD;
+
+		GUARD v >= x DO
+		OD;
+	END;
+
+	OPERATION inc();
+	BEGIN
+		x +:= 1;
+	END;
+
+	OPERATION dec();
+	BEGIN
+		x -:= 1;
+	END;
+
+	OPERATION AwaitValue(v: integer);
+	BEGIN
+		GUARD x = v DO OD;
+	END;
+BEGIN
+	x := 0;
+END;

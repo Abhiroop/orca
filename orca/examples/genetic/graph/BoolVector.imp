@@ -1,0 +1,17 @@
+MODULE IMPLEMENTATION BoolVector;
+
+FUNCTION DynBoolVector (N:integer): BoolVector;
+a_dyn: BoolVector[0..N-1];
+
+BEGIN
+	RETURN a_dyn;
+END;
+
+FUNCTION DynBoolMatrix (Nrow:integer; Ncol: integer): BoolMatrix;
+a_dyn: BoolMatrix[0..Nrow-1, 0..Ncol-1];
+
+BEGIN
+	RETURN a_dyn;
+END;
+
+END;

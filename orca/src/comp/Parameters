@@ -1,0 +1,31 @@
+!File: errout.h
+#define	ERROUT		stderr	/* file pointer for writing messages	*/
+#define	ERR_SHADOW	5	/* a syntax error overshadows error messages
+					until ERR_SHADOW symbols have been
+					accepted without syntax error */
+
+
+!File: idfsize.h
+#define	IDFSIZE	128	/* maximum significant length of an identifier	*/
+
+
+!File: numsize.h
+#define	NUMSIZE	256	/* maximum length of a numeric constant		*/
+
+
+!File: debugcst.h
+#define DEBUG			/* perform various self-tests		*/
+#undef PURIFY			/* define when using Purify		*/
+#ifndef DEBUG
+#define NDEBUG
+#endif
+
+
+!File: inputtype.h
+#define INP_READ_IN_ONE	1	/* read input file in one	*/
+
+
+!File: locking.h
+#undef LOCKING			/* define if you want db locking */
+
+

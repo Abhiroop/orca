@@ -1,0 +1,24 @@
+#!/bin/sh
+
+case `uname -r` in
+2*)	MACH=i386
+	;;
+3*)	MACH=i386
+	;;
+4*)	MACH=sun4
+	;;
+5*)	MACH=sol2
+	;;
+*)	# Huh? try using echo command ...
+	if /bin/echo 'a\c' | grep 'c' >/dev/null ; then
+		: We have BSD-like echo command.
+		MACH=sun4
+	else
+		: We have SystemV-like echo command.
+		MACH=sol2
+	fi
+esac
+
+echo $MACH
+
+exit 0

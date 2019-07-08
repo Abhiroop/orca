@@ -1,0 +1,42 @@
+# ========================================================================
+# == File:      EdgeQueue.spf  						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Queue of pending edges					==
+# ========================================================================
+OBJECT SPECIFICATION EdgeQueue;
+
+FROM Edge IMPORT edge_info_t;
+
+# ========================================================================
+# == operations								==
+# ========================================================================
+
+OPERATION create(
+) : boolean;					# succes?
+
+
+OPERATION delete(
+);
+
+
+OPERATION add_edge(					
+	info :  edge_info_t	# edge info
+) : boolean;					# succes?
+
+
+
+OPERATION num_elts(					
+) : integer;					# nr of elements in the queue
+
+
+
+OPERATION get_edge(
+        info : OUT edge_info_t   # edge info
+) : boolean;					# true if queue is non-empty. 
+						# false else
+
+
+OPERATION no_more_edges();
+
+END;

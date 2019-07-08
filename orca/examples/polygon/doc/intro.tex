@@ -1,0 +1,63 @@
+\section{Introduction}
+
+The ever-increasing demand for processing power is the
+driving force for the development of parallel processing.
+Parallel computers offer high performance,
+as more processors means more computing power,
+but programming parallel systems is difficult.
+One reason for this is that parallel programmers have to 
+worry about things such as synchronization and data consistency,
+which can be ignored by sequential programming.
+The language Orca is designed to minimize these concerns by
+providing shared, consistent objects on a variety of
+platforms.
+
+This project investigated the use of Orca to parallelize
+the Polygon Overlay Problem.
+The problem is taken from the Cowichan set \cite{Wilson:1994},
+which consists of six problems chosen to compare the performance
+and usability of parallel systems.
+Each problem deals with a different aspect of parallel systems.
+The Polygon Overlay problem has been chosen because it 
+exercises the I/O capabilities of systems, and because its 
+natural formulation in control-parallel systems involves
+generating, filtering, and combining streams.
+
+The research discussed in this report focussed on implementing
+the problem on one specific parallel system.
+This system consists of the combination of the language Orca,
+the operating system Amoeba \cite{Mullender:1990},
+and a machine called Zoo.
+The Zoo machine consists of 80 SPARC processors running at 50 MHz.
+Each processor is on a single board (a Tsunami board, equivalent
+to the Sun Classic) and contains 32 MB of local memory.
+The boards are connected by a 10 Mbit/sec switched Ethernet
+(using the Kalpana Ethernet switch).
+
+We assume that the reader is familiar with the Orca language and its
+implementation, as described in
+\cite{bal:1992}, \cite{bal:1991:a} and \cite{Bhoedjang:1993}.
+
+The aims of this research were (1) to see what performance gains
+were possible, and (2) to assess the usability of Orca in this problem
+domain.
+
+
+The paper is organized as follows.
+In
+\refSection{Problem Description} the Polygon Overlay problem is
+described.
+\refSection{Sequential Algorithms} gives the algorithm for sequential
+implementation, to which parallel versions can be compared.
+The parallel algorithms are discussed in 
+\refSection{Parallel Algorithms}, and
+\refSection{Parallel Optimizations} gives some parallel optimizations.
+Two methods are selected to be implemented in Orca.
+The outline of the two implementations in Orca are given in
+\refSection{Parallel Implementations in Orca}.
+Than the performance of the sequential and parallel programs are
+presented in
+\refSection{Performance}.
+This report ends with conclusions, these can be found in
+\refSection{Conclusions}.
+

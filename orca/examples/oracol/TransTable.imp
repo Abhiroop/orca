@@ -1,0 +1,66 @@
+# The module TransTable contains operations for the Transposition Table.
+
+OBJECT IMPLEMENTATION TransTable;
+
+FROM Types IMPORT EvalType;
+
+CONST TABLESIZE = 1;		# size of the Transposition Table
+
+# Entry type for the table.
+TYPE EntryType = RECORD
+		  lock : integer;
+		  color : integer;
+		  depth : integer;
+ 		  value : EvalType;
+		  type : integer;
+ 		 END;
+
+TYPE TableArray = ARRAY[integer] OF EntryType;
+
+	# 'transtable' is the Transposition Table which is used to store info
+	# about evaluated subtrees.
+	transtable : TableArray;
+
+	# Unlock all entries.
+	OPERATION InitTTable();
+	  tmp : TableArray[0 .. TABLESIZE - 1];
+	BEGIN
+		FOR index IN 0 .. TABLESIZE - 1 DO
+		  tmp[index].lock := -1;
+		  tmp[index].depth := 0;
+		OD;
+		transtable := tmp;
+	END;
+
+	# Retrieve info about the current position if present from the
+	# Transposition Table.
+	OPERATION Retrieve(key : integer; color : integer; depth : integer;
+			   val : OUT EvalType; type : OUT integer) : boolean;
+	  entry : EntryType;
+	BEGIN
+		entry := transtable[key % TABLESIZE];
+		IF NOT(entry.lock = key) OR
+		   (entry.depth < depth) OR
+		   (entry.color /= color) THEN
+		  RETURN false;
+		FI;
+		val := entry.value;
+		type := entry.type;
+		RETURN true;
+	END;
+
+	# Store info about the current position in the Transposition Table, if
+	# the depth of the evaluated position is greater than or equal to the
+	# depth of the table entry.
+	OPERATION Store(key : integer; color : integer; depth : integer;
+			value : EvalType; type : integer);
+	  entry : integer;
+	BEGIN
+		entry := key % TABLESIZE;
+		IF depth >= transtable[entry].depth THEN
+		  transtable[entry] := EntryType : { key,color,depth,
+						     value,type };
+		FI;
+	END;
+
+END;

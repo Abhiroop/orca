@@ -1,0 +1,82 @@
+%!PS-Adobe-2.0 EPSF-2.0
+%%Title: /tmp/xfig-fig029701
+%%Creator: fig2dev Version 2.1.8 Patchlevel 0
+%%CreationDate: Thu Aug 24 18:13:45 1995
+%%For: rvdp@enterprise.cs.vu.nl (Ronald van der Pol)
+%%Orientation: Portrait
+%%BoundingBox: 0 0 324 207
+%%Pages: 0
+%%EndComments
+/$F2psDict 200 dict def 
+$F2psDict begin
+$F2psDict /mtrx matrix put
+/l {lineto} bind def
+/m {moveto} bind def
+/s {stroke} bind def
+/n {newpath} bind def
+/gs {gsave} bind def
+/gr {grestore} bind def
+/clp {closepath} bind def
+/graycol {dup dup currentrgbcolor 4 -2 roll mul 4 -2 roll mul
+4 -2 roll mul setrgbcolor} bind def
+/col-1 {} def
+/col0 {0 0 0 setrgbcolor} bind def
+/col1 {0 0 1 setrgbcolor} bind def
+/col2 {0 1 0 setrgbcolor} bind def
+/col3 {0 1 1 setrgbcolor} bind def
+/col4 {1 0 0 setrgbcolor} bind def
+/col5 {1 0 1 setrgbcolor} bind def
+/col6 {1 1 0 setrgbcolor} bind def
+/col7 {1 1 1 setrgbcolor} bind def
+/col8 {.68 .85 .9 setrgbcolor} bind def
+/col9 {0 .39 0 setrgbcolor} bind def
+/col10 {.65 .17 .17 setrgbcolor} bind def
+/col11 {1 .51 0 setrgbcolor} bind def
+/col12 {.63 .13 .94 setrgbcolor} bind def
+/col13 {1 .75 .8 setrgbcolor} bind def
+/col14 {.7 .13 .13 setrgbcolor} bind def
+/col15 {1 .84 0 setrgbcolor} bind def
+	end
+/$F2psBegin {$F2psDict begin /$F2psEnteredState save def} def
+/$F2psEnd {$F2psEnteredState restore end} def
+%%EndProlog
+
+$F2psBegin
+0 setlinecap 0 setlinejoin
+-18.0 225.0 translate 0.900 -0.900 scale
+0.500 setlinewidth
+% Polyline
+n 299 59 m 299 19 l  19 19 l  19 59 l  clp gs col-1 s gr
+% Polyline
+n 299 109 m 299 69 l  19 69 l  19 109 l  clp gs col-1 s gr
+% Polyline
+n 299 159 m 299 119 l  19 119 l  19 159 l  clp gs col-1 s gr
+% Polyline
+n 299 199 m 299 159 l  19 159 l  19 199 l  clp gs col-1 s gr
+% Polyline
+n 299 249 m 299 209 l  19 209 l  19 249 l  clp gs col-1 s gr
+/Times-Roman findfont 14.00 scalefont setfont
+34 144 m 
+gs 1 -1 scale (Panda \(threads, RPC, group communication\)) col-1 show gr
+/Times-Roman findfont 14.00 scalefont setfont
+81 44 m 
+gs 1 -1 scale (Orca compiler \(applications\)) col-1 show gr
+/Times-Roman findfont 14.00 scalefont setfont
+41 95 m 
+gs 1 -1 scale (Orca runtime system \(object management\)) col-1 show gr
+/Times-Roman findfont 14.00 scalefont setfont
+107 184 m 
+gs 1 -1 scale (Panda system layer) col-1 show gr
+/Times-Roman findfont 14.00 scalefont setfont
+100 233 m 
+gs 1 -1 scale (host operating system) col-1 show gr
+/Times-Roman findfont 12.00 scalefont setfont
+303 163 m 
+gs 1 -1 scale (system interface) col-1 show gr
+/Times-Roman findfont 12.00 scalefont setfont
+303 118 m 
+gs 1 -1 scale (Panda interface) col-1 show gr
+/Times-Roman findfont 12.00 scalefont setfont
+305 208 m 
+gs 1 -1 scale (host interface) col-1 show gr
+$F2psEnd

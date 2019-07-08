@@ -1,0 +1,21 @@
+MODULE SPECIFICATION TspOpt;
+
+
+	FROM TspTypes IMPORT
+		NodeSubset;
+	FROM TourModule IMPORT
+		Tour;
+	IMPORT TourObject;
+	IMPORT SpecificationObject;
+	IMPORT IntObject;
+
+
+	PROCESS TspProcess (t : SHARED TourObject;
+			nodes : NodeSubset;
+			spec : SpecificationObject;
+			firstCpu : integer;
+			lastCpu : integer;
+			working : SHARED IntObject;
+			value : integer);
+
+END;

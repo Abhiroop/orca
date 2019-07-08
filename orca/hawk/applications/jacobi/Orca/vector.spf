@@ -1,0 +1,7 @@
+OBJECT SPECIFICATION vector[integer];
+
+  OPERATION check_result();
+  OPERATION print_system();
+  OPERATION print_x();
+  OPERATION update_x(): real;
+END;

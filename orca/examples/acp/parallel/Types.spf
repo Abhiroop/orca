@@ -1,0 +1,24 @@
+#=====================================================================
+#==== type.spf : misc. data structures                            ====
+#==                                                                 ==
+MODULE SPECIFICATION Types;
+
+#---------------------------------------------------------------------
+#---- types                                                       ----
+#---------------------------------------------------------------------
+
+TYPE symbol_name_t 	= string;
+
+TYPE word_t 		= string;
+
+# the following data structures represents the rule
+# 	new <- right1 right2
+
+TYPE rule_t = 
+	RECORD
+		new, right1, right2 : symbol_name_t;
+	END;
+
+TYPE    int_arr_t  = ARRAY [integer] OF integer;
+
+END;

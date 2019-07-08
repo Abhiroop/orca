@@ -1,0 +1,13 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION GlobalType;
+
+IMPORT VarObject;
+
+
+TYPE GlobalObject = ARRAY [integer] OF VarObject;
+
+
+END;

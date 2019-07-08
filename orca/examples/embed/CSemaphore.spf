@@ -1,0 +1,29 @@
+# This is a cyclic semaphore (adapted from $ORCA/lib/std/barrier
+
+# It is used for synchronising workers and a master.
+# Workers work and block when they are finished.
+# When all workers are finished, the master does something
+# and releases the workers again.
+
+OBJECT SPECIFICATION CSemaphore;
+
+
+FUNCTION sync(b: SHARED CSemaphore);
+# Blocks until it is called n_workers times. 
+# Then, the master acknowledges this by calling $ack().
+# Then, all threads blocked are released, and the barrier is re-initialized.
+
+OPERATION init(n_workers : integer);
+# initialize the CSemaphore for n_workers workers.
+
+OPERATION wait();
+# (called by the master) wait till all workers are finished
+
+OPERATION ack();
+# (called by the master) release all workers
+
+OPERATION cycles() : integer;
+# return the number of times the CSemaphore has been acknowledged so far
+
+
+END;

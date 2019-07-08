@@ -1,0 +1,19 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION TspTypes;
+	FROM Consts IMPORT MAXSZ;
+
+	# job type:
+	TYPE PathType = ARRAY[integer 0..MAXSZ-1] OF char;
+	TYPE IntArray = ARRAY[integer 0..MAXSZ-1] OF integer;
+	TYPE JobType =
+		RECORD
+			len: integer;
+			path: PathType;
+			present: longint;
+			# limits the maximum size to the number of bits in a
+			# longint.
+		END;
+END;

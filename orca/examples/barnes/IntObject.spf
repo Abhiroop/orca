@@ -1,0 +1,12 @@
+OBJECT SPECIFICATION IntObject;
+
+
+OPERATION assign(v: integer);
+
+OPERATION inc();
+
+OPERATION dec();
+
+OPERATION AwaitValue(v: integer);
+
+END;

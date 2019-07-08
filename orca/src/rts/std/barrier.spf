@@ -1,0 +1,15 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: barrier.spf,v 1.4 1995/07/31 09:03:56 ceriel Exp $
+
+OBJECT SPECIFICATION barrier;
+
+FUNCTION sync(b: SHARED barrier);
+# Blocks until it is called n_workers times. Then, all threads blocked are
+# released, and the barrier is re-initialized.
+
+OPERATION init(n_workers : integer);
+
+END;

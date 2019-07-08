@@ -1,0 +1,18 @@
+echo 'newgraph border clip X 3.8'
+echo 'xaxis min 0 max 35 label : number of CPUs'
+echo 'yaxis min 0 label : speedup'
+echo 'newcurve linetype solid marktype none'
+echo 'pts '
+cat fft.tp.spd
+echo 'newcurve linetype dotted marktype circle'
+echo 'pts '
+cat fft.2.spd
+echo 'newcurve linetype dashed marktype diamond'
+echo 'pts '
+cat fft.4.spd
+echo 'newcurve linetype longdash marktype triangle'
+echo 'pts '
+cat fft.8.spd
+echo 'newcurve linetype dotdash marktype x'
+echo 'pts '
+cat fft.16.spd

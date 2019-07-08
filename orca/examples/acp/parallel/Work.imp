@@ -1,0 +1,98 @@
+OBJECT IMPLEMENTATION Work;
+
+FROM Types IMPORT int_arr_t;
+
+
+# ========================================================================
+# == global variables							==
+# ========================================================================
+
+work_arr : int_arr_t;			# nr of pending edges per node
+idle_workers : integer;			# nr of idle_workers
+
+
+# ========================================================================
+# == function prototypes						==
+# ========================================================================
+
+FUNCTION Any_work(
+	nslaves : integer; 		# total nr of slaves
+	a : int_arr_t			# nr of pending edges per node
+): boolean;
+
+
+# ========================================================================
+# == operations								==
+# ========================================================================
+
+OPERATION init(
+	nslaves: integer		# nr of nodes
+);
+
+	tmp : int_arr_t[1..nslaves];	# dummy var to initialize global data
+
+BEGIN
+	FOR i IN 1..nslaves DO
+		tmp[i] := 0;
+	OD;
+
+        work_arr := tmp;
+        idle_workers := nslaves;
+END;
+		
+
+OPERATION idle_workers_inc();
+BEGIN
+        idle_workers +:=1;
+END;
+  
+OPERATION idle_workers_dec();
+BEGIN
+        idle_workers -:=1;
+END;
+
+
+OPERATION Work_for(
+	n, 				# nr of node to update
+	nslaves : integer		# total nr of nodes
+): boolean;				# is there work left?
+
+BEGIN
+	GUARD work_arr[n] /= 0 DO
+		idle_workers +:= 1;
+		RETURN true;
+	OD;
+		
+	GUARD (idle_workers = 0) AND NOT Any_work(nslaves, work_arr) DO
+		RETURN false;
+       	OD;
+END;
+
+
+FUNCTION Any_work(
+	nslaves : integer; 		# total nr of nodes
+	a : int_arr_t			# nr of pending edges per node
+): boolean;
+
+BEGIN
+	FOR i IN 1..nslaves DO
+		IF a[i] /= 0 THEN RETURN true; FI;
+	OD;
+	RETURN false;
+END;
+
+
+OPERATION assign(
+	a : int_arr_t; 			# nr of updated edges per node
+	nslaves : integer		# total nr of nodes
+);
+
+BEGIN
+	FOR i IN 1..nslaves DO	
+		work_arr[i] +:= a[i];
+	OD;
+END;
+
+END;
+
+

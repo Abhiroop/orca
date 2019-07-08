@@ -1,0 +1,10 @@
+# parallel prime-number generator, adapted from the Linda-version
+# described in Yale report RR-628
+#
+# this program may be ideally suited for a distributed implementation
+# based on replication, as the primetab will change relatively infrequently
+
+MODULE SPECIFICATION primes;
+
+PROCESS OrcaMain();
+END;

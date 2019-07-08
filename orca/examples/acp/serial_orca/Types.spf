@@ -1,0 +1,32 @@
+#=====================================================================
+#==== type.spf : misc. data structures                            ====
+#==                                                                 ==
+MODULE SPECIFICATION Types;
+
+FROM Const IMPORT LINE_LEN, MAX_SYMBOL_LENGTH, MAX_WORD_LENGTH;
+
+#---------------------------------------------------------------------
+#---- types                                                       ----
+#---------------------------------------------------------------------
+
+TYPE line_t 		= ARRAY [integer 1..LINE_LEN] OF char;
+
+TYPE symbol_name_t 	= string;
+#TYPE symbol_name_t = ARRAY[integer 1..20] OF char;
+
+TYPE word_t 		= string;
+#TYPE word_t 		= ARRAY [integer 1..20] OF char;
+
+# the following data structures represents the rule
+# 	new <- right1 right2
+
+TYPE rule_t = 
+	RECORD
+		new, right1, right2 : symbol_name_t;
+	END;
+
+# data structure for a node
+
+# instantiations of lists
+
+END;

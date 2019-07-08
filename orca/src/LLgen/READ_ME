@@ -1,0 +1,19 @@
+$Id: READ_ME,v 1.4 1994/06/24 10:09:25 ceriel Exp $
+
+To install LLgen, proceed as follows:
+
+- create a directory to put the libraryfiles in, f.i.
+	/usr/local/lib/LLgen
+- cd to the src directory
+- adapt the file machdep.c, should be easy
+- adapt the Makefile, changing the options to the C-compiler if
+  necessary.
+- change back to this directory
+- edit the Makefile. LIBDIR should be set to the directory for the
+  library files, INSTALLDIR should be set to the directory where LLgen
+  is to be put.
+- now type 
+	make firstinstall
+- This should do all the work.
+
+LLgen.1 contains a man-page.

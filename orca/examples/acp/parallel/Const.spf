@@ -1,0 +1,21 @@
+#=====================================================================
+#==== const.spf : misc. constant definitions                      ====
+#==                                                                 ==
+MODULE SPECIFICATION Const;
+
+#---------------------------------------------------------------------
+#---- constants                                                   ----
+#---------------------------------------------------------------------
+
+CONST   GRAMMAR_FILE      = "grammar"; 	# the file that contains the grammar
+
+CONST   STOP_SYMBOL	  = "sentence"; # symbol to check for 
+
+CONST   COMMENT           = '#';        # comment sign in gramar file
+
+CONST 	SPACE		  = ' ';	# space character
+
+CONST 	TAB     	  = '	';	# tab character
+
+
+END;

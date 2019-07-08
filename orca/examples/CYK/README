@@ -1,0 +1,15 @@
+There are two different programs in this directory:
+
+-  StatPartAlg.imp ...
+-  DynPartAlg.imp ...
+
+They do the same things, but in different ways: 
+
+   Given a context-free grammar and a string, they determine if the 
+string is syntactically correct with respect to the contex-free grammar.
+
+The output is a simple 'Yes' or 'No'.
+
+In the file file cyk.string there are sample strings of which only the
+top most is recognized. The grammar can be found in cyk.grammar.
+The grammar is in Chomsky Normal Form.

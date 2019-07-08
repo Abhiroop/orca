@@ -1,0 +1,91 @@
+#ifndef __SEND_CI__
+#define __SEND_CI__
+
+
+#include <assert.h>
+
+#include "pan_sys_msg.h"
+
+#include "pan_trace.h"
+
+#include "global.h"
+#include "dispatch.h"
+#include "grp.h"
+#include "group_tab.h"
+#include "header.h"
+#include "send.h"
+#include "grp_stats.h"
+
+
+static pan_pset_p  all;
+
+
+
+
+void
+pan_grp_snd_start(void)
+{
+    all = pan_pset_create();
+    pan_pset_fill(all);
+}
+
+
+void
+pan_grp_snd_end(void)
+{
+    pan_pset_clear(all);
+}
+
+
+
+
+/* From this function, send the message. */
+void
+pan_group_send(pan_group_p grp, pan_msg_p msg)
+{
+    grp_hdr_p      hdr;
+
+    STATINC(grp, GRP_ST_SEND_DATA);
+
+    hdr = pan_msg_push(msg, sizeof(grp_hdr_t), alignof(grp_hdr_t));
+    hdr->type   = G_SEND;
+    hdr->sender = pan_grp_me;
+    hdr->gid    = pan_grp_gid(grp);
+
+    pan_comm_multicast_msg(all, msg, pan_grp_nsap);
+}
+
+
+
+INLINE void
+pan_grp_handle_send(grp_hdr_p hdr, pan_msg_p msg)
+{
+    pan_group_p     grp;
+
+    pan_mutex_lock(pan_grp_lock);	/* lock shared between send/jl etc */
+    grp = pan_gtab_find(hdr->gid);
+    pan_mutex_unlock(pan_grp_lock);
+
+    STATINC(grp, GRP_ST_RCVE_DATA);
+
+    if (! grp) {
+	DISCARDINC(grp, GRP_DX_UNREG);
+	return;
+    }
+    if (! (grp->flags & GRP_JOINED)) {
+	DISCARDINC(grp, GRP_DX_NO_MEM);
+	return;
+    }
+
+    assert(hdr->sender >= 0);
+    assert(hdr->sender < pan_grp_n_platforms);
+
+    assert(grp->receiver != NULL);
+
+    STATINC(grp, GRP_ST_UPCALL);
+
+    grp->receiver(msg);			/* Do upcall to application */
+}
+
+
+#endif

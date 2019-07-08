@@ -1,0 +1,17 @@
+MODULE SPECIFICATION matrixfunct;
+
+FROM BoolVector IMPORT BoolMatrix;
+FROM CromoVector IMPORT population, individual;
+FROM GenTypes IMPORT configuration;
+
+FUNCTION test_symmetric (G: BoolMatrix; nb_nodes: integer): boolean;
+FUNCTION evaluation (G: BoolMatrix; symmetric: boolean;
+		nb_nodes: integer; indiv: SHARED individual);
+FUNCTION fitness (Pop: SHARED population; config: configuration);
+ 
+END;
+
+
+
+
+

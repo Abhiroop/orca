@@ -1,0 +1,54 @@
+OBJECT IMPLEMENTATION grid[integer n..N, integer m..M]; 
+
+   G: real; 
+
+FUNCTION max(v1, v2: SHARED real);
+BEGIN
+	IF v1 < v2 THEN v1 := v2; FI;
+END;
+
+OPERATION PrintGrid(); 
+BEGIN 
+  FOR  row IN n .. N DO 
+     FOR col IN m .. M DO Write(G[row,col], " "); OD; 
+     WriteLine();
+  OD; 
+END; 
+
+PARALLEL OPERATION[row,col] UpdateGrid(c: color; omega: real): REDUCE real WITH max; 
+  diff: real; 
+  avg: real;
+  oldval: real;
+BEGIN
+   IF ((row+col)&1 = ORD(c)) AND
+      (row > n) AND (row < N) AND 
+      (col > m) AND (col < M) THEN
+	   oldval := G[row, col];
+           avg := (G[row-1,col] + G[row+1,col] + G[row,col-1] + G[row,col+1])/4.0; 
+           diff := avg - oldval; 
+	   IF diff < 0.0 THEN diff := -diff; FI;
+           G[row,col] := oldval + omega * (avg - oldval);
+   ELSE diff := 0.0;
+   FI;
+   RETURN diff;
+END; 
+
+PARALLEL OPERATION[row,col] InitGrid();
+BEGIN
+	IF row = n THEN
+		G[row,col] := 4.56;
+	ELSIF row = N THEN
+		G[row,col] := 9.85;
+	ELSIF col = m THEN
+		G[row,col] := 7.32;
+	ELSIF col = M THEN
+		G[row,col] := 6.88;
+	ELSE	G[row,col] := 0.0;
+	FI;
+END;
+
+BEGIN
+  FOR  row IN n .. N DO 
+     FOR col IN m .. M DO G[row,col] := 0.0; OD; 
+  OD;
+END; 

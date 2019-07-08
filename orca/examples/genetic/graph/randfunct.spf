@@ -1,0 +1,9 @@
+MODULE SPECIFICATION randfunct;
+
+IMPORT Random;
+
+FUNCTION randft(probability: real; r: SHARED Random): boolean;
+FUNCTION randilohi(lo, hi: integer; r: SHARED Random): integer;
+FUNCTION randflohi(lo, hi: real; r: SHARED Random): real;
+
+END;

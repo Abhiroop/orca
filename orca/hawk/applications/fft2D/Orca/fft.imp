@@ -1,0 +1,100 @@
+OBJECT IMPLEMENTATION fft[integer LB1..UB1];
+
+  FROM global IMPORT	N, NDV2, LOGN, complex, brt, complex_array, w;
+
+  A: complex_array; 
+
+OPERATION dgen(); 
+BEGIN 
+  FOR  i IN LB1 .. UB1 DO 
+     FOR col IN 1 .. N DO 
+	A[i][col].r := 0.0;
+	A[i][col].i := 0.0;
+     OD;
+  OD; 
+  A[NDV2+1][NDV2+1].r := FLOAT(N);
+  A[NDV2+1][NDV2+1].i := FLOAT(N);
+END; 
+
+OPERATION chkmat();
+  sign, errors: integer;
+  epsilon: real;
+BEGIN
+  epsilon := 0.0001;
+  errors := 0;
+  FOR j IN 1..N DO
+    IF ODD(j) THEN sign := 1; ELSE sign := -1; FI;
+    FOR i IN LB1 .. UB1 DO
+      IF A[i][j].r > FLOAT(sign*N)+epsilon THEN errors +:= 1; FI;
+      IF A[i][j].r < FLOAT(sign*N)-epsilon THEN errors +:= 1; FI;
+      IF A[i][j].i > FLOAT(sign*N)+epsilon THEN errors +:= 1; FI;
+      IF A[i][j].i > FLOAT(sign*N)-epsilon THEN errors +:= 1; FI;
+    OD;
+  OD;
+  IF errors > 0 THEN
+    WriteLine(">>>> Errors = ", errors);
+  FI;
+END;
+
+OPERATION tpose();
+  t: complex;
+BEGIN
+  FOR i IN LB1..UB1 DO
+    FOR j IN 1..N DO
+	t := A[i][j];
+	A[i][j] := A[j][i];
+	A[j][i] := t;
+    OD;
+  OD;
+END;
+
+
+PARALLEL OPERATION[ind] cffts();
+  i, j, ijDiff, stride, powerOfW, sPowerOfW, first: integer;
+  t, pw, ii, jj: complex;
+BEGIN
+
+  # Bit reverse step
+  FOR k IN 1 .. N DO
+    j := brt[k];
+    IF k < j THEN
+    	t := A[ind][j];
+	A[ind][j] := A[ind][k];
+	A[ind][k] := t;
+    FI;
+  OD;
+
+  # butterfly computations
+
+  ijDiff := 1;
+  stride := 2;
+  sPowerOfW := NDV2;
+  FOR stage IN 1..LOGN DO
+    first := 1;
+    powerOfW := 1;
+    WHILE powerOfW <= NDV2 DO
+      pw := w[powerOfW];
+      i := first;
+      WHILE i <= N DO
+	j := i + ijDiff;
+	jj := A[ind][j];
+	ii := A[ind][i];
+	t.r := jj.r * pw.r - jj.i * pw.i;
+	t.i := jj.r * pw.i + jj.i * pw.r;
+	A[ind][j].r := ii.r - t.r;
+	A[ind][j].i := ii.i - t.i;
+	A[ind][i].r := ii.r + t.r;
+	A[ind][i].i := ii.i + t.i;
+	i +:= stride;
+      OD;
+      first +:= 1;
+      powerOfW +:= sPowerOfW;
+    OD;
+    ijDiff := stride;
+    stride := stride << 1;
+    sPowerOfW := sPowerOfW >> 1;
+  OD;
+END;
+
+BEGIN
+END;

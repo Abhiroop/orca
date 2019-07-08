@@ -1,0 +1,80 @@
+OBJECT IMPLEMENTATION JobQueue;
+#
+# Program:	Mandelbrot
+# File:		JobQueue.imp
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	queue with DRAWING-jobs for a graphics display program
+#		(it is a copy of the std GENERIC jobqueue module).
+#
+
+FROM Job IMPORT job_t;
+
+
+TYPE ItemName = NODENAME OF queue;
+
+TYPE queue =
+	GRAPH
+		first, last: ItemName;
+	NODES
+		next: ItemName;
+		data: job_t;
+	END;
+
+	time: integer; # time it took to do all the work in the Q
+	done: boolean;  # set to true if NoMoreJobs has been invoked.
+	Q: queue;  # the queue itself
+
+
+
+OPERATION AddJob(job: job_t);
+	p: ItemName;
+BEGIN  # add a job to the tail of the queue
+	p := ADDNODE(Q);  # add a new node to Q, return its name in p
+	Q[p].data := job; # fill in data field of the new node
+	IF Q.first = NIL THEN  # Is it the first node?
+		Q.first := p;  # yes; assign it to global data field
+	ELSE
+		Q[Q.last].next := p; # no; set its next field
+	FI;
+	Q.last := p;  # Assign to "last" global data field
+END;
+
+
+
+OPERATION NoMoreJobs(t: IN integer);
+BEGIN  # Invoked to indicate that no more jobs will be added
+	time := t;
+	done := true;
+END;
+
+
+
+OPERATION GetJob(job: OUT job_t; t: OUT integer): boolean;
+	p: ItemName;
+BEGIN  # Try to fetch a job from the queue
+	GUARD Q.first /= NIL DO  # A job is available
+		p := Q.first;  # Remove it from the queue
+		Q.first := Q[p].next;
+		IF Q.first = NIL THEN Q.last := NIL; FI;
+		job := Q[p].data;
+		DELETENODE(Q,p);  # delete the node
+
+		RETURN true;
+	OD;
+
+	GUARD done AND (Q.first = NIL) DO
+		t := time;
+		RETURN false; # All jobs have been done
+	OD;
+END;
+
+
+
+OPERATION Init();
+BEGIN
+        # WriteLine(MYCPU()," queue init");
+	done := false;  # initialize done to false
+END;
+
+
+END;

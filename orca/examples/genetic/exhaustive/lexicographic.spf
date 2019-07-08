@@ -1,0 +1,9 @@
+MODULE SPECIFICATION lexicographic;
+
+FROM CromoVector IMPORT individual;
+
+FUNCTION initindividual(Ind: SHARED individual; nb_nodes: integer);
+
+FUNCTION nextindividual(Ind: SHARED individual; nb_nodes: integer): boolean;
+
+END;

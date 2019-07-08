@@ -1,0 +1,10 @@
+OBJECT SPECIFICATION IntObject;
+  OPERATION assign (v : integer);
+  OPERATION value() : integer;
+  OPERATION inc_special(nslaves : integer);
+  OPERATION inc(v : integer);
+  OPERATION dec(v : integer);
+  OPERATION AwaitValue(v : integer);
+
+END;
+

@@ -1,0 +1,64 @@
+MODULE IMPLEMENTATION MoCaManager;
+
+#--------------------------------------------------------------------#
+#     Parallel Monte Carlo simulation of recombination processes     #
+#              in clusters with more than one ion pair               #
+#                                                                    #
+#         Variable timestep   -   External electric included         #
+#--------------------------------------------------------------------#
+
+IMPORT	Barrier;
+IMPORT  IntObject;
+IMPORT  VarObject;
+IMPORT  RandObject;
+FROM	Common		IMPORT	ISEED, ConstType;
+FROM	MoCaWorker	IMPORT	MoCaWorker;
+FROM	SetUp		IMPORT	MainInit;
+FROM	Files		IMPORT	ReadDataFile, ReadConstFile;
+FROM	args		IMPORT  Argc, Argv;
+
+
+PROCESS	OrcaMain();
+
+	GLOB             : VarObject;
+	BARRIER, CATCHER : Barrier;
+	CNST             : ConstType;
+	RAND             : RandObject;
+	WorkersAlive	 : IntObject;
+	EltsPerCPU       : integer;
+BEGIN
+
+    ### Read the input-files.
+
+	IF NOT (ReadConstFile(CNST, Argc(), Argv(0), Argv(1)) AND
+		ReadDataFile(CNST, EltsPerCPU) AND MainInit(CNST)) THEN
+	    RETURN;
+	FI;
+
+
+    ### Initialize global data object (GLOB), the global random number
+    ###	generator (RAND) and the global barriers (BARRIER and CATCHER)
+
+	GLOB$Init(EltsPerCPU);
+	RAND$Init(CNST.NCPUS, ISEED);
+	BARRIER$Init(CNST.NCPUS);
+	CATCHER$Init(CNST.NCPUS);
+	WorkersAlive$assign(0);
+
+
+    ###	FORK a 'MoCaWorker'-process for each cpu used.
+
+	FOR cpu IN 0 .. CNST.NCPUS - 1 DO
+	    FORK MoCaWorker(GLOB, BARRIER,
+			    CATCHER, RAND, CNST, WorkersAlive) ON cpu;
+
+	    ###	Explicit waiting to survive copying of large objects.
+	    ###	After receiving a piggy-backed acknowledgement, the
+	    ###	allocated memory (on cpu 0) can be freed. Hack!!!
+
+	    WorkersAlive$AwaitValue(cpu + 1);
+	OD;
+END;
+
+
+END;

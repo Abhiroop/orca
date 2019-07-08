@@ -1,0 +1,8 @@
+OBJECT SPECIFICATION fft[integer];
+
+   OPERATION dgen(); 
+   OPERATION cffts();
+   OPERATION tpose();
+   OPERATION chkmat();
+
+END; 

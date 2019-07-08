@@ -1,0 +1,127 @@
+#-----------------------------------------------#
+# Author : E.J.J. de Waal			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT IMPLEMENTATION SyncObject;
+
+hit:	       integer;
+released:      integer;
+N:	       integer;
+turn:	       integer;
+workers_ready: boolean;
+unattainable:   integer;
+
+
+
+OPERATION init(n_workers : integer);
+BEGIN
+    N := n_workers;
+    released := N;
+    hit      := 0;
+    turn     := N;
+    workers_ready := false;
+END;
+
+
+
+OPERATION done();
+BEGIN
+	# Wait until the workers are completed with the previous 
+	# synchonization point. Wait also until the manager is 
+	# is ready.
+    GUARD ((released = N) AND (workers_ready = false))
+    DO
+	hit +:= 1;
+	IF hit = N THEN 
+	    released := 0;
+	FI;
+    OD;
+END;
+
+
+
+OPERATION ack();
+BEGIN
+	# Wait until every worker has done "done()"
+    GUARD hit = N 
+    DO
+	released +:= 1;
+	IF released = N THEN 
+	    hit := 0;
+	    workers_ready := true;
+	FI;
+    OD;
+END;
+
+
+
+#
+# TurnInc increments the turn. The manager is the first one 
+# to increment the turn, so cpu 0 is the first one to read
+# or write a part of the database.
+#
+OPERATION TurnInc();
+BEGIN
+    IF (turn = N) THEN
+	turn := 0;
+    ELSE
+	turn +:= 1;
+    FI;
+END;
+
+
+
+OPERATION AwaitTurn(value: integer);
+BEGIN
+	# Wait until it is my turn.
+    GUARD (turn = value) 
+    DO 
+    OD;
+END;
+
+OPERATION AwaitAtLeast(v : integer);
+BEGIN
+	GUARD turn >= v DO OD; # block until value equals v
+END;
+
+
+
+OPERATION WaitForWorkers();
+BEGIN
+	# Wait until all workers are ready with a synchronization
+	# point. Only the manager calls this operation.
+    GUARD (workers_ready = true)
+    DO
+	workers_ready := false;
+    OD;
+END;
+
+
+
+OPERATION value(): integer;
+BEGIN
+    RETURN (turn);
+END;
+
+
+
+OPERATION WaitForUnattainable(value: integer);
+BEGIN
+	# Wait for a specific value of unattainable
+    GUARD (unattainable = value)
+    DO
+    OD;
+END;
+
+
+
+OPERATION SetUnattainable(value: integer);
+BEGIN
+    unattainable := value;
+END;
+
+
+
+END; # SyncObject

@@ -1,0 +1,15 @@
+This directory contains the generic code for all system layers. Each
+system that does not change one of these files, should create a
+hard link to it, to facilitate keeping all copies consistent. The
+following files are always architecture dependent:
+
+pan_thread.[ch]
+pan_sync.[ch]
+pan_glocal.[ch]
+pan_time.[ch]
+pan_comm.c
+pan_machdep.h
+pan_system.c
+pan_x_word.h
+
+DON'T USE SYMBOLIC LINKS. Make can't handle them correctly.

@@ -1,0 +1,26 @@
+MODULE SPECIFICATION Config;
+
+	TYPE Config_Rec = RECORD
+				filename:	string;
+				be_verbose:	boolean;
+				fault_sim:	boolean;
+				communicate:	boolean;
+			  END;
+
+	FUNCTION Init_Config(config:OUT Config_Rec):boolean;
+
+	# This function reads the configuration parameters and returns
+	# their values in config.
+	# These parameters indicate whether or not fault simulation should
+	# be carried out and whether testvectors found by one processor should
+	# be communicated among the other processors.
+
+	FUNCTION Simulate(config:Config_Rec):boolean;
+
+	FUNCTION Communicate(config:Config_Rec):boolean;
+
+	FUNCTION Be_Verbose(config:Config_Rec):boolean;
+
+	FUNCTION Circuit_File(config:Config_Rec):string;
+
+END; # MODULE SPECIFICATION Config

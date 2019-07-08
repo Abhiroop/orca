@@ -1,0 +1,10 @@
+RTS_UNIXPROC = {
+	$PWD/DoFork.c,
+	$PWD/DoOperation.c,
+	$PWD/Finish.c,
+	$PWD/Time.c,
+	$PWD/alloc.c,
+	$PWD/main.c,
+	$PWD/print.c,
+	$PWD/unix.c,
+};

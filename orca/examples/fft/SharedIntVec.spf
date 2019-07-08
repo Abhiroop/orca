@@ -1,0 +1,9 @@
+OBJECT SPECIFICATION SharedIntVec;
+
+TYPE vecint = ARRAY[integer 1..7] OF integer;
+
+	OPERATION GetElt(i: integer): integer;
+	OPERATION PutElt(i: integer; x: integer);
+	OPERATION get(): vecint;
+	OPERATION store(b: vecint);
+END;

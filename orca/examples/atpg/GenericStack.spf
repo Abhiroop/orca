@@ -1,0 +1,13 @@
+GENERIC (TYPE T)
+
+OBJECT SPECIFICATION GenericStack;
+
+	OPERATION IsEmpty():boolean;	# Check if stack empty
+	OPERATION Push(item:T);
+	OPERATION Pop(item:OUT T):boolean;
+
+END GENERIC;
+
+
+
+

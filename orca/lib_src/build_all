@@ -1,0 +1,56 @@
+#!/bin/sh
+
+MAKE=${MAKE:-make}
+
+cleanup=
+
+p=`pwd`
+
+while true; do
+        case $1 in
+                -c)     cleanup=yes
+                 	;;
+                *)      break
+			;;
+        esac
+        shift 1
+done
+
+>Out
+
+exit=0
+
+for i in `find . -name Makefile -print`; do
+	(
+		dir=`dirname $i`
+		case $dir in
+		*/makes*)	continue
+				;;
+		*/std)		continue
+				;;
+		esac
+		cd $dir
+		PWD=`pwd`
+		export PWD
+		if [ $cleanup ]; then
+			echo "Cleaning up directory $PWD"
+			$MAKE clean
+			echo "$PWD done"
+		else
+			echo "Building in $PWD ..."
+			echo ">>>> $dir" >> $p/Out
+			if $MAKE >> $p/Out 2>&1
+			then
+				echo "$PWD done"
+			else
+				echo "$PWD failed, see $p/Out"
+				exit=1
+			fi
+		fi
+	)
+done
+
+exit $exit
+
+# compile-command: "build_all"
+# End:

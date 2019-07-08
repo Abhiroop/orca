@@ -1,0 +1,72 @@
+MODULE IMPLEMENTATION ConstructionModule;
+
+FROM TspTypes IMPORT 
+	NodeSubset,
+	NodeIndex;
+FROM TourModule IMPORT
+	Tour,
+	InsertAtEnd;
+IMPORT SpecificationObject;
+
+
+
+
+
+FUNCTION NNSelection (node : NodeIndex;
+		nodes : NodeSubset;
+		spec : SpecificationObject) : NodeIndex;
+	min : integer;
+	minIndex : integer;
+	first : boolean;   # Identifies the first loop
+BEGIN
+	first := true;
+	IF node IN nodes THEN
+		DELETE (node, nodes);
+	FI;
+	
+	FOR n IN nodes DO
+		IF first THEN
+			minIndex := n;
+			first := false;
+		FI;
+
+		# Avoid any kind of array out of bound error here
+		IF ((min > spec$Distance (n, node)) AND (n /= node)) THEN
+			min := spec$Distance (n, node);
+			minIndex := n;
+		FI;
+	OD;
+	RETURN minIndex;
+END;
+
+
+FUNCTION NearestNeighbour (tour : OUT Tour; 
+			nodes : NodeSubset; 
+			start : NodeIndex;
+			spec : SpecificationObject);
+	iterations : integer;
+BEGIN
+	IF start IN nodes THEN
+		DELETE (start, nodes);
+	FI;
+
+	tour := InsertAtEnd (start, tour);
+
+	iterations := SIZE(nodes);
+
+	WHILE iterations > 0 DO
+		tour := InsertAtEnd (NNSelection (tour[tour[tour.root].prev].nr, nodes, spec), 
+				     tour);
+		DELETE (tour[tour[tour.root].prev].nr, nodes);
+		iterations := iterations - 1;
+	OD;
+
+END;
+
+
+
+END;
+
+
+
+

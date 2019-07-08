@@ -1,0 +1,160 @@
+# The module Board contains functions for handling the playing board.
+
+MODULE IMPLEMENTATION Board;
+ 
+FROM InOut IMPORT WriteChar;
+FROM Types IMPORT Problem,ProblemArray,DataRecord,BoardType;
+FROM Misc IMPORT SearchKing;
+FROM Const IMPORT BLACK,WHITE,PAWN,KNIGHT,BISHOP,ROOK,QUEEN,KING,HSIZE,VSIZE,
+		  FULLSRCH;
+
+	FUNCTION ClearBoard(b : SHARED BoardType);
+	FUNCTION GetPiece(c : char) : integer;
+
+	# The function InitBoard() initializes the playing board and stores the
+	# positions of the two kings.
+	FUNCTION InitBoard(dr : SHARED DataRecord);
+	  x,y : integer;
+	BEGIN
+		FOR color IN WHITE .. BLACK DO
+		  dr.b[0][7*color] := ROOK + 8*color;
+		  dr.b[7][7*color] := ROOK + 8*color;
+		  dr.b[1][7*color] := KNIGHT + 8*color;
+		  dr.b[6][7*color] := KNIGHT + 8*color;
+		  dr.b[2][7*color] := BISHOP + 8*color;
+		  dr.b[5][7*color] := BISHOP + 8*color;
+		  dr.b[3][7*color] := QUEEN + 8*color;
+		  dr.b[4][7*color] := KING + 8*color;
+		  FOR i IN 0 .. HSIZE - 1 DO
+		    dr.b[i][1 + color * 5] := PAWN + 8 * color;
+		  OD;
+		OD;
+		# Look for the kings.
+		SearchKing(dr.b,WHITE,x,y);
+		dr.kpos[WHITE] := 8*x + y;
+		SearchKing(dr.b,BLACK,x,y);
+		dr.kpos[BLACK] := 8*x + y;;
+		dr.method := FULLSRCH;
+		dr.signature := 0;
+	END;
+
+	# The function SetUp() sets up the playing board to a position which
+	# is defined in the problem.
+	FUNCTION SetUp(dr : SHARED DataRecord; problem : Problem);
+	  index : integer;
+	  len : integer;
+	  piece : integer;
+	  x,y : integer;
+	  str : string;
+	BEGIN
+		ClearBoard(dr.b);
+		str := problem.boardstring;
+		WriteLine("Setting Up ...");
+		len := SIZE(str) / 3;
+		FOR i IN 1 .. len DO
+		  index := 1 + (i-1) * 3;
+		  piece := GetPiece(str[index]);
+		  x := ORD(str[index+1]) - ORD('a');
+		  y := ORD(str[index+2]) - ORD('1');
+		  dr.b[x][y] := piece;
+		  IF (str[index] >= 'a') AND
+		     (str[index] <= 'z') THEN
+			dr.b[x][y] +:= 8;
+		  FI;
+		OD;
+		SearchKing(dr.b,WHITE,x,y);
+		dr.kpos[WHITE] := 8*x + y;
+		SearchKing(dr.b,BLACK,x,y);
+		dr.kpos[BLACK] := 8*x + y;;
+		dr.method := FULLSRCH;
+		dr.player := problem.color;
+		dr.transpos := 0; dr.killers := 0;
+		dr.nodes := 0;
+		dr.signature := 0;
+		dr.bval := 0;
+	END;
+
+	FUNCTION GetPiece(c : char) : integer;
+	BEGIN
+		CASE c OF
+		  'P','p'	=> RETURN PAWN; |
+		  'N','n'	=> RETURN KNIGHT; |
+		  'B','b'	=> RETURN BISHOP; |
+		  'R','r'	=> RETURN ROOK; |
+		  'Q','q'	=> RETURN QUEEN; |
+		  'K','k'	=> RETURN KING;
+		 ELSE RETURN 0;
+		ESAC;
+	END;
+
+	FUNCTION ClearBoard(b : SHARED BoardType);
+	BEGIN
+		FOR x IN 0 .. HSIZE - 1 DO
+		  FOR y IN 0 .. VSIZE - 1 DO
+		    b[x][y] := 0;
+		  OD;
+		OD;
+	END;
+
+	# The function PrintBoard() prints the playing board with white's
+	# pieces in capital letters and black's pieces in normal letters.
+	FUNCTION PrintBoard(b : SHARED BoardType);
+	  y : integer;
+	  owner : integer;
+	  piece : integer;
+	BEGIN
+		WriteLine("------------------");
+		FOR i IN 0 .. VSIZE - 1 DO
+		  y := VSIZE - 1 - i;
+		  WriteChar('|');
+		  FOR x IN 0 .. HSIZE - 1 DO
+		    owner := (b[x][y] >> 3) & 1;
+		    piece := b[x][y] & 7;
+		    IF piece = 0 THEN	
+		      IF ((x + y) & 1) = 1 THEN WriteChar(' ');	
+		       ELSE WriteChar('-');
+		      FI;
+		    ELSE
+		      CASE piece OF
+			PAWN	=> IF owner = WHITE THEN WriteChar('P');
+				    ELSE WriteChar('p');
+				   FI; |
+			KNIGHT	=> IF owner = WHITE THEN WriteChar('N');
+				    ELSE WriteChar('n');
+				   FI; |
+			BISHOP	=> IF owner = WHITE THEN WriteChar('B'); 
+				    ELSE WriteChar('b');
+				   FI; |
+			ROOK	=> IF owner = WHITE THEN WriteChar('R');
+				    ELSE WriteChar('r');
+				   FI; |
+			QUEEN	=> IF owner = WHITE THEN WriteChar('Q');
+				    ELSE WriteChar('q');
+				   FI; |
+			KING	=> IF owner = WHITE THEN WriteChar('K');
+				    ELSE WriteChar('k');
+				   FI;
+		      ESAC;	
+		    FI;
+		    WriteChar(' ');
+		  OD;
+		  WriteChar('|'); WriteLine(y + 1);
+		OD;
+		WriteLine("------------------");
+		WriteLine(" a b c d e f g h");
+	END;
+ 
+	# The function LoadProblems() loads an array with chess problems from
+	# the book "Win At Chess" by Fred Reinfeld.
+	FUNCTION LoadProblems(array : OUT ProblemArray);
+	BEGIN
+	 FOR i IN LB(array) .. UB(array) DO array[i].color := -1; OD;
+	 array[1] := Problem : { "Kb2Pc3Pd4Pe5Pf4Pg3pc4pd5pf5pg4kh8",WHITE };
+	 array[2] := Problem : { "Rf3Kd5ka8",WHITE };
+	 array[3] := Problem : { "Bh1Nc4Kc7ka6",WHITE };
+	 array[4] := Problem : { "Kd5Pe5ke8",WHITE };
+	 array[5] := Problem : { "Ke1Rf1Rg1kg2",BLACK };
+	 array[6] := Problem : { "Ra1Bc1Qd1Ke1Bf1Ng1Rh1Pa2Pb2Pc2Nd2Pe2Pf2Pg2Ph3Pe5ng4pa7pb7pc7pd7pf7pg7ph7ra8nb8bc8qd8ke8bf8rh8",BLACK};
+	END;
+
+END;

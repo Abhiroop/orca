@@ -1,0 +1,63 @@
+OBJECT IMPLEMENTATION CSemaphore;
+# This is a cyclic semaphore derived from the barrier found in $ORCA/lib/std
+
+hit      : integer;
+released : integer;
+N        : integer;
+cycle    : integer;
+complete : boolean;
+
+OPERATION release();
+BEGIN
+  GUARD (hit = N) AND (NOT complete) 
+# They are all there and the master has acknowledged this
+                DO  
+                   released +:= 1;
+                   IF released = N THEN hit := 0; FI;
+                OD;
+END;
+
+OPERATION touch();
+BEGIN
+  GUARD released = N DO   
+                        hit +:= 1;
+			IF hit = N THEN 
+                          released := 0;
+                          complete := true;
+                        FI;
+		     OD;
+END;
+
+FUNCTION sync(b: SHARED CSemaphore);
+BEGIN
+    b$touch();
+    b$release();
+END;
+
+OPERATION wait();
+BEGIN
+    GUARD complete DO OD;
+END;
+
+OPERATION ack();
+BEGIN
+    complete := false;
+    cycle   +:= 1;
+END;
+
+OPERATION cycles() : integer;
+BEGIN
+  RETURN(cycle);
+END;
+
+OPERATION init(n_workers : integer);
+BEGIN
+    N := n_workers;
+    released := N;
+    hit      := 0;
+    cycle    := 0;
+    complete := false;
+END;
+
+END;
+

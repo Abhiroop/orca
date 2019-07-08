@@ -1,0 +1,3 @@
+MODULE SPECIFICATION embed;
+	PROCESS OrcaMain();
+END;

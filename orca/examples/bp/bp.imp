@@ -1,0 +1,493 @@
+MODULE IMPLEMENTATION bp;
+
+FROM unix 	IMPORT 	open,ReadInt,close,ReadReal;
+FROM misc	IMPORT 	InitArrayBounds,PrimeActivationFunction,AlmostSame,ComputeOutput;
+FROM BpTypes 	IMPORT  ArrayType;
+FROM Time 	IMPORT  SysMilli, PrintTime;
+FROM Finish 	IMPORT  Finish;
+
+		IMPORT 	NetworkObject;
+		IMPORT 	PatternSet;
+ 		IMPORT  PollSeq;
+		IMPORT  IntObject;
+
+CONST		MaxIterations = 1500;
+
+################################################################################
+# print all patterns
+################################################################################
+FUNCTION PrintAllDigits(network: NetworkObject;
+			Patterns: PatternSet);
+	pattern: integer;
+	NetInput: ArrayType;
+	activations: ArrayType;
+	Input: ArrayType;
+	Output: ArrayType;
+	col: integer;	
+BEGIN
+pattern :=0;
+WHILE (pattern < Patterns$NumPatterns()) DO
+  # print every row of the 5 patterns
+  col:=0;
+  FOR row IN 0..5  DO 
+     WriteLine();
+     FOR p IN 0..4 DO
+	IF (pattern + p) < Patterns$NumPatterns()
+	  THEN 	# print one row for one pattern
+		Input:=Patterns$InputPattern(pattern+p);
+		   FOR ColCount IN 0..4 DO
+		        IF (Input[col+ColCount] < 0.1) 
+      				THEN Write(" "); 
+      				ELSE IF (Input[col+ColCount] > 0.9)
+ 	      				THEN Write("#");
+	      				ELSE Write("~");
+				     FI;
+           		FI;
+		   OD;
+        FI;
+	Write("            "); 
+     OD;
+     col:=col+5;
+  OD;
+  WriteLine();
+  FOR p IN 0..4 DO
+    IF (pattern + p) < Patterns$NumPatterns()
+	  THEN 	Input:= Patterns$InputPattern(pattern+p);
+		ComputeOutput(Input,network,network$NumberOfNeurons()-1,
+		network$NumUnits(network$NumLayers())-1,
+		NetInput,activations,Output);
+     		PrintPattern(Output,network$NumUnits(network$NumLayers()),1);
+    FI;
+    Write("        "); 
+  OD;
+  pattern:=pattern+5;
+OD;
+WriteLine();
+WriteLine();
+END;
+
+################################################################################
+# Prints the input-target-output patterns
+################################################################################
+FUNCTION PrintPattern(	pattern: ArrayType;
+			NumUnits: integer;
+			t: integer);
+BEGIN
+Write("'");
+FOR unit IN 0.. NumUnits-1 DO
+   IF (pattern[unit] < 0.3) 
+      THEN Write(" "); 
+      ELSE IF (pattern[unit] > 0.7)
+ 	      THEN IF (t=0)
+			THEN Write("*");
+			ELSE Write(unit);
+	 	   FI;
+	      ELSE Write("~");
+           FI;
+   FI;
+OD;
+Write("'");
+END;
+
+################################################################################
+# print all patterns
+################################################################################
+FUNCTION PrintAllPatterns(network: NetworkObject;
+			Patterns: PatternSet);
+	NetInput: ArrayType;
+	activations: ArrayType;
+	pattern: integer;
+	Input: ArrayType;
+	Output: ArrayType;		
+BEGIN
+pattern :=0;
+WHILE (pattern < Patterns$NumPatterns()) DO
+  Write("pattern ", pattern, "       ");
+  PrintPattern(Patterns$InputPattern(pattern),network$NumUnits(0),0);
+  IF (pattern+1 < Patterns$NumPatterns()) 
+     THEN Write("                 pattern ", pattern +1, "       ");
+	  PrintPattern(Patterns$InputPattern(pattern+1),network$NumUnits(0),0);
+  FI;
+  WriteLine();
+  Write("           t: ", pattern, "       ");
+  PrintPattern(Patterns$OutputPattern(pattern),
+			network$NumUnits(network$NumLayers()),0);
+  IF (pattern+1 < Patterns$NumPatterns()) 
+     THEN Write("                      t: ", pattern +1, "       ");
+	  PrintPattern(Patterns$OutputPattern(pattern+1),
+				network$NumUnits(network$NumLayers()),0);
+  FI;
+  WriteLine();
+  Write("           o: ", pattern, "       ");
+
+  Input := Patterns$InputPattern(pattern);
+  ComputeOutput(Input,network,network$NumberOfNeurons()-1,
+		network$NumUnits(network$NumLayers())-1,
+		NetInput,activations,Output);
+  PrintPattern(Output,network$NumUnits(network$NumLayers()),0);
+  IF (pattern+1 < Patterns$NumPatterns()) 
+     THEN Write("                      o: ", pattern +1, "       ");
+  	  Input := Patterns$InputPattern(pattern+1);
+  	  ComputeOutput(Input,network,network$NumberOfNeurons()-1,
+		network$NumUnits(network$NumLayers())-1,
+		NetInput,activations,Output);
+  	  PrintPattern(Output,network$NumUnits(network$NumLayers()),0);
+  FI;
+  WriteLine();
+  pattern := pattern+2; 
+OD;
+END;
+
+###############################################################################
+# reads the patterns from the specified file
+###############################################################################
+FUNCTION ReadPatterns(	fid: integer;
+		Patterns: OUT PatternSet;
+		NumInputUnits: OUT integer;
+		NumOutputUnits: OUT integer;
+		NumPatterns: OUT integer);
+
+BEGIN
+NumInputUnits := ReadInt(fid);
+NumOutputUnits := ReadInt(fid);
+NumPatterns:= ReadInt(fid);
+IF (Patterns$InitPatterns(NumPatterns,NumInputUnits,NumOutputUnits)<0)
+  THEN WriteLine("ReadPatterns: error initalizing pattern set");
+FI;
+FOR pattern IN 0..NumPatterns-1 DO
+  FOR unit IN 0..NumInputUnits-1 DO
+    IF (Patterns$InitInputPatterns(pattern,unit,ReadReal(fid))<0)
+  	THEN WriteLine("ReadPatterns: error initalizing input pattern set");
+    FI;
+  OD;
+  FOR unit IN 0..NumOutputUnits-1 DO
+    IF (Patterns$InitOutputPatterns(pattern,unit,ReadReal(fid))<0)
+  	THEN WriteLine("ReadPatterns: error initalizing output pattern set");
+    FI;
+  OD;
+OD;
+END;
+
+###############################################################################
+# reads the patterns from the specified file
+###############################################################################
+FUNCTION ReadTestPatterns(fid: integer;
+		Patterns: OUT PatternSet;
+		NumInputUnits: integer;
+		NumOutputUnits: integer);
+
+NumPatterns: integer;
+BEGIN
+NumPatterns:= ReadInt(fid);
+IF (Patterns$InitPatterns(NumPatterns,NumInputUnits,NumOutputUnits)<0)
+  THEN WriteLine("ReadTestPatterns: error initalizing pattern set");
+FI;
+FOR pattern IN 0..NumPatterns-1 DO
+  FOR unit IN 0..NumInputUnits-1 DO
+    IF (Patterns$InitInputPatterns(pattern,unit,ReadReal(fid))<0)
+	THEN WriteLine("ReadTestPatterns: error initalizing input pattern set");
+    FI;
+  OD;
+  FOR unit IN 0..NumOutputUnits-1 DO
+    IF (Patterns$InitOutputPatterns(pattern,unit,ReadReal(fid))<0)
+  	THEN WriteLine("ReadPatterns: error initalizing output pattern set");
+    FI;
+  OD;
+OD;
+END;
+
+###############################################################################
+# reads the network architecture
+###############################################################################
+FUNCTION ReadNetwork(fid: integer;
+		network: SHARED NetworkObject;
+		NumInputUnits: integer;
+		NumOutputUnits: integer);
+	NumLayers: integer;
+	myseed: integer;
+BEGIN
+NumLayers := ReadInt(fid);
+IF (network$SetNumLayers(NumLayers)<0)
+  THEN WriteLine("ReadNetwork: error initalizing number of layers");
+FI;
+FOR layer IN 1..NumLayers-1 DO 
+   IF (network$SetNumUnits(layer, ReadInt(fid))<0)
+      THEN  WriteLine("ReadNetwork: error initializing number of units");
+   FI;
+OD;
+IF (network$SetNumUnits(0,NumInputUnits)<0)
+  THEN WriteLine("ReadNetwork: error initalizing number of units");
+FI;
+IF (network$SetNumUnits(NumLayers,NumOutputUnits)<0)
+   THEN WriteLine("ReadNetwork: error initializing number of output units");
+FI;
+IF (network$SetLearningRate(0.9)<0)
+   THEN WriteLine("ReadNetwork: error initializing learning rate");
+FI; 		
+IF (network$SetNoiseProportion(5)<0)
+   THEN WriteLine("ReadNetwork: error initializing noise");
+FI;
+IF (network$SetNoiseThreshold(0.08)<0)
+   THEN WriteLine("ReadNetwork: error initializing noise threshold");
+FI;
+# WriteLine("enter seed-> ");
+# Read(myseed);
+myseed:=234;
+network$SetSeed(myseed);
+IF (network$GenerateWeights()<0)
+  THEN	WriteLine("ReadNetwork: error initializing weights");
+FI;
+END;
+
+################################################################################
+# Teacher process. Iterates on its NumPatterns/Numprocess to calculate the
+# deltas of the weights. The deltas are accumulated. After every iteration, 
+# the teacjer processes synchronize to update the weights.
+################################################################################
+PROCESS TeacherProcess( filename: string;
+			network: SHARED NetworkObject;
+			EndLearning: SHARED PollSeq;
+			EndIterate: SHARED PollSeq;
+			AllDone: SHARED IntObject);
+	patterns: PatternSet;
+	pattern: integer;
+	DeltaWeights: ArrayType;
+	Deltas, NetInput, activations: ArrayType;
+	Input, Output: ArrayType;
+	TargetOutput: ArrayType;
+	PatternsLearnt: boolean;
+	iteration: integer;
+	layer: integer;
+	NumPatterns: integer;
+	NumInputUnits, NumOutputUnits: integer;
+	NumLayers: integer;
+	StartTime, EndTime: integer;
+	BoolRes: boolean;
+	fidin: integer;
+	lr: real;
+	temp: integer;
+	nu_nl: integer;
+	nw: NetworkObject;
+
+BEGIN
+fidin := open(filename,0);
+IF (fidin >= 0) 
+      THEN  
+	ReadPatterns(fidin,patterns,NumInputUnits,NumOutputUnits,NumPatterns);
+	IF (close(fidin)<0)
+	   THEN	WriteLine("Teacher process ", MYCPU(), ": error closing file");
+	FI;
+
+	iteration :=1;
+	NumLayers:= network$NumLayers();
+
+	InitArrayBounds(0,network$NumberOfWeights()-1,DeltaWeights);
+	InitArrayBounds(0,network$NumberOfNeurons()-1,Deltas);
+	InitArrayBounds(0,network$NumberOfNeurons()-1,NetInput);
+	InitArrayBounds(0,network$NumberOfNeurons()-1,activations);
+	InitArrayBounds(0,network$NumUnits(network$NumLayers())-1,Output);
+	FOR layer IN 0..NumLayers-1 DO
+	  FOR sunit IN 0..network$NumUnits(layer)-1 DO
+	     FOR dunit IN 0..network$NumUnits(layer+1)-1 DO
+		DeltaWeights[network$WeightIndex(layer,sunit,dunit)] := 0.0;
+	     OD;
+	  OD;
+	OD;
+
+	EndLearning$vote(iteration,false);
+	BoolRes:=EndLearning$AwaitDecision(iteration);
+	IF (MYCPU()=0) THEN WriteLine("Learning phase started"); FI;
+	StartTime := SysMilli();
+	WHILE (BoolRes/= true) AND (iteration < MaxIterations) DO
+	# check whether the learning phase is over
+   
+	   # calculate the delta weights for my set of patterns
+	   PatternsLearnt := true;
+	   pattern := MYCPU();
+	   nw := network;
+	   nu_nl := nw$NumUnits(NumLayers);
+	   WHILE  pattern < NumPatterns DO
+
+		TargetOutput := patterns$OutputPattern(pattern);
+		Input := patterns$InputPattern(pattern);
+	
+		# compute the net input and the activation values
+		ComputeOutput(Input,nw,nw$NumberOfNeurons()-1,
+			nu_nl-1,
+			NetInput,activations,Output);
+
+	        # compute deltas for all units in all layers
+		FOR sunit IN 0..nu_nl-1 DO
+		   temp := nw$ActivationIndex(NumLayers,sunit);
+	   	   Deltas[temp] := 
+			(TargetOutput[sunit] - Output[sunit])
+			*PrimeActivationFunction(NetInput[temp]);
+		OD;
+
+		# backpropagate deltas to other layers
+		layer:=NumLayers-1;
+		WHILE layer >= 0 DO
+	   	   FOR sunit IN 0..nw$NumUnits(layer)-1 DO
+			temp := nw$ActivationIndex(layer,sunit);
+			Deltas[temp] := 0.0;
+			FOR dunit IN 0..nw$NumUnits(layer+1)-1 DO
+		   	   Deltas[temp] +:= 
+				Deltas[nw$ActivationIndex(layer+1,dunit)]*
+				nw$GetWeight(layer,sunit,dunit);
+			OD;
+		   Deltas[temp] *:= 
+			PrimeActivationFunction(NetInput[temp]);
+	   	   OD;
+	   	layer:=layer-1;
+		OD;
+	
+		# compute the delta of the  weights 
+		layer:=NumLayers-1;
+		lr := nw$GetLearningRate();
+		WHILE layer >= 0 DO
+		   FOR sunit IN 0..nw$NumUnits(layer)-1 DO
+			temp := nw$ActivationIndex(layer,sunit);
+			FOR dunit IN 0..nw$NumUnits(layer+1)-1 DO
+			   # WriteLine("Delta weights: ",layer, " ",sunit, " ",dunit);
+	  	   	   DeltaWeights[nw$WeightIndex(layer,sunit,dunit)] +:= 
+				lr
+				*Deltas[nw$ActivationIndex(layer+1,dunit)]
+				*activations[temp];
+			OD;
+		   OD;
+		   layer:=layer-1;
+		OD;
+	
+		PatternsLearnt := 
+		  PatternsLearnt AND 
+			AlmostSame(TargetOutput,Output,nu_nl);
+	        pattern := pattern + NCPUS();
+	   OD;
+
+	   EndIterate$vote(iteration,true);
+	   BoolRes:=EndIterate$AwaitDecision(iteration);
+	   iteration := iteration +1;
+
+	   # update the weights
+	   IF (network$UpdateWeights(DeltaWeights)<0)
+	       THEN WriteLine("Teacher Process ",MYCPU(),": error updating weights");
+	   FI;
+	   FOR i IN 0..network$NumberOfWeights()-1 DO
+	      DeltaWeights[i] := 0.0;
+	   OD;
+
+	  IF ((iteration % 100) = 0 )
+	     THEN IF MYCPU()=0 
+		    THEN 	lr:= network$GetLearningRate();
+				IF ( lr > 0.1) 
+ 				   THEN	IF (network$SetLearningRate(lr-0.05)<0)
+					 THEN	WriteLine("Teacher Process ",
+							MYCPU(),
+					          ": error setting learning rate");
+					FI;
+				FI;
+				WriteLine("iteration: ", iteration);
+		  FI;
+ 	  FI;   
+	  EndLearning$vote(iteration,PatternsLearnt);
+   	  BoolRes:=EndLearning$AwaitDecision(iteration);
+	OD;
+	EndTime := SysMilli();
+	IF MYCPU()=0 THEN 
+		IF iteration >= MaxIterations
+		   THEN WriteLine("!!!! Unsuccessful learning after 1000 iterations");
+		   ELSE WriteLine();
+ 		FI;
+		WriteLine("Learning phase ended after ", iteration , 
+			" iterations");
+		PrintTime("BP", EndTime-StartTime);
+	FI;
+    ELSE
+	
+FI;
+AllDone$dec();
+END;
+
+################################################################################
+# The main Orca process provides a user interface to the neural network. It 
+# allows a user to start the learning process, teach the network, change the
+# learning parameters, randomize the weights and so on. 
+# When a learning process is started, if forks 10 processes or the number of 
+# patterns, if less then 10 of them are being taught to the network. 
+################################################################################
+PROCESS OrcaMain();
+	NumPatterns: integer;
+	NumTeachers: integer;
+	NumInputUnits: integer;
+	NumOutputUnits: integer;
+	ReturnValue: integer;
+	EndIterate: PollSeq;
+	EndLearning: PollSeq;
+	Patterns: PatternSet;
+	network: NetworkObject;
+	AllDone: IntObject;
+	filename: string;
+	fidin: integer;
+BEGIN
+# read patterns
+Write("training patterns: file name (quit to exit) -> ");
+Read(filename);
+fidin := open(filename,0);
+IF (fidin >= 0) AND (filename/="quit")
+	THEN  
+		ReadPatterns(fidin,Patterns,NumInputUnits,NumOutputUnits,NumPatterns);
+		ReadNetwork(fidin,network,NumInputUnits,NumOutputUnits);
+		ReturnValue := close(fidin);
+		NumTeachers:=NCPUS();
+		# determine the number of slaves to be used
+		IF (NumPatterns < NumTeachers) 
+		  THEN   NumTeachers:=NumPatterns;
+		FI;
+
+		# initialize the synchornization variables
+		EndLearning$init(NumTeachers);
+		EndIterate$init(NumTeachers);
+		AllDone$assign(NumTeachers);
+
+		WriteLine("starting ", NumTeachers, " teacher(s)");
+		# fork slave processes
+		FOR teacher IN 0 .. NumTeachers-1 DO
+		    FORK 
+		      TeacherProcess(filename,network,EndLearning,EndIterate,AllDone) 
+			ON(teacher);
+		OD;
+	 
+		AllDone$AwaitValue(0);
+		# IF (filename="digits.in")
+		#  	THEN PrintAllDigits(network,Patterns);
+		#  	ELSE PrintAllPatterns(network,Patterns);
+		# FI;
+	 	Write("test patterns: file name (quit to exit) -> ");
+		Read(filename);
+		WHILE filename/="quit" DO
+			fidin := open(filename,0);
+			IF (fidin >= 0) 
+			  THEN  ReadTestPatterns(fidin,Patterns,NumInputUnits,
+						NumOutputUnits);
+				IF (filename="digits.test") 
+			 	 THEN PrintAllDigits(network,Patterns);
+				 ELSE PrintAllPatterns(network,Patterns);
+				FI;
+	 		   	ReturnValue := close(fidin); 
+			  ELSE  
+				WriteLine("error opening file ", filename);    
+			FI;
+			Write("test patterns: file name (quit to exit) -> ");
+			Read(filename);
+		OD;
+	ELSE
+		IF (filename/="quit")
+		   THEN WriteLine("error opening file ", filename);
+		FI;
+FI;
+Finish(); 
+
+END;
+
+# END MODULE IMPLEMENTATION
+END; 

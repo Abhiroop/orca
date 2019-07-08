@@ -1,0 +1,70 @@
+#-----------------------------------------------#
+# Author : H. Staalman  			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION Debug;
+
+# A collection of functions printing the contents of a given pit, side, or 
+# board are given in this module. These functions are handy for debugging
+# purposes especially.
+
+
+FROM	AwariTypes	IMPORT	Configuration, Side, PitName, PitNr,
+				ConfigUnit, ElementUnit;
+				# ,GoedelNr, GTV;
+
+
+FUNCTION Print_Pit(configuration: IN Configuration;
+		   pit: IN PitName);
+  # Prints the contents of a pit together with the 'rest'
+
+
+FUNCTION Print_Pit_Contents(configuration: IN Configuration;
+			    pit: IN PitName);
+  # Prints the contents of a pit only
+
+
+
+FUNCTION Print_Pit_Nr(configuration: IN Configuration;
+		      pit_nr: IN PitNr);
+  # Prints the contents of a pit only, by use of the pit number
+
+
+FUNCTION Print_Pit_Nr_Contents(configuration: IN Configuration;
+			    pit_nr: IN PitNr);
+  # Prints the contents of a pit together with the 'rest', by use of the pit number
+
+
+
+FUNCTION Print_Side(configuration: IN Configuration;
+		    side: IN Side);
+  # Prints the contents of all the pits at the given side
+
+
+
+FUNCTION Print_Sides(configuration: IN Configuration;
+		     start_side: IN Side);
+  # Prints the contents of all the pits at both sides, starting with the given side
+
+
+
+FUNCTION Print_Board(configuration: IN Configuration;
+		     start_side: IN Side);
+  # Prints the contents of all the pits on the board (including the capture pit), 
+  # starting with the given side
+
+
+
+FUNCTION Print_ElementUnit(element: IN ElementUnit);
+  # Prints the contents of an ElementUnit
+
+
+
+FUNCTION Print_ConfigUnit(configuration: IN ConfigUnit);
+  # Prints the contents of an ConfigUnit
+
+
+
+END; # Debug

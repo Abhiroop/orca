@@ -1,0 +1,728 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION ForceEnergy;
+
+IMPORT  barrier;        FROM    barrier         IMPORT sync;
+IMPORT	LongRealObject;
+FROM	GlobalType	IMPORT	GlobalObject;
+FROM	Consts		IMPORT	QQ, QQ2, QQ4;
+FROM	Common		IMPORT	NRDISTANCES, OrderType, DirectionType,
+				AtomType, DirAtomsArray,
+				DirTableType, DistanceTableType,
+				DirDistanceType, AllCpuDataType,
+				SmallMolDataType;
+FROM	Math		IMPORT	exp, sqrt, acos;
+IMPORT	VarObject;
+FROM VarObject		IMPORT	VarType;
+
+
+### Molecular constants for water in angstrom, radian, and a.m.u.
+
+CONST ROH		= 0.9572D;
+CONST ROHI		= 1.0 / ROH;
+CONST ROHI2		= ROHI * ROHI;
+CONST ANGLE		= 1.824218D;
+
+
+### Force constants scaled (divided) by (UNITM / UNITT ^ 2)
+
+CONST FC11		=  0.512596D;
+CONST FC33		=  0.048098D;
+CONST FC12		= -0.005823D;
+CONST FC13		=  0.016452D;
+CONST FC111		= -0.57191D;
+CONST FC333		= -0.007636D;
+CONST FC112		= -0.001867D;
+CONST FC113		= -0.002047D;
+CONST FC123		= -0.03083D;
+CONST FC133		= -0.0094245D;
+CONST FC1111		=  0.8431D;
+CONST FC3333		= -0.00193D;
+CONST FC1112		= -0.0030D;
+CONST FC1122		=  0.0036D;
+CONST FC1113		= -0.012D;
+CONST FC1123		=  0.0060D;
+CONST FC1133		= -0.0048D;
+CONST FC1233		=  0.0211D;
+CONST FC1333		=  0.006263D;
+
+
+### Water-water interaction parameters
+
+CONST A1		= 455.313100D;
+CONST B1		= 5.15271070D;
+CONST A2		= 0.27879839D;
+CONST B2		= 2.76084370D;
+CONST A3		= 0.60895706D;
+CONST B3		= 2.96189550D;
+CONST A4		= 0.11447336D;
+CONST B4		= 2.23326410D;
+CONST CM		= 0.45682590D;
+CONST AB1		= A1 * B1;
+CONST AB2		= A2 * B2;
+CONST AB3		= A3 * B3;
+CONST AB4		= A4 * B4;
+CONST C1		= 1.0 - CM;
+CONST C2		= 0.50 * CM;
+
+
+
+FUNCTION EVEN(Value : integer) : boolean;
+BEGIN
+	RETURN NOT ODD(Value);
+END;
+
+
+FUNCTION NrBufs(NMOL, NrParts : integer) : integer;
+BEGIN
+	RETURN (NMOL/2 + (NMOL/NrParts - 1)) / (NMOL/NrParts);
+END;
+
+FUNCTION GetAllPositions(Data : SHARED GlobalObject;
+			 NMOL, NrParts : integer;
+			 All : OUT AllCpuDataType[0 .. NrParts-1]);
+	CPU, Count, Last, Rest : integer;
+BEGIN
+	# Upperbound of 'All' should really be 'NrBufs(NMOL,NrParts)-1',
+	# but Orca does not allow functions in bound expressions, so take
+	# a safe upperbound.
+
+	Count := 0;
+	Last  := MYCPU() + NrBufs(NMOL,NrParts);
+
+	# Avoid barrier by marking my data valid
+	Data[MYCPU()]$Valid( Last - MYCPU());
+	Rest := NMOL % NrParts;
+	FOR cpu IN MYCPU() + 1 .. Last DO
+	    CPU := cpu;
+
+	    IF CPU > NrParts - 1 THEN	# to avoid modulo operator...
+		CPU -:= NrParts;
+	    FI;
+
+	    IF CPU < Rest THEN
+	        All[Count] := Data[CPU]$GetPositions(NMOL/NrParts + 1);
+	    ELSE
+	        All[Count] := Data[CPU]$GetPositions(NMOL/NrParts);
+	    FI;
+	    Count +:= 1;
+	OD;
+
+	# Additional synchronization needed because next operation (InterForces)
+	# takes forever, and locks out GetPosition() operations of others!
+	Data[MYCPU()]$AllHandedOut();
+END;
+
+
+FUNCTION AllocSmallMolDataType( size : integer) : SmallMolDataType;
+	out :  SmallMolDataType[0..size-1];
+BEGIN
+	RETURN out;
+END;
+
+
+FUNCTION InitForceAcc(NMOL, NrParts, me : integer;
+		      All : OUT AllCpuDataType[0 ..  NrParts-1]);
+	Rest: integer;
+BEGIN
+
+    ### Initialize the structure 'All' which is used to contain the
+    ### values to be added to the forces or accelerations for each
+    ### atom/molecule on approxiamtely half the number of CPUs
+
+    # Koen: alloc structure with the correct dimensions.
+
+	Rest := NMOL % NrParts;
+	FOR cpu IN 0 ..  NrBufs(NMOL,NrParts)-1 DO
+	    IF (me+1+cpu)%NrParts < Rest THEN
+	        All[cpu] := AllocSmallMolDataType(NMOL/NrParts + 1);
+	    ELSE
+	        All[cpu] := AllocSmallMolDataType(NMOL/NrParts);
+	    FI;
+	    FOR mol IN LB(All[cpu]) .. UB(All[cpu]) DO
+	        FOR dir IN XDIR .. ZDIR DO
+	            FOR atom IN H1 .. H2 DO
+		        All[cpu][mol][dir,atom] := 0.0;
+	            OD;
+	        OD;
+	    OD;
+	OD;
+END;
+
+
+
+FUNCTION IncAllForceAcc(Data : SHARED GlobalObject;
+			NMOL, NrParts : integer;
+			Dest : OrderType;
+			All  : AllCpuDataType);
+
+	CPU : integer;
+BEGIN
+
+    ### Add the values contained in 'All' to the accelerations or
+    ### forces (according to 'Dest') contained in 'Data' on approximately half
+    ### the number of CPUs
+
+	CPU := MYCPU();
+	FOR Count IN  0  ..  NrBufs(NMOL,NrParts)-1 DO
+	    CPU +:= 1;
+	    IF CPU = NrParts THEN
+		CPU := 0;
+	    FI;
+
+	    Data[CPU]$IncAll(Dest, All[Count]);
+	OD;
+	Data[MYCPU()]$ReceivedAll( NrBufs(NMOL,NrParts));
+END;
+
+
+FUNCTION ComputeDistances(MyAtoms, FarAtoms : DirAtomsArray;
+			  XL                : SHARED DirDistanceType; 
+			  RS                : SHARED DistanceTableType;
+			  BOXH, BOXL, CUT2  : longreal) : integer;
+
+	XMA, XMB : longreal;
+	ReturnValue : integer;
+BEGIN
+
+    ### Compute distances
+
+	FOR dir IN XDIR .. ZDIR DO
+	    XMA := C1 * MyAtoms[dir,O] +
+			C2 * (MyAtoms[dir,H1] + MyAtoms[dir,H2]);
+	    XMB := C1 * FarAtoms[dir,O] +
+			C2 * (FarAtoms[dir,H1] + FarAtoms[dir,H2]);
+	
+	    XL[dir, 0] := XMA             - XMB;
+	    XL[dir, 1] := XMA             - FarAtoms[dir,H1];
+	    XL[dir, 2] := XMA             - FarAtoms[dir,H2];
+	    XL[dir, 3] := MyAtoms[dir,H1] - XMB;
+	    XL[dir, 4] := MyAtoms[dir,H2] - XMB;
+	    XL[dir, 5] := MyAtoms[dir,H1] - FarAtoms[dir,H1];
+	    XL[dir, 6] := MyAtoms[dir,H1] - FarAtoms[dir,H2];
+	    XL[dir, 7] := MyAtoms[dir,H2] - FarAtoms[dir,H1];
+	    XL[dir, 8] := MyAtoms[dir,H2] - FarAtoms[dir,H2];
+	    XL[dir, 9] := MyAtoms[dir, O] - FarAtoms[dir, O];
+	    XL[dir,10] := MyAtoms[dir, O] - FarAtoms[dir,H1];
+	    XL[dir,11] := MyAtoms[dir, O] - FarAtoms[dir,H2];
+	    XL[dir,12] := MyAtoms[dir,H1] - FarAtoms[dir, O];
+	    XL[dir,13] := MyAtoms[dir,H2] - FarAtoms[dir, O];
+
+	    FOR i IN 0 .. NRDISTANCES DO
+		IF XL[dir,i] > BOXH THEN
+		    XL[dir,i] -:= BOXL;
+		ELSIF XL[dir,i] < -BOXH THEN
+		    XL[dir,i] +:= BOXL;
+		FI;
+	    OD;
+	OD;
+
+	ReturnValue := 0;
+
+	FOR i IN 0 .. 8 DO
+	    RS[i] := XL[XDIR,i] * XL[XDIR,i] + XL[YDIR,i] *
+		     XL[YDIR,i] + XL[ZDIR,i] * XL[ZDIR,i];
+	    IF RS[i] > CUT2 THEN
+		ReturnValue +:= 1;
+	    FI;
+	OD;
+
+	RETURN ReturnValue;
+END;
+
+
+
+FUNCTION UpdateForces(MyAtoms, FarAtoms : SHARED DirAtomsArray;
+		      XL : DirDistanceType;
+		      FF : DistanceTableType;
+		      GG : SHARED DistanceTableType); 	# avoid mallocs
+
+	G12, G34, G90, TT, TT1, TT2 : longreal;
+BEGIN
+	FOR dir IN XDIR .. ZDIR DO
+	    FOR i IN 0 .. NRDISTANCES DO
+		GG[i] := FF[i] * XL[dir,i];
+	    OD;
+
+	    G12 := GG[1] + GG[2];
+	    G34 := GG[3] + GG[4];
+	    G90 := GG[9] + GG[0] * C1;
+	    TT1 := GG[0] * C2;
+	    TT  := G12   * C2 + TT1;
+	    TT2 := G34   * C2 + TT1;
+
+	    MyAtoms[dir,H1] +:= GG[5] + GG[6]  + GG[12] + TT + GG[3];
+	    MyAtoms[dir,O]  +:= G90   + GG[10] + GG[11] + C1 * G12;
+	    MyAtoms[dir,H2] +:= GG[7] + GG[8]  + GG[13] + TT + GG[4];
+
+
+	    FarAtoms[dir,H1] -:= GG[5] + GG[7]  + GG[10] + TT2 + GG[1];
+	    FarAtoms[dir,O]  -:= G90   + GG[12] + GG[13] + C1 * G34;
+	    FarAtoms[dir,H2] -:= GG[6] + GG[8]  + GG[11] + TT2 + GG[2];
+	OD;
+END;
+
+
+
+FUNCTION IntraForces(Data    : SHARED GlobalObject;
+		     Vir     : OUT longreal;
+		     NrMols  : integer);
+BEGIN
+	Data[MYCPU()]$CallIntraForces(Vir, NrMols);
+END;
+
+FUNCTION DoIntraForces(Atom    : SHARED VarType;
+		       Vir     : OUT longreal;
+		       NrMols  : integer);
+
+    ### This routine calculates the intra-molecular force/mass
+    ### acting on each atom
+
+	Sum, Sin, Cos, R1, R2, R1S, R2S, DT, DTS,
+	DR1, DR11, DR1S, DR2, DR23, DR2S, F1, F2, F3 : longreal;
+	VR1, VR2 : DirTableType;
+BEGIN
+	Vir := 0.0D;
+
+	FOR mol IN 0 .. NrMols DO
+	    Sum := 0.0D;
+	    R1  := 0.0D;
+	    R2  := 0.0D;
+
+	    FOR dir IN XDIR .. ZDIR DO
+		VR1[dir]  := Atom[mol,DISP][dir,O] - Atom[mol,DISP][dir,H1];
+		VR2[dir]  := Atom[mol,DISP][dir,O] - Atom[mol,DISP][dir,H2];
+		R1       +:= VR1[dir] * VR1[dir];
+		R2       +:= VR2[dir] * VR2[dir];
+		Sum      +:= VR1[dir] * VR2[dir];
+	    OD;
+
+	    R1 := sqrt(R1);
+	    R2 := sqrt(R2);
+
+
+	### Calculate cos(THETA), sin(THETA),
+	### delta(R1), delta(R2) and delta(THETA)
+
+	    Cos  := Sum / (R1 * R2);
+	    Sin  := sqrt(1.0D - Cos * Cos);
+	    DT	 := (acos(Cos) - ANGLE) * ROH;
+	    DTS  := DT * DT;
+	    DR1  := R1 - ROH;
+	    DR2  := R2 - ROH;
+	    DR1S := DR1 * DR1;
+	    DR2S := DR2 * DR2;
+
+
+	### Calculate the derivatives of
+	### R1/X1, R2/X3, THETA/X1, and THETA/X3
+
+	    R1S := ROH / (R1 * Sin);
+	    R2S := ROH / (R2 * Sin);
+
+
+	### Calculate forces
+
+	    F1 := FC11 * DR1 + FC12 * DR2 + FC13 * DT + (3.0D *
+		  FC111 * DR1S + FC112 * (2.0D * DR1 + DR2) * DR2 +
+		  2.0D * FC113 * DR1 * DT + FC123 * DR2 * DT + FC133 *
+		  DTS) * ROHI + (4.0D * FC1111 * DR1S * DR1 + FC1112 *
+		  (3.0D * DR1S + DR2S) * DR2 + 2.0D * FC1122 * DR1 *
+		  DR2S + 3.0D * FC1113 * DR1S * DT + FC1123 * (2.0D *
+		  DR1 + DR2) * DR2 * DT + (2.0D * FC1133 * DR1 +
+		  FC1233 * DR2 + FC1333 * DT) * DTS) * ROHI2;
+	    F2 := FC33 * DT  + FC13 * (DR1 + DR2) + (3.0D * FC333 *
+		  DTS + FC113 * (DR1S + DR2S) + FC123 * DR1 * DR2 + 
+		  2.0D * FC133 * (DR1 + DR2) * DT) * ROHI + (4.0D *
+		  FC3333 * DTS * DT + FC1113 * (DR1S * DR1 + DR2S *
+		  DR2) + FC1123 * (DR1 + DR2) * DR1 * DR2 + 2.0D *
+		  FC1133 * (DR1S + DR2S) * DT + 2.0D * FC1233 * DR1 *
+		  DR2 * DT + 3.0D * FC1333 * (DR1 + DR2) * DTS) * ROHI2;
+	    F3 := FC11 * DR2 + FC12 * DR1 + FC13 * DT + (3.0D * FC111 *
+		  DR2S + FC112 * (2.0D * DR2 + DR1) * DR1 + 2.0D *
+		  FC113 * DR2 * DT + FC123 * DR1 * DT + FC133 * DTS) *
+		  ROHI + (4.0D * FC1111 * DR2S * DR2 + FC1112 * (3.0D *
+		  DR2S + DR1S) * DR1 + 2.0D * FC1122 * DR1S * DR2 +
+		  3.0D * FC1113 * DR2S * DT + FC1123 * (2.0D * DR2 +
+		  DR1) * DR1 * DT + (2.0D * FC1133 * DR2 + FC1233 *
+		  DR1 + FC1333 * DT) * DTS) * ROHI2;
+
+	    FOR dir IN XDIR .. ZDIR DO
+		DR11 := VR1[dir] / R1;
+		DR23 := VR2[dir] / R2;
+		Atom[mol,FORCES][dir,H1] := F1 * DR11 + F2 * (DR11 * Cos - DR23) * R1S;
+		Atom[mol,FORCES][dir,H2] := F3 * DR23 + F2 * (DR23 * Cos - DR11) * R2S;
+		Atom[mol,FORCES][dir, O] := - Atom[mol,FORCES][dir,H1] - Atom[mol,FORCES][dir,H2];
+
+	    ### Calculate summation of the product of the displacement
+	    ### and computed force for each molecule, direction and atom
+
+		FOR atom IN H1 .. H2 DO
+		    Vir +:= Atom[mol,DISP][dir,atom] * Atom[mol,FORCES][dir,atom];
+		OD;
+	    OD;
+	OD;
+END;
+
+
+FUNCTION InterForces(Data    : SHARED GlobalObject;
+                     TVIR    : SHARED LongRealObject;
+                     Vir     : longreal;
+                     StartMol, NrMols, NMOL, NrParts : integer;
+                     BOXH, BOXL, REF1, CUT2, FHM, FOM : longreal;
+                     Dest : OrderType);
+        AllPos, AllVal	: AllCpuDataType;
+        TmpVir		: longreal;
+BEGIN
+        GetAllPositions(Data, NMOL, NrParts, AllPos);
+ 
+        Data[MYCPU()]$CallInterForces(TmpVir, AllVal, AllPos, StartMol, NrMols,
+                        NMOL, NrParts, MYCPU(), BOXH, BOXL, REF1, CUT2, Dest);
+ 
+        TVIR$DecVal(Vir+TmpVir);
+
+        IncAllForceAcc(Data, NMOL, NrParts, Dest, AllVal);
+ 
+        Data[MYCPU()]$MultiplyForces(NrMols, Dest, FHM, FOM);
+END;
+
+
+FUNCTION DoInterForces(Atom   : SHARED VarType;
+		       TmpVir : OUT longreal;
+                       AllVal : OUT AllCpuDataType;
+		       AllPos : AllCpuDataType;
+                       StartMol, NrMols, NMOL, NrParts, me : integer;
+                       BOXH, BOXL, REF1, CUT2 : longreal;
+                       Dest : OrderType);
+	HalfMol, RealMol, CompLast, NrTooFar : integer;
+	FTemp  : longreal;
+	RS, RL, FF, GG  : DistanceTableType;
+	XL              : DirDistanceType;
+	offset, cpu, ub : integer;
+BEGIN
+	InitForceAcc(NMOL, NrParts, me, AllVal);
+
+	TmpVir  := 0.0D;
+	HalfMol := NMOL / 2;
+
+	FOR mol IN 0 .. NrMols DO
+	    RealMol  := mol + StartMol;
+	    CompLast := RealMol + HalfMol;
+
+# John + Raoul: bug fix; this code skips pairs of bodies.
+#
+#	    IF EVEN(NMOL) AND EVEN(RealMol)
+#            OR ( (NMOL % 4 = 0) AND (EVEN(RealMol) AND (RealMol < HalfMol) OR
+#	         ODD(RealMol) AND (RealMol > HalfMol))) THEN
+#		CompLast -:= 1;
+#	    FI;
+
+	    IF EVEN(NMOL) AND (RealMol >= HalfMol) THEN
+		CompLast -:= 1;
+	    FI;
+
+	    IF mol = NrMols THEN
+		offset := 0;
+		cpu    := 0;		# means: MYCPU() + 1
+		ub     := UB(AllPos[cpu]);
+	    ELSE
+		offset := mol+1;
+		cpu    := -1;		# means: local, this cpu
+		ub     := NrMols;
+	    FI;
+	
+	    FOR icomp IN RealMol + 1 .. CompLast DO
+
+	    ### Compute some intermolecular distances
+
+		IF cpu = -1 THEN	# is the other mol in my space too?
+		    NrTooFar := ComputeDistances(Atom[mol,DISP],
+						 Atom[offset,DISP],
+				    		 XL, RS, BOXH, BOXL, CUT2);
+		ELSE
+		    NrTooFar := ComputeDistances(Atom[mol,DISP],
+						 AllPos[cpu][offset],
+				    		 XL, RS, BOXH, BOXL, CUT2);
+		FI;
+
+		IF NrTooFar /= 9 THEN
+		    FOR i IN 0 .. NRDISTANCES DO
+			FF[i] := 0.0D;
+		    OD;
+
+		    IF RS[0] < CUT2 THEN
+			FF[0] := QQ4 / (RS[0] * sqrt(RS[0])) +
+							4.0D * REF1;
+			TmpVir +:= FF[0] * RS[0];
+		    FI;
+
+		    FOR i IN 1 .. 4 DO
+			IF RS[i] < CUT2 THEN
+			    FF[i] := -QQ2 / (RS[i] * sqrt(RS[i])) -
+							2.0D * REF1;
+			    TmpVir +:= FF[i] * RS[i];
+			FI;
+		    OD;
+
+		    FOR i IN 5 .. 8 DO
+			IF RS[i] <= CUT2 THEN
+			    RL[i] := sqrt(RS[i]);
+			    FF[i] := QQ / (RS[i] * RL[i]) + REF1;
+			    TmpVir +:= FF[i] * RS[i];
+			FI;
+		    OD;
+
+		    IF NrTooFar = 0 THEN
+			RS[9] := XL[XDIR,9] * XL[XDIR,9] +
+				 XL[YDIR,9] * XL[YDIR,9] +
+				 XL[ZDIR,9] * XL[ZDIR,9];
+			RL[9] := sqrt(RS[9]);
+			FF[9] := AB1 * exp(-B1 * RL[9]) / RL[9];
+			TmpVir +:= FF[9] * RS[9];
+
+			FOR i IN 10 .. NRDISTANCES DO
+			    FTemp := AB2 * exp(-B2 * RL[i-5]) / RL[i-5];
+			    FF[i-5] +:= FTemp;
+			    TmpVir  +:= FTemp * RS[i-5];
+			    RS[i] := XL[XDIR,i] * XL[XDIR,i] +
+				     XL[YDIR,i] * XL[YDIR,i] +
+				     XL[ZDIR,i] * XL[ZDIR,i];
+			    RL[i] := sqrt(RS[i]);
+			    FF[i] := (AB3 * exp(-B3 * RL[i]) -
+				      AB4 * exp(-B4 * RL[i])) / RL[i];
+			    TmpVir +:= FF[i] * RS[i];
+			OD;
+		    FI;
+
+		    IF cpu = -1 THEN
+		        UpdateForces(Atom[mol,Dest], Atom[offset,Dest],
+				     XL, FF, GG);
+		    ELSE
+		        UpdateForces(Atom[mol,Dest], AllVal[cpu][offset],
+				     XL, FF, GG);
+		    FI;
+		FI;
+
+		IF offset = ub THEN
+		    # Step up to next processor.
+		    #
+		    IF (icomp < CompLast) THEN
+		        offset := 0;
+		        cpu +:= 1;
+		    	ub := UB(AllPos[cpu]);
+		    FI;
+		ELSE
+		    offset +:= 1;
+		FI;
+	    OD;
+	OD;
+END;
+
+
+
+FUNCTION PotEnergy(Data              : SHARED GlobalObject;
+		   Barrier           : SHARED barrier;
+		   POTA, POTR, POTRF : SHARED LongRealObject;
+		   StartMol, NrMols, NMOL, NrParts : integer;
+		   CUTOFF, CUT2, REF1, BOXH, BOXL  : longreal);
+ 
+    ### This routine calculates the potential energy of the system.
+    ### FC11, FC12, FC13 and FC33 are the quadratic force constants.
+
+	LPOTA, LPOTR, LPTRF : longreal;
+	AllPos : AllCpuDataType;
+BEGIN
+    ### Compute intra-molecular energy
+
+	IF MYCPU() = 0 THEN
+	    POTA$SetVal(0.0D);
+	    POTR$SetVal(0.0D);
+	    POTRF$SetVal(0.0D);
+	FI;
+
+	GetAllPositions(Data, NMOL, NrParts, AllPos);
+
+	Data[MYCPU()]$CallPotEnergy(AllPos, LPOTA, LPOTR, LPTRF, StartMol,
+			          NrMols, NMOL, CUTOFF, CUT2, REF1, BOXH, BOXL);
+
+    ### Update shared sums from computed private sums and block
+
+	POTA$IncVal(LPOTA);
+	POTR$IncVal(LPOTR);
+	POTRF$IncVal(LPTRF);
+	sync(Barrier);
+END;
+
+FUNCTION DoPotEnergy(Atom : SHARED VarType;
+		     AllPos : AllCpuDataType;
+                     LPOTA, LPOTR, LPTRF : OUT longreal;
+                     StartMol, NrMols, NMOL : integer;
+                     CUTOFF, CUT2, REF1, BOXH, BOXL  : longreal);
+ 
+    ### This routine calculates the potential energy of the system.
+    ### FC11, FC12, FC13 and FC33 are the quadratic force constants.
+ 
+        HalfMol, RealMol, CompLast, NrTooFar : integer;
+        Cos, Temp1, Temp2, R1, R2, RX,
+	DT, DR1, DR2, DR1S, DR2S, DRP, DTS : longreal;
+        XL     : DirDistanceType;
+        RS, RL : DistanceTableType;
+	offset, cpu, ub : integer;
+BEGIN
+	LPOTA := 0.0D;
+	LPOTR := 0.0D;
+	LPTRF := 0.0D;
+
+
+	FOR mol IN 0 .. NrMols DO
+	    R1 := 0.0D;
+	    R2 := 0.0D;
+	    RX := 0.0D;
+
+	    FOR dir IN XDIR .. ZDIR DO
+		Temp1 := Atom[mol,DISP][dir,O] - Atom[mol,DISP][dir,H1];
+		Temp2 := Atom[mol,DISP][dir,O] - Atom[mol,DISP][dir,H2];
+		RX   +:= Temp1 * Temp2;
+		R1   +:= Temp1 * Temp1;
+		R2   +:= Temp2 * Temp2;
+	    OD;
+.ifdef RAOUL
+WriteLine("Atom[0,DISP][x,O] = ", Atom[0,DISP][XDIR,O], " Atom[0,DISP][x,H1] = ", Atom[0,DISP][XDIR,H1]);
+WriteLine("Atom[0,DISP][y,O] = ", Atom[0,DISP][YDIR,O], " Atom[0,DISP][y,H1] = ", Atom[0,DISP][YDIR,H1]);
+WriteLine("Atom[0,DISP][z,O] = ", Atom[0,DISP][ZDIR,O], " Atom[0,DISP][z,H1] = ", Atom[0,DISP][ZDIR,H1]);
+.endif
+
+	    R1     := sqrt(R1);
+	    R2     := sqrt(R2);
+	    Cos    := RX / (R1 * R2);
+	    DT     := (acos(Cos) - ANGLE) * ROH;
+	    DR1    := R1 - ROH;
+	    DR2    := R2 - ROH;
+	    DRP    := DR1 + DR2;
+	    DTS    := DT * DT;
+	    DR1S   := DR1 * DR1;
+	    DR2S   := DR2 * DR2;
+
+.ifdef RAOUL
+WriteLine("	    R1 = ", 	    R1);
+WriteLine("	    R2 = ", 	    R2);
+WriteLine("	    Cos = ", 	    Cos);
+WriteLine("	    DT = ", 	    DT);
+WriteLine("	    DR1 = ", 	    DR1);
+WriteLine("	    DR2 = ", 	    DR2);
+WriteLine("	    DRP = ", 	    DRP);
+WriteLine("	    DTS = ", 	    DTS);
+WriteLine("	    DR1S = ", 	    DR1S);
+WriteLine("	    DR2S = ", 	    DR2S);
+.endif
+
+	    LPOTA +:= (FC11 * (DR1S + DR2S) + FC33 * DTS) * 0.5D +
+		      FC12 * DR1 * DR2 + FC13 * DRP * DT + (FC111 *
+		      (DR1S * DR1 + DR2S * DR2) + FC333 * DTS * DT +
+		      FC112 * DRP * DR1 * DR2 + FC113 * (DR1S + DR2S) *
+		      DT + FC123 * DR1 * DR2 * DT + FC133 * DRP * DTS) *
+		      ROHI + (FC1111 * (DR1S * DR1S + DR2S * DR2S) +
+		      FC3333 * DTS * DTS + FC1112 * (DR1S + DR2S) *
+		      DR1 * DR2 + FC1122 * DR1S * DR2S + FC1113 *
+		      (DR1S * DR1 + DR2S * DR2) * DT + FC1123 * DRP *
+		      DR1 * DR2 * DT + FC1133 * (DR1S + DR2S) * DTS +
+		      FC1233 * DR1 * DR2 * DTS + FC1333 * DRP * DTS *
+		      DT) * ROHI2;
+	OD;
+
+	HalfMol := NMOL / 2;
+
+	FOR mol IN 0 .. NrMols DO
+	    RealMol  := mol + StartMol;
+	    CompLast := RealMol + HalfMol;
+
+# John + Raoul: bug fix; this code skips pairs of bodies.
+#
+#	    IF EVEN(NMOL) AND EVEN(RealMol)
+#            OR ( (NMOL % 4 = 0) AND (EVEN(RealMol) AND (RealMol < HalfMol) OR
+#	         ODD(RealMol) AND (RealMol > HalfMol))) THEN
+#		CompLast -:= 1;
+#	    FI;
+
+	    IF EVEN(NMOL) AND (RealMol >= HalfMol) THEN
+		CompLast -:= 1;
+	    FI;
+
+            IF mol = NrMols THEN
+                offset := 0;
+                cpu := 0;
+		ub := UB(AllPos[cpu]);
+            ELSE
+                offset := mol+1;
+                cpu := -1;
+		ub := NrMols;
+            FI;
+
+	    FOR icomp IN RealMol + 1 .. CompLast DO
+
+	    ### Compute some intermolecular distances
+
+                IF cpu = -1 THEN
+                    NrTooFar := ComputeDistances(Atom[mol,DISP],
+                                                 Atom[offset,DISP],
+                                                 XL, RS, BOXH, BOXL, CUT2);
+                ELSE
+                    NrTooFar := ComputeDistances(Atom[mol,DISP],
+                                                 AllPos[cpu][offset],
+                                                 XL, RS, BOXH, BOXL, CUT2);
+                FI;
+
+		IF NrTooFar /= 9 THEN
+		    FOR i IN 0 .. 8 DO
+			IF RS[i] <= CUT2 THEN
+			    RL[i] := sqrt(RS[i]);
+			ELSE
+			    RL[i] := CUTOFF;
+			    RS[i] := CUT2;
+			FI;
+		    OD;
+
+		    LPOTR +:= - QQ2 / RL[1] - QQ2 / RL[2] -
+				QQ2 / RL[3] - QQ2 / RL[4] +
+				QQ  / RL[5] + QQ  / RL[6] +
+				QQ  / RL[7] + QQ  / RL[8] + QQ4 / RL[0];
+
+		    LPTRF +:= - 2.0D * REF1 * RS[0] - REF1 *
+				((RS[5] + RS[6] + RS[7] + RS[8]) *
+				0.5D - RS[1] - RS[2] - RS[3] - RS[4]);
+
+		    IF NrTooFar <= 0 THEN
+			FOR i IN 9 .. NRDISTANCES DO
+			    RL[i] := sqrt(XL[XDIR,i] * XL[XDIR,i] +
+					  XL[YDIR,i] * XL[YDIR,i] +
+					  XL[ZDIR,i] * XL[ZDIR,i]);
+			OD;
+
+			LPOTR +:=
+			      A1 * exp(-B1*RL[ 9]) +
+			      A2 *(exp(-B2*RL[ 5]) + exp(-B2*RL[6]) +
+				   exp(-B2*RL[ 7]) + exp(-B2*RL[ 8])) +
+			      A3 *(exp(-B3*RL[10]) + exp(-B3*RL[11]) +
+				   exp(-B3*RL[12]) + exp(-B3*RL[13])) -
+			      A4 *(exp(-B4*RL[10]) + exp(-B4*RL[11]) +
+				   exp(-B4*RL[12]) + exp(-B4*RL[13]));
+		    FI;
+		FI;
+ 
+		IF (offset = ub) THEN
+		    IF (icomp < CompLast) THEN
+		        offset := 0;
+		        cpu +:= 1;
+		        ub := UB(AllPos[cpu]);
+		    FI;
+		ELSE
+		    offset +:= 1;
+		FI;
+	    OD;
+	OD;
+END;
+
+
+END;

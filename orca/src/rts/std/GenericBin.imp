@@ -1,0 +1,30 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: GenericBin.imp,v 1.3 1995/07/31 09:02:48 ceriel Exp $
+
+GENERIC
+OBJECT IMPLEMENTATION GenericBin;
+	bin: T;
+	empty: boolean;
+
+	OPERATION put(e: T);
+	BEGIN
+		GUARD empty DO
+			bin := e;
+			empty := false;
+		OD;
+	END;
+
+	OPERATION get(e: OUT T);
+	BEGIN
+		GUARD NOT empty DO
+			e := bin;
+			empty := true;
+		OD;
+	END;
+
+BEGIN
+	empty := true;
+END GENERIC;

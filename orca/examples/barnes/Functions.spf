@@ -1,0 +1,15 @@
+MODULE SPECIFICATION Functions;
+
+
+IMPORT IntObject, Reducer;
+IMPORT Node;
+FROM LocalMemory IMPORT LocalMemoryType;
+
+FUNCTION set_params(A, B, randx: OUT integer);
+FUNCTION local_init( Local: SHARED LocalMemoryType);
+FUNCTION SlaveStart( Local: SHARED LocalMemoryType; 
+                    b :SHARED Reducer;
+                    allnodes: SHARED Node;
+		    turn : SHARED IntObject);
+
+END;

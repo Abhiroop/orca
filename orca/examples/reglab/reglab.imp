@@ -1,0 +1,159 @@
+MODULE IMPLEMENTATION reglab;
+	IMPORT PollSequence, IntObject;
+	FROM Time IMPORT GetTime;
+	FROM Finish IMPORT Finish;
+
+	OBJECT RowBin = NEW GenericBin(RowType);
+
+	CONST NCOL=500;	# number of columns of the grid
+	CONST NROW=100;	# number of rows of the grid
+
+	TYPE grid = ARRAY[integer] OF RowType;
+
+	FUNCTION max(x, y: integer): integer;
+	BEGIN
+		IF x > y THEN RETURN x; ELSE RETURN y; FI;
+	END;
+
+
+	FUNCTION DoPhase(
+		label: SHARED grid;		# the local region of the grid
+		lb, ub: integer;	# bounds of region 
+		color: IN grid):  boolean;
+
+		NewLab, Col: integer;
+		changed: boolean;
+	BEGIN
+		changed := false;
+		FOR r IN lb .. ub DO
+			FOR c IN 0 .. NCOL-1 DO
+				NewLab := label[r][c];
+				Col := color[r][c];
+				IF (r > 0) AND (color[r-1][c] =  Col) THEN
+					NewLab := max(NewLab, label[r-1][c]);
+				FI;
+				IF (r < NROW-1) AND (color[r+1][c] = Col) THEN
+					NewLab := max(NewLab, label[r+1][c]);
+				FI;
+				IF (c > 0) AND (color[r][c-1] = Col) THEN
+					NewLab := max(NewLab, label[r][c-1]);
+				FI;
+				IF (c < NCOL-1) AND (color[r][c+1] = Col) THEN
+					NewLab := max(NewLab, label[r][c+1]);
+				FI;
+				IF NewLab > label[r][c]  THEN
+					label[r][c] := NewLab;
+					changed := true;
+				FI;
+			OD;
+		OD;
+		RETURN changed;
+	END;
+
+	FUNCTION InitLocalSection(lb, ub: integer;
+				  label: OUT grid[lb-1..ub+1][0..NCOL-1];
+				  color: OUT grid[lb-1..ub+1][0..NCOL-1]);
+	BEGIN	# Initialize local region. Also reserve space for one extra
+		# row (from neighbors) at the beginning and end of this region.
+		FOR r IN lb-1 .. ub+1 DO
+			FOR c IN 0..NCOL-1 DO
+				IF (r >= 0) AND (c <= NCOL-1) THEN
+					label[r][c] := r * NCOL + c;
+					IF r < c THEN
+						color[r][c] := 1;
+					ELSIF r = c THEN
+						color[r][c] := 2;
+					ELSE
+						color[r][c] := 3;
+					FI;
+				ELSE
+					label[r][c] := -1;
+					color[r][c] := -1;
+				FI;
+			OD;
+		OD;
+	END;
+
+#	FUNCTION PrintLabels(label: grid; lb, ub: integer);
+#	BEGIN
+#		FOR r IN lb..ub DO
+#			FOR c IN 0 .. NCOL-1 DO
+#				Write(label[r][c], " ");
+#			OD;
+#			WriteLine();
+#		OD;
+#	END;
+		
+	
+	PROCESS slave(
+			lb, ub: integer;	# lower and upper bound of extended region
+			ToLeft, ToRight: SHARED RowBin;	# bins for sending rows to neighbors
+			FromLeft, FromRight: SHARED RowBin;	# bins for receiving rows from neighbors
+			finished: SHARED PollSequence;	# used for distributed termination 
+			WorkersActive: SHARED IntObject);
+
+		section: grid;	# Current slave's part (region) of the grid
+		color: grid;	# the colors in this part of the grid
+		leftok, rightok: boolean;	# Lefmost/righmost processors are special
+		iter: integer;
+		changed: boolean;
+	BEGIN
+		InitLocalSection(lb, ub, section, color); # Initialize my region
+		leftok := (lb > 0);	# Do I have a left neighbor ?
+		rightok := (ub < NROW-1);	# Do I have a right neighbor ?
+		iter := 0;
+		WriteLine("Slave started, lb= ", lb, " ub = ", ub);
+		REPEAT
+			iter +:= 1;
+			#WriteLine("start iteration ", iter);
+			#WriteLine("Labels: ");
+			#PrintLabels(section, lb, ub);
+			# Send first and last row to neighbors
+			# WriteLine("sending rows");
+			IF leftok  THEN ToLeft$put(section[lb+1]);FI;
+			IF rightok THEN ToRight$put(section[ub-1]);FI;
+			# WriteLine("sent rows");
+			# Obtain rows from neighbors
+			# WriteLine("receiving rows");
+			IF leftok  THEN FromLeft$get(section[lb]); FI;
+			IF rightok THEN FromRight$get(section[ub]);FI;
+			# WriteLine("received rows");
+			# Do real compuation
+			changed := DoPhase(section, lb, ub, color);
+			# Bring out vote. Use veto if some points changed too much
+			finished$vote(iter, NOT changed);
+			# Write("did iteration ", iter, " ");
+			#IF NOT changed THEN  WriteLine("cont = false");
+					       #ELSE WriteLine("cont = true"); FI;
+		UNTIL finished$AwaitDecision(iter);	# Until all slaves want to quit
+		WorkersActive$dec();
+		#PrintLabels(section, lb, ub);
+	END;
+			
+
+	PROCESS OrcaMain();
+		grain, lb: integer;
+		UpperBins, LowerBins: ARRAY[integer 0 .. NCPUS()] OF RowBin;	# shared bin object
+		finished: PollSequence;	# Used for distributed termination
+		start, stop: integer;
+		WorkersActive: IntObject;
+	BEGIN
+		finished$init(NCPUS());	# Initialize PollSequence object
+		lb := 0;
+		start := GetTime();
+		WorkersActive$assign(NCPUS());
+		# WriteLine("do fork");
+		FOR i IN 0 .. NCPUS()-1 DO	# fork slave processes
+			grain := (NROW-2-lb) / (NCPUS()-i);
+			FORK slave(lb, lb+grain+1,
+				   UpperBins[i], LowerBins[i+1],
+				   LowerBins[i], UpperBins[i+1],
+				   finished, WorkersActive)  ON(NCPUS()-i-1);
+			lb +:= grain;
+		OD;
+		WorkersActive$AwaitValue(0);
+		stop := GetTime();
+		WriteLine("time = ", stop-start);
+		Finish();
+	END;
+END;

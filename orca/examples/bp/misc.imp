@@ -1,0 +1,93 @@
+MODULE IMPLEMENTATION misc;
+
+FROM  Math IMPORT exp;
+FROM BpTypes 	IMPORT ArrayType;
+		IMPORT NetworkObject;
+		IMPORT IntObject;
+		IMPORT PatternSet;
+
+###############################################################################
+# computes the output cooresponding to an input pattern
+###############################################################################
+FUNCTION ComputeOutput(	Input: ArrayType; 
+			network: NetworkObject; 
+			n1: integer;
+			n2: integer;
+			NetInput: OUT ArrayType[0..n1];
+			activations: OUT ArrayType[0..n1];
+			OPattern: OUT ArrayType[0..n2]);
+numlayers: integer;
+temp: integer;
+BEGIN
+numlayers := network$NumLayers();
+FOR sunit IN 0..network$NumUnits(0)-1 DO
+   activations[network$ActivationIndex(0,sunit)] := Input[sunit];
+OD;
+FOR layer IN 1.. numlayers DO
+   FOR dunit IN 0..network$NumUnits(layer)-1 DO
+	temp := network$ActivationIndex(layer,dunit);
+	NetInput[temp] := network$GetBias(layer,dunit);
+        FOR sunit IN 0..network$NumUnits(layer-1)-1 DO
+     	   NetInput[temp] +:= 
+		network$GetWeight(layer-1,sunit,dunit)
+		*activations[network$ActivationIndex(layer-1,sunit)];
+	OD;
+   activations[temp] := 
+		ActivationFunction(NetInput[temp]);
+   OD;
+OD;
+FOR dunit IN 0..network$NumUnits(numlayers)-1 DO
+   OPattern[dunit]:=activations[network$ActivationIndex(numlayers,dunit)];
+OD;
+END;
+
+###############################################################################
+# initializes array bounds.
+###############################################################################
+FUNCTION InitArrayBounds(	lb: integer;
+				ub: integer;
+				a: OUT ArrayType[lb..ub]);
+BEGIN
+FOR i IN lb..ub DO a[i]:=0.0; OD;
+END;
+
+################################################################################
+# Activation function
+################################################################################
+FUNCTION ActivationFunction(value: real): real;
+BEGIN
+RETURN 1.0 / (1.0 + exp(-value));
+END;
+
+################################################################################
+# Derivative of the Activation function
+################################################################################
+FUNCTION PrimeActivationFunction(value: real): real;
+BEGIN
+value := ActivationFunction(value);
+RETURN value*(1.0 - value);
+END;
+
+################################################################################
+# checks wehther the given patterns are almost the same
+################################################################################
+FUNCTION AlmostSame(
+		TPattern: ArrayType;
+		OPattern: ArrayType;
+		NumUnits: integer)
+		: boolean;
+same: boolean;
+BEGIN
+same := true;
+FOR unit IN 0..NumUnits-1 DO
+   IF ((TPattern[unit] < 0.1) AND (OPattern[unit] > 0.1))
+    OR ((TPattern[unit] > 0.9) AND (OPattern[unit] < 0.9 ))
+	THEN same := false;
+   FI;
+OD;
+RETURN same;
+END;
+
+
+# end module implementation
+END;

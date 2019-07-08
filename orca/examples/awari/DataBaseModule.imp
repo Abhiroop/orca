@@ -1,0 +1,40 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION DataBaseModule;
+
+FROM InOut 	   IMPORT Flush;
+FROM AwariTypes    IMPORT GoedelNr, GTV, ConfigUnit, ElementUnit, 
+			  ConfigList, GoedelAdresList, EmptySlot;
+FROM DataBaseTypes IMPORT DataBaseObject, AdresTable;
+
+	   IMPORT DataBasePartObject; 
+		# for the use of operations:
+		# Get_DBPart_Element, Get_DBPart_Element_Value,
+		# Get_DBPart_Elements, Put_DBPart_Element, 
+		# Put_DBPart_Element_Value, Put_DBPart_Elements,
+		# Place_DBPart_Element, Place_DBPart_Element_Value,
+		# Place_DBPart_Elements, Set_DBPart_Element;
+
+
+
+
+FUNCTION Get_DBPartObject_LB(cpu_table: IN AdresTable; lower_bound: OUT GoedelNr);
+BEGIN
+  lower_bound := cpu_table[MYCPU()].begin_adres;
+END;
+
+
+
+FUNCTION Get_DBPartObject_UB(cpu_table: IN AdresTable; upper_bound: OUT GoedelNr);
+BEGIN
+  upper_bound := cpu_table[MYCPU()].end_adres;
+END;
+
+
+
+
+END; # DataBaseModule

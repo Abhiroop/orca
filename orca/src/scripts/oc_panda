@@ -1,0 +1,261 @@
+#!/bin/sh
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: oc_panda,v 1.34 1999/05/10 14:20:57 ceriel Exp $
+
+# To be set by the installation mechanism.
+OC_HOME=/usr/proj/orca
+PANDA_PROJ=/usr/proj/panda
+
+OC_CCOMP="$PANDA_PROJ/bin/panc -c"
+OC_LD=$PANDA_PROJ/bin/panc
+# # OC_COMP=/$OC_HOME/lib/out_of_order; export OC_COMP
+OC_LIBNAM=lib
+
+export OC_HOME
+export OC_CFLAGS
+export OC_CCOMP
+export OC_LD
+export OC_RTSNAM
+export OC_SPECIAL
+export OC_LDFLAGS
+export OC_MACH
+export OC_RTSINCLUDES
+export OC_LIBS
+export OC_LIBNAM
+
+# default values: choose values for SunOS 4, sparc
+#
+PROCESSOR=sparc
+OS=sunos4
+PANDA_SYSNAME=sparc
+binsuf=sun4
+
+# default Panda version
+#
+PANDA_VERSION=3
+
+# default no data parallel stuff
+#
+HAWKLIB=
+DP_ORCA=0
+
+PANCFLAGS=
+
+
+# Find out whether we run on some other OS
+#
+case `uname` in
+Linux)
+    OS=linux
+    PROCESSOR=i386
+    PANDA_VERSION=4
+    binsuf=linux
+    ;;
+BSD/OS)
+    OS=bsdi
+    PROCESSOR=i386
+    binsuf=bsdi
+    ;;
+*)  case `uname -r` in
+    5*)
+    	OS=solaris2
+    	binsuf=sol2
+	;;
+    esac
+    ;;
+esac
+
+OS_PANDA=$OS
+
+
+# Extract the options which are meaningful to this script.
+# Pass on any unrecognized ones.
+#
+for i
+do
+    case $i in
+    # Options that control the working of this script
+    #
+	-dp)
+	    OC_FLAGS="-d $OC_FLAGS"; export OC_FLAGS
+	    OC_CFLAGS="-DDATA_PARALLEL $OC_CFLAGS"
+	    OC_HOME=$OC_HOME/hawk
+	    OC_LIBNAM=lib.orca
+	    DP_ORCA=1
+	    ;;
+	-corg*)
+	    MY_LD=`expr $i : '-corg\(.*\)'`
+	    ;;
+
+    # Options that specify panda version
+    #
+	-2|-3|-4)
+	    PAN_CFLAGS="$PAN_CFLAGS $i"
+	    PANDA_VERSION=`expr $i : '-\(.*\)'`
+	    ;;
+
+    # Options that specify the architecture
+    #
+	-bsdi-ndynamic)
+	    OC_SPECIAL=ndynamic
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    ;;
+	-native-cluster|-tcp-cluster)
+	    OS_PANDA=bsdi-`expr $i : '-\(.*\)'`
+	    ;;
+	-linux*|-bsdi*|-amoeba*|-myrinet*|-fe*|-atm*|-solaris*|-sunos*)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    ;;
+	-pkt-cluster)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    ;;
+
+	-parix-T800|-T800|-parix)
+	    OS_PANDA=parix-T800
+	    PROCESSOR=T800
+	    ;;
+	-parix-PowerPC|-PowerPC|-PPC)
+	    OS_PANDA=parix-PowerPC
+	    PROCESSOR=PowerPC
+	    ;;
+
+	-sparc|-mc68000)
+	    PROCESSOR=`expr $i : '-\(.*\)'`
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    ;;
+
+    # Compilation specials
+    #
+	-p*)
+	    OC_SPECIAL=profiling
+	    PAN_CFLAGS="$PAN_CFLAGS $i"
+	    ;;
+	-trc)
+	    OC_SPECIAL=tracing
+	    PAN_CFLAGS="$PAN_CFLAGS $i"
+	    ;;
+	-v)
+	    if test x$VERBOSE = x1
+	    then
+		PAN_CFLAGS="$PAN_CFLAGS $i"
+	    else
+		ARGS="$ARGS $i"
+	    fi
+	    VERBOSE=1
+	    ;;
+	-c)
+	    ARGS="$ARGS $i"
+	    ;;
+	-g)
+	    PAN_CFLAGS="$PAN_CFLAGS $i"
+	    ;;
+	-qpt)
+	    PAN_CFLAGS="$PAN_CFLAGS $i"
+	    ;;
+	-O*)
+	    PAN_CFLAGS="$PAN_CFLAGS $i"
+	    # ARGS="$ARGS $i"
+	    OC_SPECIAL=optimized
+	    ;;
+
+    # Unrecognized options. Pass them on.
+    #
+	*)
+	    ARGS="$ARGS $i"
+	    ;;
+    esac
+done
+
+
+# Deduce OS from OS_PANDA
+#
+case $OS_PANDA in
+    linux*)
+	OS=linux
+	;;
+
+    bsdi*|lfc*)
+	OS=bsdi
+	;;
+
+    amoeba*|myrinet*|fe*|atm*)
+	OS=amoeba
+	;;
+
+    solaris*)
+	OS=solaris2
+	;;
+
+    sparc|mc68000)
+	;;
+
+    parix*)
+	OS=parix
+	;;
+esac
+
+case $OS in
+    parix)
+	OC_MACH=$OS-${PROCESSOR}
+	;;
+    *)
+	OC_MACH=${PROCESSOR}_$OS
+	;;
+esac
+
+
+OC_CFLAGS="$OC_CFLAGS -$OS"
+OC_LDFLAGS="$OC_LDFLAGS -$OS_PANDA"
+
+
+# RTS name and Orca includes
+#
+OC_RTSNAM=panda$PANDA_VERSION.0
+OC_RTSINCLUDES="-I\$OC_HOME/\$OC_LIBNAM/include \
+	        -I\$OC_HOME/\$OC_LIBNAM/include/system/$OC_RTSNAM"
+
+
+# The Data Parallel stuff
+#
+HAWKRTSMACH=$OS
+case $OS_PANDA in
+amoeba*|fast-ether*|fe*|atm)
+	HAWKRTSMACH=amoeba
+	;;
+myrinet*)
+	HAWKRTSMACH=myrinet
+	;;
+bsdi-udp|bsdi-atm)
+	HAWKRTSMACH=bsdi-udp
+	;;
+bsdi*)
+	HAWKRTSMACH=bsdi-myri
+	;;
+esac
+
+case X$DP_ORCA in
+X1)
+    HAWKLIB="\$OC_HOME/lib/panda/$HAWKRTSMACH/\$OC_SPECIAL/librts.a"
+    OC_RTSINCLUDES="$OC_RTS_INCLUDES \
+		    -I\$OC_HOME/rts/include \
+		    -I\$OC_HOME/rts/include/communication \
+		    -I\$OC_HOME/rts/include/synchronization \
+		    -I\$OC_HOME/rts/include/po \
+		    -I\$OC_HOME/rts/include/collection \
+		    -I\$OC_HOME/rts/include/util"
+    ;;
+esac
+
+
+# Set the C compiler/linker flags
+#
+OC_CFLAGS="$OC_CFLAGS $PAN_CFLAGS"
+OC_LDFLAGS="$OC_LDFLAGS $PAN_CFLAGS"
+OC_LIBS="\$OC_HOME/\$OC_LIBNAM/\$OC_RTSNAM/\$OC_MACH/\$OC_SPECIAL/lib\$OC_RTSNAM.a $HAWKLIB"
+
+# Call the compiler
+#
+$OC_HOME/bin.$binsuf/oc $ARGS

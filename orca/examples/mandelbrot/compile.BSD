@@ -1,0 +1,2 @@
+#!/bin/sh
+/usr/home/orca_panda/orca/bin/oc_panda -v -O2 -CHK --O --V Mandelbrot.imp xdisplay/*.c -I/usr/X11/include -L/usr/X11/lib -lXaw -lXmu -lXext -lXt -lX11 -lSM -lICE

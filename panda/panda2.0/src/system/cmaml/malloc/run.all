@@ -1,0 +1,6 @@
+run time $1 -n200 -t
+run time $1 -n200
+run time $1 -n2000 -t
+run time $1 -n2000
+run time $1 -n20000 -t
+run time $1 -n20000

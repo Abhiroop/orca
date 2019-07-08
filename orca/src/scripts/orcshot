@@ -1,0 +1,15 @@
+#!/bin/sh
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+
+OC_HOME=/usr/proj/orca
+PANDA_PROJ=/usr/proj/panda
+PANDA_VERSION=panda2.0
+
+ROOT=$PANDA_PROJ/$PANDA_VERSION/bin
+
+FILTERS="level=4000;thread=logged:'do operation'"
+
+$ROOT/upshot -filter "$FILTERS" -root $ROOT -e $OC_HOME/orca_obj_ops -s $OC_HOME/orca_states $*

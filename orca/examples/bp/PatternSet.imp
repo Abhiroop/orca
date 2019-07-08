@@ -1,0 +1,135 @@
+OBJECT IMPLEMENTATION  PatternSet;
+
+FROM BpTypes	IMPORT ArrayType;
+FROM misc	IMPORT InitArrayBounds;
+
+	NumInputUnits: integer;
+	NumOutputUnits: integer;
+	NumberPatterns: integer;
+	InputPatterns: ArrayType;
+	OutputPatterns: ArrayType;
+
+################################################################################
+# prints the state of the Patterns object
+################################################################################
+OPERATION PrintPatternSet();
+BEGIN
+WriteLine(" Number of Patterns: ",NumberPatterns);
+WriteLine(" Number of Input Units: ", NumInputUnits);
+WriteLine(" Number of Output Units: ", NumOutputUnits);
+WriteLine(" Input Patterns:");
+FOR pattern IN 0..NumberPatterns-1 DO
+  FOR unit IN 0..NumInputUnits-1 DO
+     Write(InputPatterns[pattern*NumInputUnits+unit]," "); 
+     IF (unit /=0) AND ((unit % 10)=0) THEN WriteLine(); FI;
+  OD;
+OD;
+WriteLine();
+WriteLine(" Output Patterns:");
+FOR pattern IN 0..NumberPatterns-1 DO
+  FOR unit IN 0..NumOutputUnits-1 DO
+     Write(OutputPatterns[pattern*NumOutputUnits+unit]," ");
+     IF (unit /=0) AND ((unit % 10)=0) THEN WriteLine(); FI;
+  OD;
+OD;
+WriteLine();
+END;
+
+################################################################################
+# sets the number of patterns
+################################################################################
+OPERATION 	InitPatterns(NPatterns: integer; NInputUnits: integer; 
+		NOutputUnits: integer): integer;
+BEGIN
+IF ( NPatterns < 0) OR (NInputUnits < 0) OR (NOutputUnits <0) 
+  THEN RETURN -1; 
+FI;
+NumberPatterns:=NPatterns;
+NumInputUnits:=NInputUnits;
+NumOutputUnits:=NOutputUnits;
+InitArrayBounds(0,NumberPatterns*NumInputUnits,InputPatterns);
+InitArrayBounds(0,NumberPatterns*NumOutputUnits,OutputPatterns);
+RETURN 0;
+END;
+
+################################################################################
+# sets the value of an input pattern
+################################################################################
+OPERATION InitInputPatterns(pattern: integer; unit: integer; value: real): integer;
+BEGIN
+IF (NumInputUnits < 0) OR (NumberPatterns < 0) OR (pattern > NumberPatterns) 
+   OR (unit > NumInputUnits)
+   THEN RETURN -1; FI;
+InputPatterns[pattern*NumInputUnits+unit] := value;
+RETURN 0;
+END;
+
+################################################################################
+# sets the value of an input pattern
+################################################################################
+OPERATION InitOutputPatterns(pattern: integer; unit: integer; value: real): integer;
+BEGIN
+IF (NumOutputUnits < 0) OR (NumberPatterns < 0) OR (pattern > NumberPatterns) 
+   OR (unit > NumOutputUnits)
+   THEN RETURN -1; 
+FI;
+OutputPatterns[pattern*NumOutputUnits+unit] := value;
+RETURN 0;
+END;
+
+################################################################################
+# returns the difference between the array given as a parameter and the 
+# specified output pattern.
+################################################################################
+OPERATION 	difference(output: ArrayType; pattern: integer)
+		: ArrayType;
+p: ArrayType;
+BEGIN
+p:=output;
+FOR UnitNum IN 0..NumOutputUnits-1 DO p[UnitNum] := 0.0; OD;
+IF (NumInputUnits<0) OR (NumOutputUnits<0) OR (NumberPatterns < 0) THEN RETURN p; FI;
+FOR UnitNum IN 0..NumOutputUnits-1 DO
+  p[UnitNum] := OutputPatterns[pattern*NumOutputUnits+UnitNum] - output[UnitNum];
+OD;
+RETURN p;
+END;
+
+
+################################################################################
+# returns the number of patterns in the set
+################################################################################
+OPERATION NumPatterns(): integer;
+BEGIN
+RETURN NumberPatterns;
+END;
+
+################################################################################
+# returns an input pattern
+################################################################################
+OPERATION InputPattern(pattern: integer): ArrayType;
+scratch: ArrayType;
+BEGIN
+IF NumInputUnits<0 THEN RETURN scratch; FI;
+InitArrayBounds(0,NumInputUnits-1,scratch);
+FOR i IN 0..NumInputUnits-1 DO
+  scratch[i]:=InputPatterns[pattern*NumInputUnits+i];
+OD;
+RETURN scratch; 
+END;
+
+################################################################################
+# returns an output pattern
+################################################################################
+OPERATION OutputPattern(pattern: integer): ArrayType;
+scratch: ArrayType;
+BEGIN
+IF NumOutputUnits<0 THEN RETURN scratch; FI;
+InitArrayBounds(0,NumOutputUnits-1,scratch);
+FOR i IN 0..NumOutputUnits-1 DO
+  scratch[i]:=OutputPatterns[pattern*NumOutputUnits+i];
+OD;
+RETURN scratch; 
+END;
+
+# OBJECT IMPLEMENTATION
+END; 

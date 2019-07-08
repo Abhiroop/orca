@@ -1,0 +1,27 @@
+MODULE SPECIFICATION task_stack;
+
+FROM ParamRes IMPORT param_t;
+FROM task_graph_obj IMPORT task_t;
+
+TYPE stack_ptr    = NODENAME OF task_stack;
+TYPE task_descr   = RECORD  task   : task_t;
+			    parent : task_t;
+			    child  : integer;
+			    params : param_t;
+			    task_id : integer;      # avoid copy of graph
+		    END;
+TYPE task_stack   = GRAPH   stacktop : stack_ptr;
+		    NODES   next     : stack_ptr;
+			    data     : task_descr;
+		    END;
+
+FUNCTION print_task_descr(task : SHARED task_descr);
+
+FUNCTION push(S : SHARED task_stack;
+	      item: task_descr);
+FUNCTION pop(S : SHARED task_stack;
+	     item: OUT task_descr);
+FUNCTION emptyS(S : SHARED task_stack) : boolean;
+FUNCTION list(S : SHARED task_stack);
+
+END;

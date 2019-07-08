@@ -1,0 +1,697 @@
+MODULE IMPLEMENTATION Result;
+
+IMPORT	VarObject;
+IMPORT	RandObject;
+FROM Common	IMPORT	NTRACK, Kind1Type,
+			Kind2Type, IntArrayType, RealArrayType,
+			IntKinsType, RealKinsType, RealTableType,
+			IntKind2Type, RealKind2Type, CombiType,
+			IntRecordType, RealRecordType, ConstType;
+FROM Files	IMPORT	PrintLine;
+FROM Math	IMPORT	exp, pow, sqrt, log10,
+			IntToLongReal, LongRealToInt;
+FROM InOut	IMPORT	WriteString, WriteLn, WriteInt, WriteReal,
+			AppendOutputFile, CloseOutput;
+FROM RandObject	IMPORT	Random, GetRan;
+
+
+CONST	ECHARG		= 1.6021D-19;
+
+TYPE	RealKind2Array	= ARRAY [Kind2Type sh .. tm] OF real;
+
+
+FUNCTION PrintWarning(IOUT : string);
+
+BEGIN
+	WriteString("WARNING: Can't open outputfile '");
+	WriteLine(IOUT, "'; Output not saved.");
+	WriteLn();
+END;
+
+
+FUNCTION Print1(CNST    : ConstType;
+		Flag1   : SHARED boolean;
+		Flag2   : OUT boolean;
+		EndFlag : boolean);
+BEGIN
+	Flag2 := false;
+
+	IF Flag1 OR EndFlag THEN
+	    Flag1 := false;
+	    Flag2 := true;
+
+	    PrintLine(CNST.RNAME);
+	    WriteLn();
+
+	    IF EndFlag THEN
+		IF CNST.IDIS = 0 THEN
+		    WriteLine("Gaussian electron distribution");
+		ELSIF CNST.IDIS = 1 THEN
+		    WriteLine("Exponential electron distribution");
+		FI;
+	    FI;
+
+	    WriteString("DPL    = ");         WriteReal(CNST.DPL);
+	    WriteString("     DEL = ");       WriteReal(CNST.DEL);
+	    WriteString("    UPL   = ");      WriteReal(CNST.UPL);
+	    WriteString("  UEL   = ");        WriteReal(CNST.UEL);
+	    WriteLn();
+	    WriteString("TAUMAX = ");         WriteReal(CNST.TAUMAX);
+	    WriteString("      T FACTOR = "); WriteReal(CNST.TUN);
+	    WriteString("  TAU   = ");        WriteInt(CNST.K0);
+	    WriteString("     P/DEC = ");     WriteInt(CNST.KD);
+	    WriteLn();
+	    WriteString("RPM    = ");         WriteReal(CNST.RPM);
+	    WriteString("     RONS = ");      WriteReal(CNST.RONS);
+	    WriteString("  RREAC = ");        WriteReal(CNST.RRION);
+	    WriteLn();
+	    WriteLn();
+	FI;
+END;
+
+
+FUNCTION Print2(itrack, irep : integer;
+		PEAV         : real;
+		FEX          : RealTableType;
+		Flag1        : SHARED boolean;
+		Flag2        : OUT boolean;
+		EndFlag      : boolean);
+BEGIN
+	Flag2 := false;
+
+	IF ((itrack = 1) AND Flag1) OR EndFlag THEN 
+	    Flag1 := false;
+	    Flag2 := true;
+
+	    WriteLine("electric field in x,y,z direction in V/m");
+	    FOR i IN 1 .. 3 DO
+		WriteString("  ");
+		WriteReal(FEX[i]);
+	    OD;
+	    WriteLn();
+	    IF NOT EndFlag THEN
+		WriteLine("track no.    irep      esc. prob.");
+	    FI;
+	FI;
+
+	IF NOT EndFlag THEN
+	    WriteLine("  ", itrack, "  ", irep, "  ", PEAV);
+	FI;
+END;
+
+
+FUNCTION Print3(itrack, irep, NREP : integer;
+		pteav, sfav, PESIG : real;
+		AV, SIG            : RealKind2Array);
+BEGIN
+	IF irep = NREP THEN
+	    WriteLn();
+	    WriteString("shav  = ");   WriteReal(AV[sh]);
+	    WriteString("  thav  = "); WriteReal(AV[th]); WriteLn();
+	    WriteString("shsig = ");   WriteReal(SIG[sh]);
+	    WriteString("  thsig = "); WriteReal(SIG[th]);
+	    WriteLn();
+	    WriteLn();
+	    WriteString("smav  = ");   WriteReal(AV[sm]);
+	    WriteString("  tmav  = "); WriteReal(AV[tm]); WriteLn();
+	    WriteString("smsig = ");   WriteReal(SIG[sm]);
+	    WriteString("  tmsig = "); WriteReal(SIG[tm]);
+	    WriteLn();
+	    WriteLn();
+	FI;
+
+	IF (irep = NREP) AND (itrack = NTRACK) THEN
+	    WriteLn();
+	    WriteLn();
+	    WriteLine("-------------------------------------------");
+	    WriteLine("av esc. prob. over all tracks: ", pteav);
+	    WriteLine("pesig = ", PESIG);
+	    WriteLine("av. singlet fraction over all tracks: ", sfav);
+	    WriteLine("-------------------------------------------");
+	FI;
+END;
+
+
+FUNCTION Print4(CNST : ConstType;
+		AKT  : RealKinsType;
+		AT   : RealKind2Type);
+
+	TAUKIN, TRZECZ : real;
+BEGIN
+	WriteLn();
+	WriteLine("kinetics averaged over all tracks");
+	WriteString("TAU      TIME         AV         SH");
+	WriteLine("         TH         SM         TM");
+
+	FOR i IN 0 .. CNST.IKMAX DO
+	    TAUKIN := IntToLongReal(CNST.K0) +
+		      IntToLongReal(i) / IntToLongReal(CNST.KD);
+	    TRZECZ := pow(10.0, TAUKIN) * CNST.TUN;
+	    WriteReal(TAUKIN);  WriteString("  ");
+	    WriteReal(TRZECZ);  WriteString("  ");
+	    WriteReal(AKT[i]);  WriteString("  ");
+	    FOR a IN sh .. tm DO
+		WriteReal(AT[a][i]);
+		WriteString("  ");
+	    OD;
+	    WriteLn();
+	OD;
+END;
+
+
+FUNCTION Print5(pteav, sfav : real);
+
+BEGIN
+	WriteLn();
+	WriteLine("av esc. prob. over all tracks: ", pteav);
+	WriteLine("av. singlet fraction over all tracks: ", sfav);
+	WriteLn();
+END;
+
+
+FUNCTION Ponsag(X, RC, E, TH, TERM : longreal) : longreal;
+
+	N : integer;
+	AR1, AR2, FAC1, FAC2, PROD, PSUM, DOD, WYRAZ, PONSAG : longreal;
+BEGIN
+	AR1 := ECHARG * E / TERM / 2.0D0 * X * (1.0D0 + TH);
+	AR2 := RC / X;
+	IF AR2 < 5.0D-2 THEN
+	    RETURN 1.0;
+	FI;
+
+	FAC1   := exp(-AR1);
+	FAC2   := exp(-AR2);
+	PONSAG := FAC2 * FAC1;
+	IF AR1 = 0.0D0 THEN
+	    RETURN PONSAG;
+	FI;
+
+	N    := 1;
+	PROD := FAC1;
+	PSUM := FAC2;
+	DOD  := FAC2;
+
+	WHILE true DO
+	    DOD    *:= AR2 / IntToLongReal(N);
+	    PSUM   +:= DOD;
+	    PROD   *:= AR1 / IntToLongReal(N);
+	    WYRAZ   := PROD * PSUM;
+	    PONSAG +:= WYRAZ; 
+	    IF ((WYRAZ / PONSAG) < 1.0D-8) AND (N > 5) THEN
+		RETURN PONSAG;
+	    ELSE
+		N +:= 1;
+	    FI;
+	OD;
+END;
+
+
+FUNCTION Remove(GLOB        : SHARED VarObject;
+		CNST        : ConstType;
+		NION0, NCPU : integer;
+		FEXM        : real;
+		NRREAC      : SHARED integer;
+		ESCC        : SHARED real;
+		FEX         : RealTableType;
+		NRECORD     : SHARED IntRecordType;
+		TRECORD     : SHARED RealRecordType);
+
+	TP, TH1, TH2, TH3, RX12, RY12, RZ12, RM9, IQ : real;
+	D0, D1, D2, D3, D4, D5                       : longreal;
+	NEL, TOTAL, NION, Ix, Jx                     : integer;
+
+	RMULTI   : ARRAY [integer 1 .. NION0 / 2,
+			  integer 1 .. NION0 / 2] OF longreal;
+	CPU, ELT : IntArrayType[1 .. NION0 - (2 * NRREAC)];
+BEGIN
+	D2 := CNST.RONS;
+	D3 := FEXM;
+	D5 := CNST.ETERM;
+
+    #-------- For the clusters containing electrons after TMAX --------#
+
+	TOTAL := 0;
+
+	FOR cpu IN 0 .. NCPU - 1 DO
+	    NION := GLOB$ValNION(cpu);
+
+	    FOR i IN 1 + TOTAL .. NION + TOTAL DO
+		CPU[i] := cpu;
+		ELT[i] := i - TOTAL;
+	    OD;
+
+	    TOTAL +:= NION;
+	OD;
+
+	NEL := TOTAL / 2;
+
+	IF NEL > 1 THEN
+
+	    ### Seperation of the cluster on individual pairs.
+	    ### Find the pair with the shortest distance, calculate
+	    ### Pesc, remove pair, find next shortest and so on...
+
+	    FOR i IN 1 .. NEL DO
+		FOR j IN 1 .. NEL DO
+		    TP := pow(GLOB$ValX(CPU[i], ELT[i]) -
+			      GLOB$ValX(CPU[j+NEL], ELT[j+NEL]),2.0) +
+			  pow(GLOB$ValY(CPU[i], ELT[i]) -
+			      GLOB$ValY(CPU[j+NEL], ELT[j+NEL]),2.0) +
+			  pow(GLOB$ValZ(CPU[i], ELT[i]) -
+			      GLOB$ValZ(CPU[j+NEL], ELT[j+NEL]),2.0);
+		    RMULTI[i, j] := sqrt(TP);
+		OD;
+	    OD;
+
+	    FOR k IN 1 .. NEL DO
+		RM9 := 1.0D29;
+		FOR i IN 1 .. NEL DO
+		    FOR j IN  1 .. NEL DO
+			IF RMULTI[i, j] < RM9 THEN
+			    RM9 := RMULTI[i, j];
+			    Ix  := i;
+			    Jx  := j;
+			FI;
+		    OD;
+		OD;
+
+		D1 := RM9;
+		IF FEXM = 0.0 THEN
+		    D4 := 0.0;
+		ELSE
+		    IQ  := GLOB$ValIQ(CPU[Ix], ELT[Ix]);
+		    TH1 := IQ * FEX[1] * (GLOB$ValX(CPU[Ix], ELT[Ix]) -
+			    GLOB$ValX(CPU[Jx + NEL], ELT[Jx + NEL]));
+		    TH2 := IQ * FEX[2] * (GLOB$ValY(CPU[Ix], ELT[Ix]) -
+			    GLOB$ValY(CPU[Jx + NEL], ELT[Jx + NEL]));
+		    TH3 := IQ * FEX[3] * (GLOB$ValZ(CPU[Ix], ELT[Ix]) -
+			    GLOB$ValZ(CPU[Jx + NEL], ELT[Jx + NEL]));
+		    D4  := (TH1 + TH2 + TH3) / RM9 / FEXM;
+		FI;
+
+		D0      := Ponsag(D1, D2, D3, D4, D5);
+		ESCC   +:= D0;
+		NRREAC +:= 1;
+
+		TRECORD[1, NRREAC] := 1.0E+20;
+		TRECORD[2, NRREAC] := 1.0 - D0;
+		NRECORD[1, NRREAC] := GLOB$ValNPAR(CPU[Ix], ELT[Ix]);
+		NRECORD[2, NRREAC] :=
+				GLOB$ValNPAR(CPU[Jx+NEL], ELT[Jx+NEL]);
+
+		FOR i IN 1 .. NEL DO
+		    RMULTI[i, Jx] := 1.0D30;
+		    RMULTI[Ix, i] := 1.0D30;
+		OD;
+	    OD;
+	FI;
+
+	RX12 := GLOB$ValX(CPU[2], ELT[2]) - GLOB$ValX(CPU[1], ELT[1]);
+	RY12 := GLOB$ValY(CPU[2], ELT[2]) - GLOB$ValY(CPU[1], ELT[1]);
+	RZ12 := GLOB$ValZ(CPU[2], ELT[2]) - GLOB$ValZ(CPU[1], ELT[1]);
+	D1   := sqrt(RX12 * RX12 + RY12 * RY12 + RZ12 * RZ12);
+
+	IF FEXM = 0.0 THEN
+	    D4 := 0.0;
+	ELSE
+	    D4 := -(RX12 * FEX[1] +
+		    RY12 * FEX[2] + RZ12 * FEX[3]) / D1 / FEXM;
+	FI;
+
+	D0      := Ponsag(D1, D2, D3, D4, D5);
+	ESCC   +:= D0;
+	NRREAC +:= 1;
+
+	NRECORD[1, NRREAC] := GLOB$ValNPAR(CPU[1], ELT[1]);
+	NRECORD[2, NRREAC] := GLOB$ValNPAR(CPU[2], ELT[2]);
+	TRECORD[1, NRREAC] := 1.0E+20;
+	TRECORD[2, NRREAC] := 1.0 - D0;
+END;
+
+
+FUNCTION Average(CNST                 : ConstType;
+		 ifield, irep, itrack : integer;
+		 AD                   : real;
+		 ISER                 : SHARED integer;
+		 ESCC, SUMES,
+		 SUMESSQ, PEAV,
+		 PESIG, pteav, sfav   : SHARED real;
+		 PR                   : SHARED CombiType;
+		 IKIN                 : SHARED IntKinsType;
+		 INT                  : SHARED IntKind2Type;
+		 AKT, SUMK            : SHARED RealKinsType;
+		 AT, SUM              : SHARED RealKind2Type;
+		 AV, SIG              : SHARED RealKind2Array): boolean;
+
+	A0, ESCP   : real;
+	ISER1      : integer;
+	A, AVA     : RealKind2Type;
+	AKIN, AKAV : RealKinsType;
+	PR1, NILL  : RealKind2Array;
+BEGIN
+	### Calculate kinetic curve.
+
+	A0 := 1.0;
+	FOR a IN sh .. tm DO
+	    NILL[a] := 0.0;
+	OD;
+
+	FOR i IN 0 .. CNST.IKMAX DO
+	    A0 -:= IntToLongReal(IKIN[i]) / AD;
+	    AKIN[i] := A0;
+	    IKIN[i] := 0;
+	    FOR a IN sh .. tm DO
+		NILL[a]  +:= IntToLongReal(INT[a][i]) / AD;
+		A[a][i]   := NILL[a];
+		INT[a][i] := 0;
+	    OD;
+	OD;
+
+	### Escape probability.
+
+	ESCP := ESCC / AD;
+	ESCC := 0.0;
+
+	FOR a IN sh .. tm DO
+	    PR1[a]   := PR[x, a] / AD;
+	    PR[x, a] := 0.0;
+	OD;
+
+	FOR i IN 0 .. CNST.IKMAX DO
+	    SUMK[i] +:= AKIN[i];
+	    FOR a IN sh .. tm DO
+		SUM[a][i] +:= A[a][i];
+	    OD;
+	OD;
+
+	SUMES   +:= ESCP;
+	SUMESSQ +:= ESCP * ESCP;
+
+	FOR a IN sh .. tm DO
+	    PR[s, a] +:= PR1[a];
+	    PR[q, a] +:= PR1[a] * PR1[a]; 
+	OD;
+
+	ISER +:= 1;
+	IF ISER <= 1 THEN
+#	    FOR i IN 0 .. CNST.IKMAX DO
+#		TAUKIN := IntToLongReal(CNST.K0) +
+#			  IntToLongReal(i) / IntToLongReal(CNST.KD);
+#		TRZECZ := pow(10.0, TAUKIN) * CNST.TUN;
+#	    OD;
+	    RETURN false;
+	FI;
+
+	ISER1 := ISER - 1;
+	PEAV  := SUMES / IntToLongReal(ISER);
+	PESIG := SUMESSQ / IntToLongReal(ISER) - PEAV * PEAV;
+	IF PESIG < 0.0 THEN
+	    PESIG := 0.0;
+	FI;
+	PESIG := sqrt(PESIG / IntToLongReal(ISER1));
+
+	FOR a IN sh .. tm DO
+	    AV[a]  := PR[s, a] / IntToLongReal(ISER);
+	    SIG[a] := PR[q, a] / IntToLongReal(ISER) - AV[a] * AV[a];
+	    IF SIG[a] < 0.0 THEN
+		SIG[a] := 0.0;
+	    FI;
+	    SIG[a] := sqrt(SIG[a] / IntToLongReal(ISER1));
+	OD;
+	    
+	FOR i IN 0 .. CNST.IKMAX DO
+	    AKAV[i] := SUMK[i] / IntToLongReal(ISER);
+	    FOR a IN sh .. tm DO
+		AVA[a][i] := SUM[a][i] / IntToLongReal(ISER);
+	    OD;
+	OD;
+
+	### Averaging kinetics over all tracks.
+	### Initialize the arrays with average kinetics.
+
+	IF (ifield = 1) AND (irep = CNST.NREP) AND (itrack = 1) THEN
+	    FOR i IN 0 .. CNST.IKMAX DO
+		AKT[i] := 0.0;
+		FOR a IN sh .. tm DO
+		    AT[a][i] := 0.0;
+		OD;
+	    OD;
+	FI;
+
+	IF (ifield = 1) AND (irep = CNST.NREP) THEN
+	    FOR i IN 0 .. CNST.IKMAX DO
+		AKT[i] +:= AKAV[i] / IntToLongReal(NTRACK);
+		FOR a IN sh .. tm DO
+		     AT[a][i] +:= AVA[a][i] / IntToLongReal(NTRACK);
+		OD;
+	    OD;
+	FI;
+
+	IF irep = CNST.NREP THEN
+	    pteav +:= PEAV / IntToLongReal(NTRACK);
+	    sfav  +:= AV[sh] /
+		     (AV[sh] + AV[th]) / IntToLongReal(NTRACK);
+	FI;
+
+	RETURN true;
+END;
+
+
+FUNCTION Result(CNST                 : ConstType;
+		ifield, irep, itrack : integer;
+		AD                   : real;
+		SEED, NRREAC, ISER   : SHARED integer;
+		ESCC, SUMES,
+		SUMESSQ, pteav, sfav : SHARED real;
+		FEX                  : RealTableType;
+		NRECORD              : SHARED IntRecordType;
+		TRECORD              : SHARED RealRecordType;
+		PR                   : SHARED CombiType;
+		IKIN                 : SHARED IntKinsType;
+		INT                  : SHARED IntKind2Type;
+		AKT, SUMK            : SHARED RealKinsType;
+		AT, SUM              : SHARED RealKind2Type;
+		OutFlag1, OutFlag2   : SHARED boolean;
+		RAND                 : SHARED RandObject);
+
+	TND, PEAV, PESIG : real;
+	XRN, PROBMAG     : longreal;
+	AV, SIG          : RealKind2Array;
+	NSPIN            : IntRecordType[1 .. 2, 1 .. CNST.MAX / 2];
+	Ran              : RealArrayType[1 .. 100];
+
+	ICRCOUNT, IT, NTRIPM, NTRIPH, NCROSS : integer;
+	Flag, TmpFlag1, TmpFlag2, Dum1, Dum2 : boolean;
+BEGIN
+
+    #------- For the clusters where all electrons have reacted. -------#
+
+	### Main part of the spin calculations. First decide about
+	### singlet/triplet states of consecutive recombinations.
+	### We have recorded the percentage of the recombining ions
+	### (NRECORD) and the time of recombination and probability
+	### of recombination (the last usually 1.0 or 1.0 -Pesce for
+	### the surviving ions (TRECORD)).
+
+	IF CNST.RAND = 0 THEN
+	    GetRan(SEED, 100, Ran);
+	ELSE
+	    RAND$GetVals(100, Ran);
+	FI;
+
+	XRN := 0.0;
+	FOR i IN 1 .. 100 DO
+	    XRN +:= Ran[i];
+	OD;
+
+	NTRIPM  := 0;
+	NTRIPH  := 0;
+	NCROSS  := 0;
+	PROBMAG := 1.0 - 0.75 * (1.0 - 1.0/IntToLongReal(2*NRREAC - 1));
+
+	FOR k IN 1 .. NRREAC DO
+
+	    ### In case of the last pair we have to avoid the case
+	    ### when only 1 triplet is produced. Therefore, if there
+	    ### were no triplets before the last pair, the last re-
+	    ### combination also has to give 'singlet'.
+
+	    Flag := false;
+	    IF k = NRREAC THEN
+		IF NTRIPM = 0 THEN
+		    NSPIN[2, k] := 1;
+		    Flag := true;
+
+	    ### If there was one triplet before the last recombi-
+	    ### nation, the last must be a triplet. All other cases
+	    ### are free to choose.
+
+		ELSIF NTRIPM = 1 THEN
+		    NSPIN[2, k] := 2;
+		    NTRIPM +:= 1;
+		    Flag := true;
+		FI;
+	    FI;
+
+	    IF NOT Flag THEN
+		IF CNST.RAND = 0 THEN
+		    XRN := Random(SEED);
+		ELSE
+		    XRN := RAND$Ran();
+		FI;
+
+		IF XRN < PROBMAG THEN
+		    NSPIN[2, k] := 1;
+		ELSE
+		    NSPIN[2, k] := 2;
+		    NTRIPM +:= 1;
+		FI;
+	    FI;
+
+	    ### Higashimura recombination. First find the geminate
+	    ### pairs which certainly produce singlets. Only count
+	    ### the number of cross cases w/o deciding about spins.
+
+	    IF NRECORD[1, k] = NRECORD[2, k] THEN
+		NSPIN[1, k] := 1;
+	    ELSE
+		NSPIN[1, k] := 0;
+		NCROSS +:= 1;
+	    FI;
+	OD;
+
+	### We decide about the spins of the cross cases.
+	### If this is the last case then no triplets until now:
+	### the last is also singlet.
+
+	ICRCOUNT := 0;
+	FOR k IN 1 .. NRREAC DO
+	    IF NSPIN[1, k] = 0 THEN
+		Flag := false;
+		ICRCOUNT +:= 1;
+		IF ICRCOUNT = NCROSS THEN
+		    IF NTRIPH = 0 THEN
+			NSPIN[1, k] := 1;
+			Flag := true;
+
+		    ### One triplet until now: the last is triplet.
+
+		    ELSIF NTRIPH = 1 THEN
+			NSPIN[1, k] := 2;
+			NTRIPH +:= 1;
+			Flag := true;
+		    FI;
+		FI;
+
+		### Other cases are free to choose.
+
+		IF NOT Flag THEN
+		    IF CNST.RAND = 0 THEN
+			XRN := Random(SEED);
+		    ELSE
+			XRN := RAND$Ran();
+		    FI;
+
+		    IF XRN < 0.25 THEN
+			NSPIN[1, k] := 1;
+		    ELSE
+			NSPIN[1, k] := 2;
+			NTRIPH +:= 1;
+		    FI;
+		FI;
+	    FI;
+	OD;
+
+	### The construction of kinetics from the
+	### recombination record for a given cluster.
+
+	FOR k IN 1 .. NRREAC DO
+	    TND := TRECORD[1, k] / CNST.TUN;
+	    IF TND <= CNST.TK0 THEN
+		IT := 0;
+	    ELSE
+		TND := log10(TND) - IntToLongReal(CNST.K0);
+		IT  := LongRealToInt(TND * IntToLongReal(CNST.KD)) + 1;
+	    FI;
+
+	    IF IT <= CNST.IKMAX THEN
+		IF NSPIN[1, k] = 1 THEN
+		    INT[sh][IT] +:= 1;
+		ELSE
+		    INT[th][IT] +:= 1;
+		FI;
+
+		IF NSPIN[2, k] = 1 THEN
+		    INT[sm][IT] +:= 1;
+		ELSE
+		    INT[tm][IT] +:= 1;
+		FI;
+	    FI;
+
+	    IF NSPIN[1, k] = 1 THEN
+		PR[x, sh] +:= TRECORD[2, k];
+	    ELSE
+		PR[x, th] +:= TRECORD[2, k];
+	    FI;
+
+	    IF NSPIN[2, k] = 1 THEN
+		PR[x, sm] +:= TRECORD[2, k];
+	    ELSE
+		PR[x, tm] +:= TRECORD[2, k];
+	    FI;
+	OD;
+
+
+    #------ Periodic averaging and output (every NRPSC clusters) ------#
+
+	IF irep % CNST.NRPSC /= 0 THEN
+	    RETURN;
+	FI;
+
+	IF NOT Average(CNST, ifield, irep, itrack, AD, ISER, ESCC,
+		       SUMES, SUMESSQ, PEAV, PESIG, pteav, sfav,
+		       PR, IKIN, INT, AKT, SUMK, AT, SUM, AV, SIG) THEN
+	    RETURN;
+	FI;
+
+    ### Output to screen:
+
+	Print1(CNST, OutFlag1, TmpFlag1, false);
+	Print2(itrack, irep, PEAV, FEX, OutFlag2, TmpFlag2, false);
+	Print3(itrack, irep, CNST.NREP, pteav, sfav, PESIG, AV, SIG);
+
+    ### Output to IOUT:
+
+	IF NOT AppendOutputFile(CNST.IOUT) THEN
+	    PrintWarning(CNST.IOUT);
+	ELSE
+	    Print1(CNST, TmpFlag1, Dum1, false);
+	    Print2(itrack, irep, PEAV, FEX, TmpFlag2, Dum1, false);
+
+	    IF (irep = CNST.NREP) AND (itrack = NTRACK) THEN
+		Print5(pteav, sfav);
+	    FI;
+	    CloseOutput();
+	FI;
+
+    ### Output to IOUT2:
+
+	IF (itrack = NTRACK) AND
+		(irep = CNST.NREP) AND (ifield = 1) THEN
+
+	    IF NOT AppendOutputFile(CNST.IOUT2) THEN
+		PrintWarning(CNST.IOUT2);
+	    ELSE
+		Print1(CNST, Dum1, Dum2, true);
+		WriteLine("number of tracks:", NTRACK);
+		Print2(itrack, irep, PEAV, FEX, Dum1, Dum2, true);
+		Print4(CNST, AKT, AT);
+		Print5(pteav, sfav);
+		CloseOutput();
+	    FI;
+	FI;
+END;
+
+
+END;

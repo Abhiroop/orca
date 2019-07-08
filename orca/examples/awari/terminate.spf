@@ -1,0 +1,23 @@
+OBJECT SPECIFICATION terminate;
+	OPERATION init(nproc: integer);
+		# initialize; nproc = number of processes
+
+	OPERATION clear();
+		# reset idle processes counter to 0
+
+	OPERATION value(): integer;
+		# return counter
+
+	OPERATION GoPassive();
+		# increment idle processes counter
+
+	OPERATION GoActive(): boolean;
+		# Try to decrement idle processes counter;
+		# If the counter is already at the maximum (nproc), however,
+		# it is not changed and 'false' is returned
+
+	OPERATION done(): boolean;
+		# check if counter if at the maximum (nproc)
+
+	OPERATION PrintStatistics();
+END;

@@ -1,0 +1,5 @@
+MODULE SPECIFICATION Math;
+FUNCTION ABSF(a: real): real;
+FUNCTION sin_velm(x:real):real;
+FUNCTION SQR(x:real):real;
+END;

@@ -1,0 +1,35 @@
+DATA MODULE SPECIFICATION GlobalVars;
+
+FROM LocalMemory IMPORT IntArray;
+
+FROM Types IMPORT SeqType;
+
+nbody   : integer;
+
+seed    : integer;
+eps     : real;		# potential softening parameter
+fcells  : real;		# ratio of cells/leaves allocated
+fleaves : real;
+
+dtime   : real;
+tol     : real;
+dtout   : real;
+tstop   : real;
+
+			### derived quantities
+dthf    : real;
+epssq   : real;
+tolsq   : real;
+
+maxcell	: integer;
+maxleaf	: integer;
+maxmycell : integer;
+maxmyleaf : integer;
+maxmybody : integer;
+
+Child_Sequence, Direction_Sequence : SeqType;
+
+			### Print-out control
+report  : IntArray;
+
+END;

@@ -1,0 +1,27 @@
+#-----------------------------------------------#
+# Author : H. Staalman				#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION ForwardRA;
+
+# The forward retrograde analysis is applied once to the whole database. This
+# means that all workers keeping a database part must invoke the forward RA 
+# function to their own part.
+
+
+FROM	DataBaseTypes		IMPORT	DataBaseObject, AdresTable;
+	IMPORT	ConverterObject;
+	IMPORT	DBMetaDataObject;
+
+
+FUNCTION Forward(database: SHARED DataBaseObject;
+		 dbmetadata: SHARED DBMetaDataObject;
+		 converter: IN ConverterObject;
+		 cpu_table: IN AdresTable;
+		 nworkers:  integer);
+  # Applies the forward retrograde analysis algorithm to the given database part
+
+
+END; # ForwardRA

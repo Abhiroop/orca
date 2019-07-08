@@ -1,0 +1,76 @@
+GENERIC
+OBJECT IMPLEMENTATION GenericStack;
+
+	FROM iscas IMPORT MAX_NO_OF_GATES;
+
+# DEBUG
+#	TYPE Stacklink = NODENAME OF Stack;
+#	TYPE Stack = GRAPH
+#			sp: Stacklink;
+#		     NODES
+#			previous: Stacklink;
+#			data: T;
+#		     END;
+	TYPE Stack = RECORD
+			no_of_elements: integer;
+			element: ARRAY[integer 1..MAX_NO_OF_GATES] OF T;
+		     END;
+
+	stack:Stack;
+	
+	OPERATION IsEmpty():boolean;	# Check if stack empty
+
+	BEGIN
+#	 	IF stack.sp = NIL
+#	 	THEN RETURN true;
+#	 	FI;
+#	 	RETURN false;
+		RETURN (stack.no_of_elements=0);
+	END;
+
+ 
+	OPERATION Push(item:T);
+
+#	p: Stacklink;
+
+	BEGIN
+#		p:= ADDNODE(stack);
+#		stack[p].previous:=stack.sp;
+#		stack[p].data:=item;
+#		stack.sp:=p;
+		IF stack.no_of_elements<MAX_NO_OF_GATES THEN
+			stack.no_of_elements+:=1;
+			stack.element[stack.no_of_elements]:=item;
+		ELSE
+			WriteLine("ERROR...stack overflow");
+		FI;
+	END;
+
+
+	OPERATION Pop(item:OUT T):boolean;
+
+#	p: Stacklink;
+
+	BEGIN
+#		IF stack.sp = NIL
+#		THEN RETURN false;
+#		ELSE
+#			item := stack[stack.sp].data;
+#			p:=stack.sp;
+#			stack.sp:=stack[p].previous;
+#			DELETENODE(stack,p);
+#			RETURN true;
+#		FI;
+		IF stack.no_of_elements>0 THEN
+			item:=stack.element[stack.no_of_elements];
+			stack.no_of_elements-:=1;
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	END;
+
+BEGIN
+#	stack.sp:= NIL;	# Initialize stack (empty)
+	stack.no_of_elements:=0;
+END GENERIC; # OBJECT IMPLEMENTATION GenericStack

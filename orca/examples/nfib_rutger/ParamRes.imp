@@ -1,0 +1,24 @@
+MODULE IMPLEMENTATION ParamRes;
+
+FUNCTION WriteParamRes(p : ParamRes);
+BEGIN
+    CASE p.tag OF
+      params_tag =>
+	WriteParam(p.params);
+    | result_tag =>
+	WriteResult(p.result);
+    ESAC;
+END;
+
+FUNCTION WriteParam(p : param_t);
+BEGIN
+    Write(p.nfib_val, ";", p.threshold);
+END;
+
+FUNCTION WriteResult(r : result_t);
+BEGIN
+    Write(r);
+END;
+
+END;
+

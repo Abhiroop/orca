@@ -1,0 +1,123 @@
+#This is an adapted version of the program found in orca/examples/asp/
+
+MODULE IMPLEMENTATION asp;
+	IMPORT IntObject, CSemaphore;
+	FROM RowCollection IMPORT RowCollection, RowType;
+	FROM Time IMPORT GetTime;
+        FROM graphdef IMPORT NVertices, Diameter, createDistanceMatrix;
+	FROM InOut  IMPORT WriteString, WriteInt;
+	FROM CSemaphore IMPORT sync;
+
+	CONST N = NVertices;
+
+        TYPE DistTab = ARRAY[integer] OF RowType;
+
+	FUNCTION DoIteration(C: SHARED DistTab; RowK: RowType;
+			lb, ub, k: integer);
+		tmp: integer;
+	BEGIN  # update the values of rows C[lb] .. C[ub].
+		FOR i IN lb .. ub DO
+			IF i /= k THEN  # Skip C[k], as it won't change.
+				FOR j IN 1 .. N DO
+					# See if path i->k->j is better than
+					# current path i->j.
+					tmp := C[i][k] + RowK[j];
+					IF tmp < C[i][j] THEN
+						C[i][j] := tmp;
+					FI;
+				OD;
+			FI;
+		OD;
+	END;
+
+	FUNCTION ComputeRows(C: SHARED DistTab; RowkColl: SHARED RowCollection;
+				lb, ub: integer);
+		RowK: RowType;
+	BEGIN  # Body of slave processes.
+		# WriteString(".");
+		# IF MYCPU()=1 THEN WriteLine(); FI;
+		FOR k IN 1 .. N DO  # do N iterations
+			IF (k >= lb) AND (k <= ub) THEN
+				# I have row k; add it to RowkColl.
+				RowK := C[k];
+				RowkColl$AddRow(k, RowK);
+			ELSE
+				# Someone else computed row k; wait for it.
+				RowK := RowkColl$AwaitRow(k);
+			FI;
+			DoIteration(C, RowK, lb, ub, k);
+		OD;
+	END;
+
+	FUNCTION InitializeTable(lb, ub: integer; m : SHARED RowCollection; C: SHARED DistTab);
+	BEGIN
+	FOR i IN lb .. ub DO
+		FOR j IN 1..N DO
+			C[i][j] := m$at(i,j);
+		OD;
+	OD;
+	END;
+
+	# Description of slave processes.
+	PROCESS aspSlave(RowkColl : SHARED RowCollection;
+			lb, ub: integer;  doSema, writeSema: SHARED CSemaphore;  go: SHARED IntObject);
+		C: DistTab[lb..ub][1..N];
+	BEGIN
+		go$AwaitValue(1);
+		WHILE writeSema$cycles() <= Diameter DO
+    			
+			InitializeTable(lb, ub, RowkColl, C);
+			ComputeRows(C, RowkColl, lb, ub);
+			sync(doSema);
+			FOR i IN lb .. ub DO
+				RowkColl$AddRow(i, C[i]);
+			OD;
+			sync(writeSema);
+		OD;
+	END;
+
+
+
+	# Description of master process
+	PROCESS aspMain(RowkColl : SHARED RowCollection; 
+			finished : SHARED IntObject);
+
+		nslaves: integer;
+		lb, ub: integer;
+		turn: IntObject; # used to do coordinate printing
+		go: IntObject;
+		start, stop: integer;
+		doSema, writeSema : CSemaphore;
+	BEGIN
+		WriteLine("N = ", N);
+		start := GetTime();
+		turn$assign(1); # initialize turn
+		go$assign(0);
+		nslaves := NCPUS();
+		doSema$init(nslaves);
+		writeSema$init(nslaves);
+		lb := 1;
+		FOR i IN 0 .. nslaves-1 DO
+			ub := lb + (N-lb+1) / (nslaves-i) - 1;
+			FORK aspSlave(RowkColl, lb, ub, doSema, writeSema, go) ON(nslaves-i-1);
+			lb := ub+1;
+		OD;
+		RowkColl$init(NVertices);
+		createDistanceMatrix(RowkColl); 
+		go$assign(1);	# start slaves
+		WHILE writeSema$cycles() <=  Diameter DO
+			doSema$wait();
+			doSema$ack();
+
+                        writeSema$wait();
+			WriteLine("Round",  writeSema$cycles());
+			WriteLine();
+
+			writeSema$ack();
+		OD;
+		stop := GetTime();
+		WriteLine("time = ", stop-start);
+		WriteLine("Job done!!!");
+		finished$assign(1);
+	END;
+END;

@@ -1,0 +1,36 @@
+
+OBJECT IMPLEMENTATION IntObject;
+  x : integer;
+ 
+  OPERATION assign(v : integer);
+   BEGIN
+     x := v;
+   END;
+  OPERATION value() : integer;
+   BEGIN
+     RETURN x;
+   END;
+  OPERATION inc_special(nslaves : integer);
+   BEGIN
+     x+:=1;
+     IF x = (nslaves + 1)
+       THEN
+         x := 1;
+     FI;
+   END;
+  OPERATION inc(v : integer);
+   BEGIN
+    x +:=v;
+   END;
+  OPERATION dec(v : integer);
+   BEGIN
+    x -:= v;
+   END;
+  OPERATION AwaitValue(v : integer);
+   BEGIN
+    GUARD x = v DO OD; # block until value equals v
+   END;
+
+BEGIN
+   x := 0;
+END;

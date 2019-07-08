@@ -1,0 +1,36 @@
+\documentstyle[a4]{report}
+
+\title{The Panda Interface Document}
+\author{Panda Group}
+
+\begin{document}
+
+\maketitle
+
+\chapter{The System Interface}
+\label{cha:system}
+
+\input pan_sys
+
+
+\chapter{The Message Passing Interface}
+\label{cha:mp}
+\input pan_mp
+
+
+\chapter{The Remote Procedure Call Interface}
+\label{cha:rpc}
+\input pan_rpc
+
+\chapter{The Group Interface}
+\label{cha:group}
+\input pan_group
+
+\appendix
+\chapter{Example Usage System Interface}
+\input saw
+
+\chapter{Debug Interfaces}
+\input pan_group_debug
+
+\end{document}

@@ -1,0 +1,238 @@
+\section{Implementations of Orca}
+\label{sOrcaImp}
+
+Several implementations of Orca exist. The current compiler translates
+Orca into ANSI~C, which is then compiled using {\tt gcc}.  The object
+code is then linked with the Orca {\em run-time system}.
+The run-time system implements the concepts of Orca as described in
+Section \ref{sOrca}. It must ensure that objects
+which are supposed to be shared between processes are kept
+consistent, even on distributed memory.
+
+Several different run-time systems have been implemented.
+One, which runs on top of Unix, uses
+threads (light-weight processes) to simulate parallelism. Since this
+run-time system uses only one machine, its primary use is for testing
+Orca programs on single workstations. This is the simplest of the
+run-time systems, since 
+implementing distributed shared memory is trivial within a single
+address space.
+
+\subsection{The Broadcast-RPC Run-Time System on Amoeba}
+
+Another run-time system has been developed on top of Amoeba,
+a distributed operating system which combines several
+workstations connected with a network into a single virtual time-sharing
+machine \cite{Amoeba}.
+This Orca run-time system \cite{ieee92,cpe92} is the middle layer inside
+a four layer
+system. The lowest software layer is the {\em reliable broadcasting layer},
+which
+is provided by Amoeba. The top layer is the compiled application
+program.
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{orcastruct.eps}
+\caption{Structure of the Orca system}
+\label{fOrcaStructure}
+\end{figure}
+
+\subsubsection{Object Management}
+
+The principal design choice for implementing distributed shared memory in the
+Amoeba run-time system is {\em replication}.
+This means that multiple copies of each shared object are
+available, so that each processor that uses the object has a local copy. This 
+way reading data from
+an object can be done locally, without any network access.
+
+Writing to an object is more complicated. First, every processor
+which has a copy of the object needs to receive update information.
+Secondly, each of these processors must appear to receive the different updates
+in the same order, so that changes appear consistent across all
+processors.
+
+The run-time system places an object-manager on each processor. This
+is a light-weight process that handles updating of the
+objects on each processor. Each object's data is stored in an address space
+shared by the user processes and the object-manager, so reading an object
+can be done by the user application itself. An object can have been locked
+by the object-manager, in which case the user process blocks. Locking
+within one address space is easy, though.
+
+If a write operation is requested, the object-manager marshals
+the write operation and broadcasts it to all object-managers in the
+system. The
+object-managers then store the request in a FIFO-queue. Note that
+reliable broadcasting is used: this means that every processor receives
+all requests in the same order.
+
+The object-managers now handle the queued requests in order. They
+lock their local copy of the object, perform the update and release the
+lock again. Each object-manager in the system handles the updates on its
+local copy in the same order, so this way {\em serialisability} is
+ensured. It is possible that one processor is ahead of another in updating
+the object, however.
+
+As an aside, {\em indivisibility} of operations now has become a local
+affair. The object-manager locks its local copy of the object, so the
+user process will block if it tries to read the object, and the write
+operations are performed one at a time by the object manager.
+
+Following the approach described above, every object is replicated on
+every processor. However, full replication is impractical if an object
+is shared by only a few processors, or if it has mostly write
+operations. In the last case, a better system can be used, which does
+not replicate objects.  Instead, the object is
+stored on exactly one processor, where it can be accessed by other
+processors using point-to-point messages.
+Normally, the run-time system should decide on
+which processor the object is stored, but the programmer can affect
+this decision using {\em strategy calls}.
+
+Most of the functionality of this system is put in the compiler. The
+compiler analyses the code for processes to find out which objects
+they access and how many times they read or write them. The run-time
+system then decides whether to replicate objects or not. This is not 
+done by the compiler, since the decision can depend on the hardware used
+and the communication protocol. Leaving this decision to the run-time
+system keeps the compiler architecture-independent.
+
+Normally, the compiler cannot determine exactly how many times an object is read
+or written without actually running the program. For example, it is often 
+impossible to
+determine how many times a loop's body will be executed or if
+the body of an if-statement will be executed or not. The
+compiler
+therefore uses simple heuristics for these constructs, multiplying the
+number of operations by a constant (such as 16 for loops and 0.5 for
+if-statements.)
+
+The compiler then passes two values to the run-time system for each
+object processes can access: the estimated number of read
+operations and the estimated number of write
+operations. When the run-time system forks off the process, it broadcasts a
+message to all processors telling them which process is forked off and
+on which processor it runs. All processors now decide
+whether the object should be replicated or not, based on the data they
+received. Since they use the same data, they all come to the same conclusion.
+An object may wind up being stored on one machine, or being replicated by
+the processor which currently holds it. 
+A non-replicated object can also be migrated to another processor (if that
+processor accesses it more frequently.)
+
+The decision whether to replicate or not is based on the number of
+messages needed in either case. For a replicated object, each write
+operation involves a broadcast. For a non-replicated object, each read
+operation from another processor than the one which currently stores
+the object requires a point-to-point message.
+
+\subsubsection{Reliable Broadcasting}
+
+The key to the run-time system is reliable broadcasting.
+This is implemented in the distributed operating system
+Amoeba. The main entity in the broadcasting scheme in Amoeba is the {\em
+sequencer}.  The CPU on which an Orca program is initially located is chosen
+the sequencer for this program. Other processes use this sequencer
+for reliable
+broadcast in one of two ways. The first method can be summarised as
+follows:
+\begin{itemize}
+        \item[1.] The Orca run-time system traps to the kernel, passing
+	the message to be broadcast.
+        \item[2.] The kernel blocks the Orca run-time system.
+        \item[3.] The kernel sends the message to the sequencer as a
+        point-to-point message.
+        \item[4.] The sequencer assigns a {\em sequence number} to the
+        message and broadcasts it.
+        \item[5.] The sending kernel receives the broadcast and unblocks
+        the Orca run-time system.
+\end{itemize}
+If the sending kernel does not receive the broadcast message in a
+fixed period of time, it assumes the message has been lost and retransmits it
+to the sequencer. The sequencer on the other hand checks to see that it
+does not broadcast a message twice.
+
+The sequencer stores the broadcast message in a history buffer. If a
+CPU misses a broadcast, it detects this by comparing the sequence
+number of the next broadcast it receives with that of the last one it
+got. If any number was skipped, the CPU sends a request for the missing
+messages to the sequencer. It then passes the messages in the right
+order to the Orca run-time system.
+
+To ensure the history buffer of the sequencer does not grow too large, a
+processor sending a {\em Request For Broadcast} attaches a piggy-backed
+acknowledgement telling the sequencer the last sequence number it
+received. Additionally it sometimes sends special messages with the
+last sequence number
+to the sequencer. Finally the sequencer can request this information from
+every processor. If every processor received the broadcast messages up to
+some sequencer number $n$, the sequencer can safely delete messages
+$1 \ldots n$ from the history buffer.
+
+A second method of reliable broadcasting is also used. It can be
+summarised as follows:
+\begin{itemize}
+        \item[1.] The Orca run-time system traps to the kernel, passing the message to
+        be broadcast.
+        \item[2.] The kernel blocks the Orca run-time system.
+        \item[3.] The kernel assigns a unique identifier to the
+        message and broadcasts it.
+        \item[4.] The sequencer receives the broadcast, and broadcasts an
+        {\em Accept} message containing the identifier and the next
+        sequencer number.
+        \item[5.] The sending kernel receives the {\em Accept} broadcast
+        and unblocks the Orca run-time system.
+\end{itemize}
+Processors which missed a broadcast can request it from the sequencer in
+the normal way.
+
+The difference between the two protocols is that in the first one, the
+broadcast message appears on the network twice: once as a point-to-point
+message to the sequencer and once as a broadcast. This uses a lot of
+bandwidth, especially if the message is large. The second protocol, on
+the other hand, uses two broadcasts, one for the actual message and one
+for a short {\em Accept} message. This way every processor is interrupted
+twice.
+
+The first protocol is thus used for small messages and the second one
+for large messages. This achieves greater efficiency.
+
+\subsection{The Panda Platform}
+
+A rather different approach was taken with {\em Panda} \cite{Panda},
+a portable platform for parallel programming languages. Panda
+is a virtual machine which offers the following abstractions:
+\begin{itemize}
+	\item threads
+	\item Remote Procedure Call (RPC)
+	\item totally-ordered group communication
+\end{itemize}
+These are the same constructions which made the Broadcast-RPC run-time
+system on Amoeba possible. 
+However, Panda can more easily be ported to non-Amoeba systems.
+
+\begin{figure}
+\epsfxsize=\textwidth
+\epsfbox{panda.eps}
+\caption{The Panda architecture}
+\label{fPanda}
+\end{figure}
+
+Panda is implemented in two layers, the system layer and the Panda
+layer (see Figure \ref{fPanda}).
+The lowest layer is the system layer,
+which 
+can take full advantage of the features of the underlying operating
+system. Above this layer is the Panda layer, which provides the
+operations as described above.
+
+To port Panda to a new architecture, only the system layer has to be
+rewritten. The system layer is carefully designed to implement all
+parts which are performance-critical: messages, threads and the underlying
+network. This way these parts can all be implemented using fast,
+low-level features of the specific operating system.
+
+Panda run-time systems are currently implemented on Amoeba, a
+T9000-based parallel machine, and the CM-5.

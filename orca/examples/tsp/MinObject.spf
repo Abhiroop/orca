@@ -1,0 +1,14 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: MinObject.spf,v 1.2 1999/04/21 10:05:24 ceriel Exp $
+
+OBJECT SPECIFICATION MinObject;
+	FROM TspTypes IMPORT PathType;
+	OPERATION minval(): integer;
+	OPERATION min(v: integer; path: PathType): integer;
+	OPERATION minpath() : PathType;
+	OPERATION assigni(v: integer);
+	OPERATION assignp(p: PathType);
+END;

@@ -1,0 +1,99 @@
+			--------------------------
+			GENETIC ALGORITHMS IN ORCA
+			--------------------------
+
+This directory contains the codes of genetic algorithms written in
+Orca, for solving the graph partition problem. The problem can be
+stated as follows: partition a given graph into two sub-graphs having
+the same number of nodes, by eliminating a minimum number of edges. The
+problem is NP-complete.
+
+One version uses an array for the representation of the population of
+chromosomes. A second version was also implemented, which uses a GRAPH
+structure for representing the population. Finally, a program for
+solving the problem by an exhaustive search method was implemented.
+
+The directory "array" contains the "array" version. The "graph" version
+can be found in the directory "graph". The exhaustive search
+version is in the "exhaustive" directory (this is a sequential program,
+so in the following commands use 1 as <ncpus>).
+
+
+
+COMPILATION
+-----------
+
+To compile the program for an execution under UNIX use the command:
+
+	oc_unixproc -O2 --O -LIN -CHK genetic.imp
+
+To compile the program for an execution under AMOEBA use the command:
+
+	oc_panda -amoeba -O2 --O -LIN -CHK genetic.imp
+
+RUNNING THE PROGRAM UNDER UNIX
+------------------------------
+
+Under UNIX the program can be run with the command
+
+	a.out <ncpus> -OC <matrixfile>
+
+where
+	<ncpus> is the number of CPUs one wants to simulate
+	<matrixfile> is the neme of the file which contains the description of the graph to partition, in the form of the adjacency matrix. An example file follows:
+
+4
+0 1 0 0 
+1 0 1 0
+0 1 0 1
+0 0 1 0
+
+where 
+	4 is the number of nodes (4*4 adjacency matrix)
+	1 represents the presence of an edge
+	0 represents the absence of the edge
+
+Some matrix files are provided with the program. Their names are:
+	3cube.new
+	4-3cube.new
+	8-3cube.new
+
+The file genetic.cfg is also used by the program. It includes specifications for the parameters of the  genetic algorithm. An example file is:
+
+Number of generations 	: 10000
+Number of individuals	: 2000
+Migration rate	 	: 20
+Number of migrators	: 10 
+Crossover probability 	: 0.8
+Mutation probability 	: 0.005
+
+If one wants to run the program with a different set of parameters, changes must be made to this file. 
+ATTENTION! The program looks for the colon character (:) in order to find a parameter value.
+
+
+RUNNING THE PROGRAM UNDER AMOEBA
+-----------------------------
+
+To run the program under AMOEBA, it must be installed. Use the commend 
+
+	ainstall a.out /home/genetic
+
+to install the program in AMOEBA under the name "genetic". To run the program, use the command:
+
+	gax genetic <ncpus> -OC <matrixfile>
+
+The <matrixfile> and the genetic.cfg file must be present in AMOEBA, when the command is executed. Use the "tob" command (before gax), in order to transfer the files, as necessary:
+
+tob genetic.cfg /home/genetic.cfg
+tob <matrixfile> /home/<matrixfile>
+
+					----------------
+					Valentin Cristea
+
+
+
+
+
+
+
+

@@ -1,0 +1,15 @@
+MODULE SPECIFICATION Util;
+
+IMPORT Node;
+IMPORT Reducer;
+
+FUNCTION Init(A,B,randx: OUT integer);
+FUNCTION xrand(lo, hi:real;A,B:integer;randx:SHARED integer) : real;
+FUNCTION pranset(A,B,randx:OUT integer);
+FUNCTION error(msg, a1, a2, a3, a4:string);
+FUNCTION timer_clear_and_start(timer: OUT real);
+FUNCTION timer_stop_and_print(time: SHARED Reducer;timer :real;
+			      allnodes: SHARED Node);
+FUNCTION print_report(allnodes: SHARED Node);
+
+END;

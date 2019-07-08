@@ -1,0 +1,10 @@
+MODULE SPECIFICATION fourier;
+CONST nn2=4096;
+CONST iproc=8;
+CONST ilog=3; # ilog =  logarithme (grondtal 2) van iproc
+CONST nproc=nn2 / iproc;
+
+TYPE vector=ARRAY[integer 1..nn2] OF real;
+
+PROCESS OrcaMain();
+END;

@@ -1,0 +1,103 @@
+OBJECT SPECIFICATION VarObject;
+
+FROM Common IMPORT	IntArrayType, RealArrayType, IntMrecType,
+			RealMrecType, IntMrecArray, RealMrecArray,
+			IntRecordType, NTYPInfType, PosArrayType,
+			ParTypType, InfoType;
+
+
+TYPE VarType =	ARRAY [integer 0 .. NCPUS() - 1] OF RECORD
+		    NION, IREC : integer;
+		    POS, EPOS  : PosArrayType;
+		    IQ         : RealArrayType;
+		    PARTYP     : ParTypType;
+		    IRP, IRM   : IntMrecType;
+		    RREC       : RealMrecType;
+		END;
+
+
+OPERATION Init(Size : integer);
+
+
+OPERATION SetUp(CPU, GNION, NION, NrCPUs : integer;
+		POS                      : PosArrayType;
+		IQ                       : RealArrayType;
+		PARTYP                   : ParTypType);
+
+
+OPERATION ValX(CPU, i : integer) : real;
+
+OPERATION ValY(CPU, i : integer) : real;
+
+OPERATION ValZ(CPU, i : integer) : real;
+
+OPERATION ValIQ(CPU, i : integer) : real;
+
+OPERATION ValNTYP(CPU, i : integer) : integer;
+
+OPERATION ValNPAR(CPU, i : integer) : integer;
+
+OPERATION ValNION(CPU : integer) : integer;
+
+OPERATION GetTime(NrCPUs : integer) : real;
+
+OPERATION SetTime(Time : real);
+
+OPERATION Recombined() : boolean;
+
+
+OPERATION AddFieldsTime(EPOS : PosArrayType;
+			Time : real);
+
+
+OPERATION SetComp(CPU  : integer;
+		  EPOS : PosArrayType);
+
+
+OPERATION GetPosField(CPU       : integer;
+		      POS, EPOS : OUT PosArrayType);
+
+OPERATION SetPosField(CPU, NrCPUs : integer;
+		      POS         : PosArrayType);
+
+
+OPERATION GetPosInfo(CPU    : integer;
+		     POS    : OUT PosArrayType;
+		     IQ     : OUT RealArrayType;
+		     PARTYP : OUT ParTypType);
+
+OPERATION SetPosInfo(CPU, NION : integer;
+		     POS       : PosArrayType;
+		     IQ        : RealArrayType;
+		     PARTYP    : ParTypType);
+
+
+OPERATION GetSomePosInfo(NrCPUs, NrElts : integer;
+                         GNION          : OUT integer;
+                         NIONS          : OUT IntArrayType;
+                         INF            : OUT InfoType;
+                         NTYPS          : OUT NTYPInfType);
+
+
+OPERATION GetAllInfo(NION, IDX, Size, NrCPUs : integer;
+		     WHERE                   : IntRecordType;
+		     POS, EPOS               : OUT PosArrayType;
+		     IQ                      : OUT RealArrayType;
+		     PARTYP                  : OUT ParTypType);
+
+OPERATION SetAllInfo(CPU, NION, NrCPUs : integer;
+		     POS, EPOS         : PosArrayType;
+		     IQ                : RealArrayType;
+		     PARTYP            : ParTypType);
+
+
+OPERATION GetReac(NrCPUs     : integer;
+		  IRECs      : OUT IntArrayType;
+		  IRPs, IRMs : OUT IntMrecArray;
+		  RRECs      : OUT RealMrecArray);
+
+OPERATION SetReac(CPU, IREC : integer;
+		  IRP, IRM  : IntMrecType;
+		  RREC      : RealMrecType);
+
+END;

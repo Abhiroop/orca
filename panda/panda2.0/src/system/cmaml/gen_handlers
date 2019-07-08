@@ -1,0 +1,22 @@
+#!/bin/sh
+
+template="template.s"
+destfile="pan_small.S"
+
+if [ $# -ne 1 ]; then
+	echo "Usage: $0 <number of handlers>" 2>&1
+	exit 1
+fi
+
+if [ -r $destfile ]; then
+	rm $destfile
+fi
+
+n=$1
+i=0
+while [ $i -lt $n ]; do
+	cat $template |
+	sed s/XXX/$i/g |
+	sed s/LABEL/pan_small_handler_$i/g >> pan_small.S
+	i=`expr $i + 1`
+done

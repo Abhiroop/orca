@@ -1,0 +1,14 @@
+OBJECT SPECIFICATION JobQueue;
+	FROM Matrix IMPORT ComplexArray_T;
+
+	TYPE Job_T = RECORD
+		work: ComplexArray_T;
+		start: integer;
+		time: integer;
+		id: integer;
+	END;
+
+	OPERATION AddJob(job: IN Job_T);
+	OPERATION NoMoreJobs();
+	OPERATION GetJob(job: OUT Job_T): boolean;
+END;

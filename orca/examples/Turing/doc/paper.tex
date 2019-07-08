@@ -1,0 +1,60 @@
+\documentstyle[titlepage,11pt,a4,epsf,tgrind]{article}
+
+\hyphenation{speed-up speed-ups}
+
+\title{Parallelising the Turing Ring using Orca}
+
+\author{Dion Nicolaas\\
+	Department of Mathematics and Computer Science \\
+        Vrije Universiteit \\
+	Amsterdam, The Netherlands}
+\date{August 31, 1994}
+
+\begin{document}
+\begin{titlepage}
+%\vspace{1.5cm}
+\hspace{2cm}
+\parbox{10cm}{
+	\begin{small}
+	\begin{center}
+		{\Large Parallelising the Turing Ring using Orca} \\
+	\vspace{1cm}
+		Dion Nicolaas\\
+		Department of Mathematics and Computer Science \\
+		Vrije Universiteit \\
+		Amsterdam, The Netherlands \\
+	\vspace{2cm}
+		August 31, 1994
+	\end{center}
+	\end{small}
+\vspace{12.2cm}
+\hspace{7cm}
+\epsfxsize=3.5cm
+\epsfbox{grif.ps}
+}
+\end{titlepage}
+
+\begin{abstract}
+The Turing Ring is a discrete simulation of a chaotic dynamic system. It
+is well suited for parallelisation, but balancing the load on processors
+is difficult. A program was written in Orca, an ALGOL-like language for
+parallel systems supporting shared data objects.
+The load-balancing strategy used is described and its performance
+reported. Some comments on the ease of programming in Orca are then
+made.
+\end{abstract}
+
+
+\input{intro}
+\input{turring}
+\input{prevwork}
+\input{orca}
+\input{orcaimp}
+\input{imptur}
+\input{results}
+\input{concl}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

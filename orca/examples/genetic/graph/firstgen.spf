@@ -1,0 +1,13 @@
+MODULE SPECIFICATION firstgen;
+
+FROM IntMatrix IMPORT IntMatrix;
+FROM Random IMPORT Random;
+FROM CromoVector IMPORT individual, population;
+FROM GenTypes IMPORT configuration;
+
+FUNCTION generate_indiv(A: IntMatrix; symmetric: boolean; 
+                 nb_nodes: integer; individ: SHARED individual; r: Random);
+FUNCTION first_generation(Pop: SHARED population; config: configuration;
+		A: IntMatrix; symmetric: boolean;  nb_nodes: integer; r: Random);
+
+END;

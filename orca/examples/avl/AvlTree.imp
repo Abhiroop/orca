@@ -1,0 +1,555 @@
+OBJECT IMPLEMENTATION AvlTree;
+
+   FROM Finish IMPORT Finish;
+
+#
+# AVL operations
+#
+#
+#	rc := AvlSearch (user_info);
+#	rc := AvlUpdate (user_info);
+#	rc := AvlModify (user_info);
+#	rc := AvlInsert (user_info);
+#	rc := AvlDelete (user_info);
+#
+#	AvlDisplay ()
+#		display the AVL tree
+#	AvlStatistics ()
+#		display performance characteristics of AVL functions
+#
+#	Algorithm from  [??] .......................................
+#
+
+   CONST COMPARE_RESULT_LT	= -1;
+   CONST COMPARE_RESULT_EQ	= 0;
+   CONST COMPARE_RESULT_GT	= 1;
+
+   CONST RIGHT			= 0;
+   CONST EQUAL			= 1;
+   CONST LEFT			= 2;
+
+   CONST TRUE			= 1;
+   CONST FALSE			= 0;
+
+   t : Tree;
+   operation_record : OperationRecord;
+
+FUNCTION avl_rshift (t : SHARED Tree; n : Node) : Node;
+ # right shift :
+ #
+ #               (1)        (2)
+ #               /            \
+ #             (2)     =>     (1)
+ #               \            /
+ #               (3)        (3)
+   x : Node;
+BEGIN
+   x := n;
+   n := t[x].ltree;
+   t[x].ltree := t[n].rtree;
+   t[n].rtree := x;
+   RETURN n;
+END;
+
+FUNCTION avl_lshift (t : SHARED Tree; n : Node) : Node;
+ # left shift :
+ #
+ #           (1)                (2)
+ #             \                /
+ #             (2)     =>     (1)
+ #             /                \
+ #           (3)                (3)
+   x : Node;
+BEGIN
+   x := n;
+   n := t[x].rtree;
+   t[x].rtree := t[n].ltree;
+   t[n].ltree := x;
+   RETURN n;
+END;
+
+FUNCTION avl_lreduce (t : SHARED Tree; b : Node) : Node;
+   with : Node;
+   bb, bl, br : integer;
+BEGIN
+   t.balance_operations +:= 1;
+
+   with := t[b].ltree;
+   IF (t[with].bal = EQUAL) THEN
+      bb := RIGHT;
+   ELSE
+      bb := EQUAL;
+   FI;
+
+   IF (t[with].bal /= RIGHT) THEN
+      bl := t[t[with].ltree].bal;
+   ELSE
+      IF (t[t[with].rtree].bal = RIGHT) THEN
+         bl := LEFT; ELSE bl := EQUAL;
+      FI;
+   FI;
+
+   CASE (t[with].bal) OF
+      LEFT =>
+         br := EQUAL;
+    | EQUAL =>
+         br := LEFT;
+    | RIGHT =>
+         IF (t[t[with].rtree].bal = LEFT) THEN
+            br := RIGHT; ELSE br := EQUAL;
+         FI;
+   ESAC;
+
+   IF (t[t[b].ltree].bal = RIGHT) THEN
+      t[b].ltree := avl_lshift (t, t[b].ltree);
+   FI;
+
+   b := avl_rshift (t, b);
+   t[b].bal := bb;
+   t[t[b].ltree].bal := bl;
+   t[t[b].rtree].bal := br;
+
+   RETURN b;
+END;
+
+FUNCTION avl_rreduce (t : SHARED Tree; b : Node) : Node;
+   with : Node;
+   bb, br, bl : integer;
+BEGIN
+
+   t.balance_operations +:= 1;
+
+   with := t[b].rtree;
+   IF (t[with].bal = EQUAL) THEN
+      bb := LEFT; ELSE bb := EQUAL;
+   FI;
+
+   IF (t[with].bal /= LEFT) THEN
+      br := t[t[with].rtree].bal;
+   ELSE IF (t[t[with].ltree].bal = LEFT) THEN
+           br := RIGHT; ELSE br := EQUAL;
+        FI;
+   FI;
+
+   CASE (t[with].bal) OF
+      RIGHT =>
+         bl := EQUAL;
+    | EQUAL =>
+         bl := RIGHT;
+    | LEFT =>
+         IF (t[t[with].ltree].bal = RIGHT) THEN
+            bl := LEFT; ELSE bl := EQUAL;
+         FI;
+   ESAC;
+
+   IF (t[t[b].rtree].bal = LEFT) THEN
+      t[b].rtree := avl_rshift (t, t[b].rtree);
+   FI;
+
+   b := avl_lshift (t, b);
+   t[b].bal := bb;
+   t[t[b].rtree].bal := br;
+   t[t[b].ltree].bal := bl;
+
+   RETURN b;
+END;
+
+FUNCTION avl_compare (user_key, node_key : integer) : integer;
+BEGIN
+   IF (user_key < node_key) THEN
+      RETURN (COMPARE_RESULT_LT);
+   ELSE
+      IF (user_key > node_key) THEN
+         RETURN (COMPARE_RESULT_GT);
+      ELSE
+         RETURN (COMPARE_RESULT_EQ);
+      FI;
+   FI;
+END;
+
+FUNCTION avl_tree (t : SHARED Tree; node : Node; record : SHARED UserRecord) : Node;
+
+   # combined search, update, modify, and insert function
+
+   compare_result : integer;
+BEGIN
+   IF (node /= NIL) THEN
+      t.avlnode_compares +:= 1;
+      compare_result := avl_compare (record.key, t[node].key);
+      IF (compare_result = COMPARE_RESULT_EQ) THEN
+         t.avl_inc := FALSE;
+         t.avl_result_node := node;
+         CASE (t.avl_status) OF
+            AVL_RECORD_SEARCH =>
+               t.avl_result_key := t[node].key;
+               t.avl_result_data := t[node].data;
+               t.avl_status := AVL_SEARCH_OK;
+          | AVL_RECORD_UPDATE =>
+               t.avl_result_key := t[node].key;
+               t.avl_result_data := t[node].data;
+               t[node].data := record.data;
+               t.up_old_operations +:= 1;
+               t.avl_status := AVL_UPDATE_OLD;
+          | AVL_RECORD_MODIFY =>
+               t.avl_result_key := t[node].key;
+               t.avl_result_data := t[node].data;
+               t[node].data := record.data;
+               t.avl_status := AVL_MODIFY_OK;
+          | AVL_RECORD_INSERT =>
+               t.avl_result_key := record.key;
+               t.avl_result_data := record.data;
+               t.avl_status := AVL_INSERT_NOT_OK;
+         ELSE
+               WriteLine ("avl_tree : internal error ", t.avl_status);
+               Finish ();
+         ESAC;
+      ELSE
+         IF (compare_result = COMPARE_RESULT_LT) THEN
+            t[node].ltree := avl_tree (t, t[node].ltree, record);
+            IF (t.avl_inc = TRUE) THEN
+               CASE (t[node].bal) OF
+                  RIGHT =>
+                     t[node].bal := EQUAL;
+                     t.avl_inc := FALSE;
+                | EQUAL =>
+                     t[node].bal := LEFT;
+                | LEFT =>
+                     node := avl_lreduce (t, node);
+                     t.avl_inc := FALSE;
+               ELSE
+                     WriteLine ("avl_tree : internal error");
+                     Finish ();
+               ESAC;
+            FI;
+         ELSE	# COMPARE_RESULT_GT
+            t[node].rtree := avl_tree (t, t[node].rtree, record);
+            IF (t.avl_inc = TRUE) THEN
+               CASE (t[node].bal) OF
+                  LEFT =>
+                     t[node].bal := EQUAL;
+                     t.avl_inc := FALSE;
+                | EQUAL =>
+                     t[node].bal := RIGHT;
+                | RIGHT =>
+                     node := avl_rreduce (t, node);
+                     t.avl_inc := FALSE;
+               ELSE
+                     WriteLine ("avl_tree : internal error\n");
+                     Finish ();
+               ESAC;
+            FI;
+         FI;
+      FI;
+   ELSE		# node = NIL
+      t.avl_result_key := record.key;
+      t.avl_result_data := record.data;
+      CASE (t.avl_status) OF
+
+         AVL_RECORD_MODIFY =>
+            t.avl_inc := FALSE;
+            t.avl_result_node := NIL;
+            t.avl_status := AVL_MODIFY_NOT_OK;
+
+       | AVL_RECORD_UPDATE,
+         AVL_RECORD_INSERT =>
+            t.avl_inc := TRUE;
+            node := ADDNODE (t);
+            t.avl_result_node := node;
+            t[node].key := record.key;
+            t[node].data := record.data;
+            t[node].ltree := NIL;
+            t[node].rtree := NIL;
+            t[node].bal := EQUAL;
+            t.current_tree_nodes +:= 1;
+            IF (t.current_tree_nodes >
+                  t.maximum_tree_nodes) THEN
+               t.maximum_tree_nodes :=
+                  t.current_tree_nodes;
+            FI;
+
+            IF (t.avl_status = AVL_RECORD_UPDATE) THEN
+               t.up_new_operations +:= 1;
+               t.avl_status  := AVL_UPDATE_NEW;
+            ELSE
+               t.avl_status := AVL_INSERT_OK;
+            FI;
+
+       | AVL_RECORD_SEARCH =>
+            t.avl_inc := FALSE;
+            t.avl_result_node := NIL;
+            t.avl_status := AVL_SEARCH_NOT_OK;
+
+         ELSE
+            WriteLine ("avl_tree : internal error, status = ", t.avl_status);
+            Finish ();
+      ESAC;
+   FI;
+   RETURN node;
+END;
+
+FUNCTION avl_lbalance (t : SHARED Tree; st : Node) : Node;
+BEGIN
+   CASE (t[st].bal) OF
+      RIGHT =>
+         t[st].bal := EQUAL;
+    | EQUAL =>
+         t[st].bal := LEFT;
+         t.avl_decr := FALSE;
+    | LEFT =>
+         st := avl_lreduce (t, st);
+         IF (t[st].bal = RIGHT) THEN
+            t.avl_decr := FALSE;
+         FI;
+   ESAC;
+   RETURN st;
+END;
+
+FUNCTION avl_rbalance (t : SHARED Tree; st : Node) : Node;
+BEGIN
+   CASE (t[st].bal) OF
+      LEFT =>
+         t[st].bal := EQUAL;
+    | EQUAL =>
+         t[st].bal := RIGHT;
+         t.avl_decr := FALSE;
+    | RIGHT =>
+         st := avl_rreduce (t, st);
+         IF (t[st].bal = LEFT) THEN
+            t.avl_decr := FALSE;
+         FI;
+   ESAC;
+   RETURN st;
+END;
+
+FUNCTION avl_delmax (t : SHARED Tree; st : Node) : Node;
+BEGIN
+   IF (t[st].rtree /= NIL) THEN
+      t[st].rtree := avl_delmax (t, t[st].rtree);
+      IF (t.avl_decr = TRUE) THEN
+         st := avl_lbalance (t, st);
+      FI;
+   ELSE
+      t.avl_subst := st;
+      st := t[st].ltree;
+      t.avl_decr := TRUE;
+   FI;
+   RETURN st;
+END;
+
+FUNCTION avl_delmin (t : SHARED Tree; st : Node) : Node;
+BEGIN
+   IF (t[st].ltree /= NIL) THEN
+      t[st].ltree := avl_delmin (t, t[st].ltree);
+      IF (t.avl_decr = TRUE) THEN
+         st := avl_rbalance (t, st);
+      FI;
+   ELSE
+      t.avl_subst := st;
+      st := t[st].rtree;
+      t.avl_decr := TRUE;
+   FI;
+   RETURN st;
+END;
+
+FUNCTION avl_delete (t : SHARED Tree; node : Node; record : SHARED UserRecord) : Node;
+   compare_result : integer;
+BEGIN
+   IF (node = NIL) THEN
+      t.avl_decr := FALSE;
+      t.avl_status := AVL_DELETE_NOT_OK;
+   ELSE
+      t.avlnode_compares +:= 1;
+      compare_result := avl_compare (record.key, t[node].key);
+      IF (compare_result = COMPARE_RESULT_GT) THEN
+         t[node].rtree := avl_delete (t, t[node].rtree, record);
+         IF (t.avl_decr = TRUE) THEN
+            node := avl_lbalance (t, node);
+         FI;
+      ELSE
+         IF (compare_result = COMPARE_RESULT_LT) THEN
+            t[node].ltree := avl_delete (t, t[node].ltree, record);
+            IF (t.avl_decr = TRUE) THEN
+               node := avl_rbalance (t, node);
+            FI;
+         ELSE   # COMPARE_RESULT_EQ
+            t.current_tree_nodes -:= 1;
+            t.avl_status := AVL_DELETE_OK;
+            t.avl_result_node := node;
+            t.avl_result_key := t[node].key;
+            t.avl_result_data := t[node].data;
+            IF (t[node].ltree = NIL) AND
+               (t[node].rtree = NIL) THEN
+               DELETENODE (t, node);
+               node := NIL;
+               t.avl_decr := TRUE;
+            ELSE
+               IF (t[node].bal = LEFT) THEN
+                  t[node].ltree := avl_delmax (t, t[node].ltree);
+                  IF (t.avl_decr = TRUE) THEN t[node].bal := EQUAL; FI;
+               ELSE
+                  t[node].rtree := avl_delmin (t, t[node].rtree);
+                  IF (t.avl_decr = TRUE) THEN
+                     IF (t[node].bal = RIGHT) THEN
+                        t[node].bal := EQUAL;
+                     ELSE
+                        t[node].bal := LEFT;
+                        t.avl_decr := FALSE;
+                     FI;
+                  FI;
+               FI;
+               t[t.avl_subst].ltree := t[node].ltree;
+               t[t.avl_subst].rtree := t[node].rtree;
+               t[t.avl_subst].bal := t[node].bal;
+               DELETENODE (t, node);
+               node := t.avl_subst;
+            FI;
+         FI;
+      FI;
+   FI;
+   RETURN node;
+END;
+
+FUNCTION avl_print_tree (t : SHARED Tree; n : Node; ind : integer);
+   i : integer;
+BEGIN
+   IF (ind = 0) THEN
+      WriteLine ();
+      WriteLine ("Tree :");
+   FI;
+
+   IF (n /= NIL) THEN
+      avl_print_tree (t, t[n].ltree, ind+6);
+      i := 0;
+      WHILE (i < ind) DO
+         Write (" ") ;
+         i +:= 1;
+      OD;
+      WriteLine (t[n].key);
+      avl_print_tree (t, t[n].rtree, ind+6);
+   FI;
+
+   IF (ind = 0) THEN
+      WriteLine ("End of tree");
+      WriteLine ();
+   FI;
+   RETURN;
+END;
+
+FUNCTION ShowTree (t : SHARED Tree);
+BEGIN
+   avl_print_tree (t, t.root, 0);
+END;
+
+FUNCTION ShowStatistics (t : SHARED Tree);
+   total_tree_operations : integer;
+   average_node_compares : integer;
+   average_balance_operations : integer;
+BEGIN
+
+   total_tree_operations :=
+      t.search_operations + t.up_new_operations +
+      t.up_old_operations + t.modify_operations +
+      t.insert_operations + t.delete_operations;
+
+   IF (total_tree_operations = 0) THEN
+      average_node_compares := 0;
+   ELSE
+      average_node_compares :=
+		(10 * t.avlnode_compares) / total_tree_operations ;
+   FI;
+
+   IF ((total_tree_operations - t.search_operations) = 0) THEN
+      average_balance_operations := 0;
+   ELSE
+      average_balance_operations :=
+		(10 * t.balance_operations) / (total_tree_operations - t.search_operations);
+   FI;
+
+   WriteLine ();
+   WriteLine ("Avl Tree Statistics :");
+   WriteLine ("search operations ......................", t.search_operations);
+   WriteLine ("update (new) operations ................", t.up_new_operations);
+   WriteLine ("update (old) operations ................", t.up_old_operations);
+   WriteLine ("modify operations ......................", t.modify_operations);
+   WriteLine ("insert operations ......................", t.insert_operations);
+   WriteLine ("delete operations ......................", t.delete_operations);
+   WriteLine ("total tree operations ..................", total_tree_operations);
+
+   WriteLine ("maximum number of nodes ................", t.maximum_tree_nodes);
+   WriteLine ("total balance operations ...............", t.balance_operations);
+   WriteLine ("total node compares ....................", t.avlnode_compares);
+
+   WriteLine ("avg node compares (*10) ................", average_node_compares);
+   WriteLine ("avg balance operations (*10) ...........", average_balance_operations);
+   WriteLine ();
+END;
+
+OPERATION AvlDisplay ();
+BEGIN
+   ShowTree (t);
+END;
+
+OPERATION AvlStatistics ();
+BEGIN
+   ShowStatistics (t);
+END;
+
+OPERATION AvlSearch (record : UserRecord) : OperationRecord;
+BEGIN
+   t.avl_status := AVL_RECORD_SEARCH;
+   t.search_operations +:= 1;
+   t.root := avl_tree (t, t.root, record);
+   operation_record.return_code := t.avl_status;
+   operation_record.user_record.key := t.avl_result_key;
+   operation_record.user_record.data := t.avl_result_data;
+   RETURN (operation_record);
+END;
+
+OPERATION AvlUpdate (record : UserRecord) : integer;
+BEGIN
+   t.avl_status := AVL_RECORD_UPDATE;
+   # update old/new counters in function "avl_tree"
+   t.root := avl_tree (t, t.root, record);
+   RETURN (t.avl_status);
+END;
+
+OPERATION AvlModify (record : UserRecord) : integer;
+BEGIN
+   t.avl_status := AVL_RECORD_MODIFY;
+   t.modify_operations +:= 1;
+   t.root := avl_tree (t, t.root, record);
+   RETURN (t.avl_status);
+END;
+
+OPERATION AvlInsert (record : UserRecord) : integer;
+BEGIN
+   t.avl_status := AVL_RECORD_INSERT;
+   t.insert_operations +:= 1;
+   t.root := avl_tree (t, t.root, record);
+   RETURN (t.avl_status);
+END;
+
+OPERATION AvlDelete (record : UserRecord) : integer;
+BEGIN
+   t.avl_status := AVL_RECORD_DELETE;
+   t.delete_operations +:= 1;
+   t.root := avl_delete (t, t.root, record);
+   RETURN (t.avl_status);
+END;
+
+BEGIN
+
+   t.root := NIL;
+
+   t.search_operations := 0;
+   t.up_old_operations := 0;
+   t.up_new_operations := 0;
+   t.modify_operations := 0;
+   t.insert_operations := 0;
+   t.delete_operations := 0;
+   t.avlnode_compares  := 0;	# total number of node compares
+   t.balance_operations := 0;	# total number of balance operations
+   t.current_tree_nodes := 0;	# current number of tree nodes
+   t.maximum_tree_nodes := 0;	# maximum number of nodes
+
+END;	# object implementation of Avltree

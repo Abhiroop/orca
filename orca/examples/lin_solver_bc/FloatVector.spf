@@ -1,0 +1,20 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION FloatVector;
+
+TYPE FloatVector  = ARRAY[integer] OF real;
+TYPE FloatMatrix  = ARRAY[integer] OF FloatVector;
+TYPE FloatMatrix3 = ARRAY[integer] OF FloatMatrix;
+
+FUNCTION DynFloatVector(N : integer) : FloatVector;
+
+FUNCTION DynFloatMatrix(Nrow : integer;
+			Ncol : integer) : FloatMatrix;
+
+FUNCTION DynFloatMatrix3(Nx : integer;
+			 Ny : integer;
+			 Nz : integer) : FloatMatrix3;
+
+END;

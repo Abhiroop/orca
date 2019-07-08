@@ -1,0 +1,20 @@
+PROCESS MixedWorker(P, firstMatrix, lastMatrix: integer; procs: CPUlist);
+    A: fftObject[1..N];
+BEGIN
+    A$$partition(N);
+    A$$distribute_on_list(Procs, P, BLOCK);
+    FOR i IN firstMatrix .. lastMatrix DO
+       	readMatrix(i, A);        # read next matrix
+        2Dfft(A);                # do data parallel 2D-FFT
+    OD;
+END;
+
+PROCESS mixedTaskDataParallel(Ncpus, Nworkers, Nmatrices: integer);
+    P, S: integer;
+BEGIN
+    P := Ncpus/Nworkers;         # number of CPUs per worker
+    S := Nmatrices/Nworkers;     # number of matrices per worker
+    FOR i IN  0 .. Nworkers-1 DO
+        FORK MixedWorker(P, i*S, (i+1)*S-1, [i*P .. (i+1)*P-1]) ON(i*P);
+    OD;
+END;

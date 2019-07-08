@@ -1,0 +1,58 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION Consts;
+
+FROM	Common	IMPORT	TLC_Type, PCC_Type;
+
+
+### Molecular constants for water in angstrom, radian, and a.m.u.
+ 
+CONST NATOMS		= 3;
+CONST NDIRS		= 3;
+CONST NVALS		= NATOMS * NDIRS;
+CONST TEMP		= 298.0D;
+CONST OMAS		= 15.99945D;
+CONST HMAS		= 1.007825D;
+CONST WTMOL		= OMAS + 2.0 * HMAS;
+CONST RHO		= 0.9980D;
+ 
+ 
+### Units used to scale variables (in c.g.s.)
+ 
+CONST UNITT		= 1.0D-15;
+CONST UNITL		= 1.0D-8;
+CONST UNITM		= 1.6605655D-24;
+CONST BOLTZ		= 1.380662D-16;
+ 
+ 
+### Water-water interaction parameters
+ 
+CONST QQ		= 0.07152158D;
+CONST QQ2		= 2.00 * QQ;
+CONST QQ4		= 2.00 * QQ2;
+
+
+### Calculate predictor-corrector constants
+#
+FUNCTION ComputePccConstants(N   : integer;
+			     C   : OUT TLC_Type;
+			     PCC : OUT PCC_Type);
+
+
+### Set up some specific system constants
+#
+FUNCTION SetUpSystemConstants(NMOL  : integer;
+			      TSTEP : SHARED longreal;
+			      NATMO : OUT integer;
+			      CUTOFF, FPOT, FKIN, BOXH, BOXL,
+			      REF1,FHM, FOM : OUT longreal);
+
+
+### Print some system constants 
+#
+FUNCTION PrintConstants(NSTEP, NMOL, NORDER : integer;
+			TSTEP, CUTOFF : longreal);
+
+END;

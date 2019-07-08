@@ -1,0 +1,18 @@
+OBJECT IMPLEMENTATION vector[lb..ub:integer];
+    x: real;
+
+PARALLEL OPERATION[ind] update_x(): REDUCE real WITH max;
+    val, diff: real;
+BEGIN
+    val := b[ind];
+    FOR j IN lb..ub DO   # sum (x[j] * a[ind,j]), for j /= ind
+        IF j /= ind THEN
+	    val := val - x[j] * a[ind, j];
+        FI;
+    OD;
+    val /:= a[ind, ind]; # divide by a[ind,ind]
+    diff := fabs(val - x[ind]);
+    x[ind] := val;
+    RETURN diff;         # return difference with previous value
+END;
+END;

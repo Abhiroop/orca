@@ -1,0 +1,37 @@
+.\"
+.\" (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+.\" For full copyright and restrictions on use see the file COPYRIGHT in the
+.\" top level of the Orca distribution.
+.\"
+.\" $Id: oc_bcast-rpc.1,v 1.3 1998/10/27 15:43:18 ceriel Exp $
+.TH OC_BCAST-RPC 1
+.ad
+.SH NAME
+oc_bcast-rpc \- Orca with the bcast-rpc runtime system
+.SH SYNOPSIS
+.B oc_bcast-rpc
+.RI [ option ] 
+.I sources
+.SH DESCRIPTION
+This command compiles an Orca program for the bcast-rpc runtime system,
+which runs on Amoeba.
+In addition to the usual
+.IR oc (1)
+options, the following options are available:
+.IP \-\fBsparc\fP
+.br
+Produce code for the SPARC processor. This is the default.
+.IP \-\fBmc68000\fP
+.br
+Produce code for the Motorola 680?0 processor.
+.IP \-\fBopt\fP
+.br
+Use the optimizing version of the bcast-rpc runtime system. The non-optimizing
+version of the runtime system always replicates shared objects. The optimizing
+version may decide to store a shared object on one processor and handle
+updates and reads using RPC's.
+.LP
+This command is just a simple front-end for
+.IR oc (1).
+.SH "SEE ALSO"
+oc(1)

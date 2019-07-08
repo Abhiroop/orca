@@ -1,0 +1,57 @@
+echo "Building libraries ..."
+
+if  mkdir -p $TARGET/lib/std
+then	:
+else	echo "Could not create directory $TARGET/lib/std" 1>&2
+	exit 1
+fi
+
+cd $TARGET/lib/std
+
+( cd $ORCA_HOME/src/rts/std ; tar cf - . ) | tar xf -
+
+cp Makefile Makefile.orig
+sed "s+^\(ORCA_HOME[ 	]*= \).*+\1$TARGET+" < Makefile.orig > Makefile
+if $MAKE > Out 2>&1
+then	rm -f Out
+else	echo "make failed, see $TARGET/lib/std/Out"
+	exit 1
+fi
+
+if  mkdir -p $TARGET/lib/include
+then	:
+else	echo "Could not create directory $TARGET/lib/include" 1>&2
+	exit 1
+fi
+
+cd $TARGET/lib/include
+
+( cd $ORCA_HOME/src/rts/include ; tar cf - . ) | tar xf -
+
+cd $TARGET/lib/include/system/panda3.0
+if mkdir -p src
+then	:
+else	echo "Could not create directory $TARGET/lib/include/system/panda3.0/src" 1>&2
+	exit 1
+fi
+
+cd src
+( cd $ORCA_HOME/src/rts/system/panda3.0 ; tar cf - . ) | tar xf -
+
+cd $TARGET/lib/include/system/panda4.0
+if mkdir -p src
+then	:
+else	echo "Could not create directory $TARGET/lib/include/system/panda4.0/src" 1>&2
+	exit 1
+fi
+
+cd src
+( cd $ORCA_HOME/src/rts/system/panda4.0 ; tar cf - . ) | tar xf -
+
+cd $TARGET/lib
+cp $CONF/make_paths make_paths
+
+if ./build_all
+then echo "libraries done"
+else exit 1
+fi

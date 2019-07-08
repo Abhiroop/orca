@@ -1,0 +1,71 @@
+#!/bin/sh
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: oc_bcast-rpc,v 1.6 1995/07/31 09:08:47 ceriel Exp $
+
+OC_HOME=/usr/proj/orca; export OC_HOME
+AMOEBA_HOME=/usr/proj/amwork
+
+# default values:
+PROCESSOR=sparc
+OC_RTSNAM=bcast-rpc; export OC_RTSNAM
+binsuf=sun4
+OPTIM=
+PROFLIB=
+PROFFLAG=
+OC_PFLAG=
+AMOEBALIB=amoeba
+
+case `uname -r` in
+5*)	binsuf=sol2
+	;;
+esac
+
+for i
+do
+  case $i in
+    -sparc|-mc68000)
+	PROCESSOR=`expr $i : '-\(.*\)'`
+	;;
+    -opt*)
+	OC_RTSNAM=bcast-rpc.opt; export OC_RTSNAM
+	OPTIM=-DOPTIMIZED
+	;;
+    -p*)
+	PROFLIB=$AMOEBA_HOME/conf/amoeba/$PROCESSOR.gnu-2/lib/gprof/libgprof.a
+	PROFFLAG="$i"
+	OC_PFLAG="OC_SPECIAL=profiling"
+	;;
+    -g)	ARGS="$ARGS $i"
+	AMOEBALIB=amoeba.gdb
+	;;
+    *)	ARGS="$ARGS $i"
+	;;
+  esac
+done
+
+ORCA_INCLUDES="-I\$OC_HOME/lib/include \
+	       -I\$OC_HOME/lib/include/system/bcast-rpc"
+
+AMOEBA_INCLUDES="-I$AMOEBA_HOME/src/h \
+		 -I$AMOEBA_HOME/src/h/posix \
+		 -I$AMOEBA_HOME/src/h/toolset/gnu-2"
+
+OC_MACH=${PROCESSOR}_amoeba
+OC_RTSINCLUDES="$ORCA_INCLUDES $AMOEBA_INCLUDES"
+OC_CCOMP="$AMOEBA_HOME/conf/amoeba/$PROCESSOR.gnu-2/toolset/do_gcc"
+OC_CFLAGS="-mv8 -c -G /usr/proj/amwork/bin.$binsuf/gnu \
+	   -mam_$PROCESSOR -D$PROCESSOR -DAMOEBA $OPTIM $PROFFLAG $OC_CFLAGS"
+OC_LD="/usr/proj/amwork/conf/amoeba/$PROCESSOR.gnu-2/toolset/do_ld"
+OC_LDFLAGS="-G /usr/proj/amwork/bin.$binsuf/gnu -mam_$PROCESSOR -L\$OC_HOME/lib/amoeba/$PROCESSOR $OC_LDFLAGS"
+OC_STARTOFF="$AMOEBA_HOME/conf/amoeba/$PROCESSOR.gnu-2/lib/head/head.o"
+OC_LIBS="\$OC_HOME/\$OC_LIBNAM/\$OC_RTSNAM/\$OC_MACH/\$OC_SPECIAL/lib\$OC_RTSNAM.a \
+	 $PROFLIB \
+	 $AMOEBA_HOME/conf/amoeba/$PROCESSOR.gnu-2/lib/ajax/libajax.a \
+	 $AMOEBA_HOME/conf/amoeba/$PROCESSOR.gnu-2/lib/math/libmath.a \
+	 $AMOEBA_HOME/conf/amoeba/$PROCESSOR.gnu-2/lib/$AMOEBALIB/libamoeba.a"
+export OC_MACH OC_RTSINCLUDES OC_CCOMP OC_CFLAGS OC_LD OC_LDFLAGS
+export OC_STARTOFF OC_LIBS
+$OC_HOME/bin.$binsuf/oc $OC_PFLAG $ARGS

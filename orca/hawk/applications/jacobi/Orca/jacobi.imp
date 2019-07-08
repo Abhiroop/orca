@@ -1,0 +1,45 @@
+MODULE IMPLEMENTATION jacobi;
+  IMPORT vector;
+  FROM consts IMPORT PRECISION, DEFAULT_UPB;
+  FROM Time IMPORT SysMilli;
+  FROM args IMPORT Argc, Argv;
+  FROM conversions IMPORT StringToInt;
+  FROM distributions IMPORT BLOCK;
+
+  FUNCTION DoWork(upb: integer);
+	v: vector[1..upb];
+	start, end: integer;
+	maxdiff: real;
+	niter: integer;
+  BEGIN
+	WriteLine("Jacobi, size ", upb);
+	v$$partition(NCPUS());
+	v$$distribute_on_n(NCPUS(), BLOCK);
+	niter := 0;
+	start := SysMilli();
+	REPEAT
+		maxdiff := v$update_x();
+		niter +:= 1;
+	UNTIL maxdiff <= PRECISION;
+	end := SysMilli();
+#	v$print_system();
+	v$check_result();
+	WriteLine("#CPUS ", NCPUS(), "   ", FLOAT(end-start)/1000.0, " sec    niter: ", niter);
+	WriteLine("    time per iteration: ", FLOAT(end-start) / FLOAT(niter), " msec");
+  END;
+
+  PROCESS OrcaMain();
+    n: integer;
+    dummy: integer;
+  BEGIN
+    IF Argc() = 2 THEN
+	n := StringToInt(Argv(1), dummy);
+    ELSIF Argc() = 1 THEN
+	n := DEFAULT_UPB;
+    ELSE
+	WriteLine("Usage: ", Argv(0), " <upb>");
+	RETURN;
+    FI;
+    DoWork(n);
+  END;
+END;

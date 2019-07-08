@@ -1,0 +1,225 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION newsor;
+	IMPORT PollSequence, IntObject;
+	FROM Time IMPORT SysMilli, PrintTime;
+	FROM Finish IMPORT Finish;
+	FROM args IMPORT Argc, Argv;
+	FROM conversions IMPORT StringToInt;
+	FROM Math IMPORT PI, cos, sqrt;
+
+	OBJECT RowBin = NEW GenericBin(RowType);
+
+	CONST NCOL=80;	# default number of columns of the grid
+	CONST NROW=482;	# default number of rows of the grid
+
+	# We use a tolerance of 0.001
+	CONST TOLERANCE = 0.001;
+
+	TYPE grid = ARRAY[integer] OF RowType;
+
+	FUNCTION NewValue(G: grid; r,c: integer): longreal;
+	BEGIN	# compute the average value if the four neighbors
+		RETURN (G[r-1][c] + G[r+1][c] + G[r][c-1] + G[r][c+1])/4.0D+00;
+	END;
+
+	FUNCTION abs(x: longreal): longreal;
+	BEGIN
+		IF x > 0.0D+00 THEN
+			RETURN x;
+		ELSE
+			RETURN -x;
+		FI;
+	END;
+
+	FUNCTION DoPhase(
+		G: SHARED grid;		# the local region of the grid
+		lb, ub: integer;	# bounds of region extended region
+		color: integer;		# color of current phase
+		ncol: integer;		# number of columns
+		omega: longreal;	# relaxation parameter
+		maxdif: SHARED longreal	# keep track of maximum change
+		);
+
+		c: integer;
+		Gnew, diff: longreal;
+	BEGIN	# Update all points with the given color in this region
+		FOR r IN lb+1 .. ub-1 DO
+			c := 1 + ((r+color) & 1);
+			WHILE c < ncol-1 DO
+				Gnew := NewValue(G,r,c);
+				diff := abs(Gnew-G[r][c]);
+				IF diff > maxdif THEN
+					maxdif := diff;
+				FI;
+				G[r][c] := G[r][c] + omega*(Gnew-G[r][c]);	# update point
+				c +:= 2;
+			OD;
+		OD;
+	END;
+
+	FUNCTION InitLocalSection(lb, ub: integer;
+				  nrow, ncol: integer;
+				  G: OUT grid[lb-1..ub+1][0..ncol-1]);
+	BEGIN	# Initialize local region. Also reserve space for one extra
+		# row (from neighbors) at the beginning and end of this region.
+		# Points on the boundary of the (whole) grid are initialized
+		# to an arbitrary value. Internal points are initialized to
+		# zero.
+		FOR r IN lb-1 .. ub+1 DO
+			FOR c IN 0..ncol-1 DO
+				IF r = 0 THEN
+					G[r][c] := 4.56D+00;
+				ELSIF r = nrow-1 THEN
+					G[r][c] := 9.85D+00;
+				ELSIF c = 0 THEN
+					G[r][c] := 7.32D+00;
+				ELSIF c = ncol-1 THEN
+					G[r][c] := 6.88D+00;
+				ELSE
+					G[r][c] := 0.0D+00;
+				FI;
+			OD;
+		OD;
+	END;
+
+#	FUNCTION PrintGrid(G: grid; lb, ub, ncol: integer);
+#	BEGIN
+#		FOR r IN lb..ub DO
+#			FOR c IN 0 .. ncol-1 DO
+#				Write(G[r][c], " ");
+#			OD;
+#			WriteLine();
+#		OD;
+#	END;
+		
+	
+	PROCESS slave(
+			lb, ub: integer;	# lower and upper bound of
+						# extended region
+			nrow, ncol: integer;
+			ToLeft, ToRight: SHARED RowBin;
+						# bins for sending rows to
+						# neighbors
+			FromLeft, FromRight: SHARED RowBin;
+						# bins for receiving rows from
+						# neighbors
+			finished: SHARED PollSequence;
+						# distributed termination 
+			WorkersActive: SHARED IntObject);
+
+		section: grid;	# Current slave's part (region) of the grid
+		leftok, rightok: boolean;	# Lefmost/righmost processors are special
+		maxdif: longreal;	# Maximum change of any point in this region
+		iter: integer;
+		dummy: RowType;
+		omega, stopdiff, r: longreal;
+	BEGIN
+		# WriteLine("worker is running");
+
+		# omega and stopdiff are defined by the following equations:
+		#    r = 0.5 * (cos(pi/ncol) + cos(pi/nrow));
+		#    omega = 2 / (1 + sqrt(1-r*r));
+		#    stopdiff = TOLERANCE/(2 - omega);
+		r := 0.5 * (cos(PI/FLOAT(ncol)) + cos(PI/FLOAT(nrow)));
+		omega := 2.0 / (1.0 + sqrt(1.0 - r * r));
+		stopdiff := TOLERANCE / (2.0 - omega);
+
+		# WriteLine("omega = ", omega, "  stopdiff = ", stopdiff);
+		InitLocalSection(lb, ub, nrow, ncol, section);	
+						# Initialize my region
+		leftok := (lb > 0);		# Do I have a left neighbor ?
+		rightok := (ub < nrow-1);	# Do I have a right neighbor ?
+		iter := 0;
+		REPEAT
+			iter +:= 1;
+			# WriteLine("start iteration ", iter);
+			maxdif := 0.0D+00;
+			# Each iteration has two phases, for Red/Black points
+			FOR color IN 0..1 DO
+				# Send first and last row to neighbors
+				IF leftok  THEN 
+					# WriteLine(MYCPU(), " left");
+					ToLeft$put(section[lb+1]);
+				FI;
+				IF rightok THEN 
+					# WriteLine(MYCPU(), " right");
+					ToRight$put(section[ub-1]);
+				FI;
+				# Obtain rows from neighbors
+				IF leftok  THEN 
+					# WriteLine(MYCPU(), " get left");
+					section[lb] := dummy;
+					FromLeft$get(section[lb]); 
+					# WriteLine(MYCPU(), " got left");
+				FI;
+				IF rightok THEN 
+					# WriteLine(MYCPU(), " get right");
+					section[ub] := dummy;
+					FromRight$get(section[ub]);
+					# WriteLine(MYCPU(), " got right");
+				FI;
+				# Do real compuation
+				DoPhase(section, lb, ub, color, ncol, omega, maxdif);
+			OD;
+			# Bring out vote. Use veto if some points changed too much
+			# WriteLine(MYCPU(), " vote");
+			finished$vote(iter, maxdif <= stopdiff);
+		UNTIL finished$AwaitDecision(iter);	# Until all slaves want to quit
+		# WriteLine("worker finished");
+
+		WorkersActive$dec();
+		# PrintGrid(section, lb+1, ub-1, ncol);
+	END;
+
+
+	PROCESS OrcaMain();
+		grain, lb: integer;
+		UpperBins, LowerBins: ARRAY[integer 0 .. NCPUS()] OF RowBin;	# shared bin object
+		finished: PollSequence;	# Used for distributed termination
+		start, stop: integer;
+		nrow, ncol: integer;
+		WorkersActive: IntObject;
+	BEGIN
+		IF Argc() = 1 THEN
+			nrow := NROW;
+			ncol := NCOL;
+		ELSIF Argc() = 3 THEN
+			nrow := StringToInt(Argv(1), start);
+			ncol := StringToInt(Argv(2), start);
+		ELSE
+			WriteLine("Usage: ", Argv(0), " <NROW> <NCOL>");
+			RETURN;
+		FI;
+		start := SysMilli();
+		finished$init(NCPUS());	# Initialize PollSequence object
+		lb := 0;
+		WorkersActive$assign(NCPUS());
+		Strategy(WorkersActive, 0, 0);
+		Strategy(finished, 1, 0);
+		FOR i IN 0 .. NCPUS()-1 DO
+			# Make sure 'From' bins are stored locally so
+			# polling based Orca systems can achieve good
+			# results without checking the network at each loop.
+			# (Policy: first sent out my data first, then wait for
+			# neighbours)
+			Strategy(LowerBins[i], 0, NCPUS()-i-1);
+			Strategy(UpperBins[i+1], 0, NCPUS()-i-1);
+		OD;
+		FOR i IN 0 .. NCPUS()-1 DO	# fork slave processes
+			grain := (nrow-2-lb) / (NCPUS()-i);
+			FORK slave(lb, lb+grain+1,
+				   nrow, ncol,
+				   UpperBins[i], LowerBins[i+1],
+				   LowerBins[i], UpperBins[i+1],
+				   finished, WorkersActive)  ON(NCPUS()-i-1);
+			lb +:= grain;
+		OD;
+		WorkersActive$AwaitValue(0);
+		stop := SysMilli();
+		PrintTime("newsor", stop - start);
+		Finish();
+	END;
+END;

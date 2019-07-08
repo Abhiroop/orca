@@ -1,0 +1,22 @@
+MODULE SPECIFICATION bp;
+
+FROM BpTypes 	IMPORT ArrayType;
+		IMPORT NetworkObject;
+		IMPORT PatternSet;
+		IMPORT PollSeq;
+		IMPORT  IntObject;
+
+FUNCTION PrintAllPatterns(network: NetworkObject;
+			Patterns: PatternSet);
+FUNCTION PrintPattern(	pattern: ArrayType;
+			NumUnits: integer;
+			t: integer);
+PROCESS TeacherProcess(	filename: string;
+			network: SHARED NetworkObject;
+			EndLearning: SHARED PollSeq;
+			EndIterate: SHARED PollSeq;
+			AllDone: SHARED IntObject);
+PROCESS OrcaMain();
+
+# END MODULE SPECIFICATION
+END;

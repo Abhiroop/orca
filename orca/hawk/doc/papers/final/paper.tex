@@ -1,0 +1,2715 @@
+\documentclass{acmtrans2e}
+
+\usepackage{paper}
+
+% \usepackage{times}
+% \usepackage{mathptm}
+\usepackage{graphicx}
+
+% \def\baselinestretch{2.5}
+
+\firstfoot{ACM Transactions on Programming Languages and Systems,
+Vol.\ ??, No.\ ??, ????, Pages \pages.}
+\runningfoot{ACM Transactions on Programming Languages and Systems,
+Vol.\ ??, No.\ ??, ????.}
+
+\markboth{Saniya Ben Hassen et al.}{A Task- and Data-Parallel Programming Language Based on Shared Objects}
+
+\title{A Task- and Data-Parallel Programming Language\\ Based on Shared Objects}
+\author{SANIYA BEN HASSEN, HENRI E. BAL, and CERIEL J.H. JACOBS\\
+Vrije Universiteit, Amsterdam}
+\begin{abstract}
+Many programming languages support either task parallelism or data
+parallelism, but few languages provide a uniform framework for writing
+applications that need both types of parallelism.
+We present a programming language and system that integrates task and
+data parallelism using shared objects. Shared objects may be stored on
+one processor or may be replicated. Objects may also be partitioned
+and distributed on several processors. Task parallelism is achieved by
+forking processes remotely and have them communicate and synchronize
+through objects. Data parallelism is achieved by executing operations
+on partitioned objects in parallel.
+Writing task- and data-parallel applications with shared objects
+has several advantages. Programmers use the objects as if they were stored in a
+memory common to all processors. On distributed-memory machines, if
+objects are remote, replicated, or partitioned, the system takes care
+of many low-level details such as data transfers and consistency
+semantics.
+In this article, we show how to write task- and data-parallel programs
+with our shared object model. We also describe a portable implementation of
+the model.
+To assess the performance of the system, we
+wrote several applications that use task and data parallelism and
+executed them on a collection of Pentium Pros connected by Myrinet.
+The performance of these applications is also discussed in this article.
+\end{abstract}
+
+% \textbf{Keywords:} Data Parallelism. Distributed Memory
+% Machines. Parallel Programming. Programming Languages. Programming
+% Systems. Shared Objects. Task Parallelism.
+
+\begin{sloppypar}
+
+\category{D.1.3}{Programming Techniques}{Concurrent Programming}[distributed programming \and parallel programming]
+
+\category{D.3.2}{Programming Languages}{Language Classifications}[concurrent, distributed, and parallel languages]
+
+\category{D.3.4}{Programming Languages}{Processors}[compilers \and run-time environments]
+
+\end{sloppypar}
+
+\terms{Languages, Performance}
+
+\keywords{Data parallelism, shared objects, task parallelism}
+
+\begin{document}
+
+\begin{bottomstuff}
+This research is supported in part by a
+PIONIER grant from the Netherlands Organization for Scientific
+Research (N.W.O.).\newline
+Parts of this article have been published earlier in conference
+proceedings~\cite{hicss96,oopsla96,ics96}.\newline
+Authors' addresses:
+S. Ben Hassen, IBM Nederland N.V., Watsonweg 2, 1423 ND Uithoorn;
+H. Bal and C. Jacobs, Division of Mathematics and Computer Science,
+de Boelelaan 1081a, 1081 HV Amsterdam, The Netherlands.
+\permission
+\copyright ....
+\end{bottomstuff}
+\maketitle
+
+\section{Introduction}
+\label{sec:introduction}
+
+Most parallel programming systems are based either on data parallelism
+or on task parallelism.  The advantage of data parallelism is that it
+is easy to use. The programmer merely specifies the distribution of
+data structures, and the compiler takes care of many low-level details,
+such as the generation of messages and synchronization.  Task
+parallelism, on the other hand, is more suitable for applications with
+irregular communication patterns.  It allows creation of multiple
+threads of control (processes or tasks) that can synchronize and
+communicate in arbitrary ways.
+
+Recently, interest has arisen in integrating task and data
+parallelism
+[\citeNP{banerjee95}; \citeNP{chakrabarti95}; \citeNP{dhagat95};
+\citeNP{foster94}; \citeyearNP{foster96}; \citeNP{gross94};
+\citeNP{haines95}; \citeNP{sundaresan95}; \citeNP{west95}].
+Such an integration offers several advantages. First, programmers can
+use a single language to write either a data-parallel or a task-parallel
+program, whichever is most suitable for the application at
+hand. Second, and even more important, many applications can exploit
+both types of parallelism in the same program.  Examples can be found
+in signal and image processing and in heterogeneous applications that
+combine modules from different scientific disciplines~\cite{gross94}.
+It is difficult to write portable and efficient programs for such
+applications in a language that offers only one of the two types of
+parallelism.
+
+Integrating task and data parallelism in a clean way is difficult,
+however, and most languages that try to achieve such integration have
+important restrictions. In this article, we present a new programming
+model for integrating task and data parallelism. This model is based
+on shared objects.  A \emph{shared object} is an instance of an
+Abstract Data Type (ADT). It encapsulates shared data structures and
+the operations on the data. In a distributed-memory system, processes
+residing on different processors may access a shared object, no matter
+how the state of the object is distributed across
+processors. Processes communicate by applying ADT operations to the
+shared objects.
+
+Our model supports task parallelism by allowing the dynamic creation
+of processes that communicate through shared objects. In addition, it
+supports data parallelism by allowing shared objects to be partitioned
+and distributed among multiple processors. These processors operate in
+parallel on the different partitions. We use the single concept of a
+shared object for the following purposes:
+
+\begin{itemize}
+\item communication between processes,
+\item storage of shared (possibly replicated) information,
+\item partitioning of shared information, and
+\item distribution of work in a data parallel way.
+\end{itemize}
+
+So, for both task and data parallelism, the programming model is based
+on shared data encapsulated in objects. The distribution of shared
+data is done by the compiler and Run-Time System (RTS), possibly in
+cooperation with the programmer (as will be discussed later).  Shared
+objects can be partitioned as well as replicated. Data parallelism is
+based on executing operations on partitioned objects in parallel.
+
+The model is very flexible and suitable for general-purpose parallel
+programming.
+Task parallelism is based on a general process model that allows arbitrary
+interactions between processes and mappings to physical machines.
+Task parallelism thus can be used to implement any application, including
+ones with highly irregular communication patterns.
+(We have indeed implemented dozens of such applications, using
+various communication patterns~\cite{Bal:1998,wilson96}.)
+Data parallelism in our model is intended for applications with
+regular communication patterns and regular distributed data structures (arrays).
+Such applications are easier to write in a data-parallel style and
+sometimes also obtain better performance.
+Our programming model also allows a single program to use both task and
+data parallelism, which, as we will see, is useful for several applications.
+
+The programming model also has clean semantics. All ADT operations on shared
+objects are executed atomically, whether the objects are stored on a
+single node, replicated, or partitioned.
+Within a single data-parallel operation, the language uses owner-computes
+semantics, which implies that processors do not observe updates
+of remote elements until the operation is completed.
+
+This article describes a programming language based on the model.
+Our language is based on the Orca task-parallel
+language~\cite{bal92}.  We have extended Orca with constructs
+for data parallelism (i.e., partitioned objects and data-parallel
+operations).  Likewise, the implementation of the extended language
+is based on an implementation of the original Orca
+language.  For completeness, we briefly describe the original task-parallel
+constructs and their implementation in this article; for more
+detailed descriptions we refer to
+Bal et al. [\citeyearNP{bal92}; \citeyearNP{Bal:1998}] and
+R\"{u}hl et al.~\citeyear{ruhl96}.
+
+The outline of the rest of the article is as follows.  In
+Section~\ref{sec:model} we describe our programming model and the
+language we use for writing mixed task- and data-parallel applications.
+In Section~\ref{sec:overview}, we present an implementation of the
+model on distributed-memory machines. This implementation consists of
+three layers: the compiler, the RTS, and a portability layer that
+facilitates porting the system to various platforms. In
+Section~\ref{sec:dependencies}, we discuss the execution of parallel
+operations with an emphasis on access to remote data, which is
+critical for the performance of
+applications. Section~\ref{sec:applications} compares the performance
+of four applications that use our model and that were executed on
+a Myrinet-based network of workstations.
+In Section~\ref{sec:RelatedWork}, we look at related
+work and, finally, in Sections~\ref{sec:discussion}
+and~\ref{sec:conclusions} we discuss directions for further research
+and draw some conclusions.
+
+\section{Programming Model and Language}
+\label{sec:model}
+
+In this section we describe a programming model that integrates
+task and data parallelism using shared objects. 
+The model is supported by the (extended) Orca language.
+We first show how parallelism is expressed in Orca.
+Next, we discuss the mapping of data and computations to processors.
+Finally, we give one example application (Fast Fourier Transform)
+that uses mixed task and data parallelism.
+Additional examples are given in Section~\ref{sec:applications}.
+
+\subsection{Processes}
+
+Task parallelism in Orca is expressed using dynamically created
+processes that communicate through shared objects. These shared
+objects are made accessible to a process during process creation. For
+example, assume a process type \verb+worker+ is declared as follows:
+
+\begin{quote}
+\begin{verbatim}
+PROCESS worker(Q: SHARED QueueObject);
+\end{verbatim}
+\end{quote}
+
+A parent process can fork one or more workers by calling 
+\verb+FORK worker(Q)+, where \verb+Q+ is an object of the user-defined
+ADT \verb+QueueObject+.
+The keyword \verb+SHARED+ in the declaration denotes that \verb+Q+
+will be passed as a call-by-reference parameter to the worker processes.
+The parent process and the worker processes
+thus can communicate through \verb+Q+, even if they run on different
+machines connected by a network. Assuming the ADT has operations to
+enqueue and dequeue items, the processes may execute an operation
+\verb+Q$Enqueue(job)+ to add a new job to the queue, and
+they may execute an operation \verb+Q$Dequeue(job)+ to fetch a job from
+the queue.
+
+In our system, a shared object such as \verb+Q+
+can be placed on one processor, replicated on all processors, or even
+partitioned and distributed among several processors. Nonpartitioned
+objects are most suitable for task-parallel applications, to
+synchronize processes and perform irregular computations. Partitioned
+objects, on the other hand, are more suitable for data-parallel,
+regular computations, in which the data are distributed among
+the processors.
+
+\subsection{Nonpartitioned Shared Objects} 
+
+A nonpartitioned shared object in Orca is essentially a shared
+variable of an Abstract Data Type. The object can only be accessed
+through user-defined operations. It is created by one process, by
+declaring a variable of the ADT. The object can be shared with other
+processes by passing the object as a shared (i.e., call-by-reference)
+parameter to these processes during their creation, as described
+above.
+
+The language semantics guarantee that all operations are executed
+atomically.  If multiple processes simultaneously execute an operation
+on the same shared object, the result is as if the operations are
+serialized. In other words, mutual exclusion synchronization is done
+automatically (as in a monitor), and the system guarantees that shared
+objects are sequentially consistent.
+
+A nonpartitioned shared object is a communication channel
+between different processes. It can be used to express arbitrary
+communication patterns, so it is flexible enough to support
+applications with irregular parallelism and
+communication~\cite{Bal:1998,wilson96}.
+
+\subsection{Partitioned Shared Objects}
+\label{sec:pso}
+
+Our model allows to express data parallelism by {\em partitioning} an
+object, \emph{distributing} its partitions among multiple machines,
+and accessing the partitions in parallel using \emph{parallel
+operations}. As in most data-parallel languages, we partition only
+array-based data structures. Each machine gets some of the partitions
+of the array (using a distribution scheme to be described shortly).
+
+As an example, consider the object type \verb+MatrixObject+
+defined in Figure~\ref{algo:MatrixImp}. An object type declaration
+in Orca consists of a specification part and an implementation part.
+The specification part lists the operations supported by the type.
+For brevity, the figure shows only the implementation part.
+The first line
+
+\begin{quote}
+\begin{verbatim}
+OBJECT IMPLEMENTATION MatrixObject[integer I1..I2,
+                                   integer J1..J2];
+\end{verbatim}
+\end{quote}
+indicates that a \verb+MatrixObject+ is a two-dimensional partitioned object.
+The variables \verb+I1+, \verb+I2+, \verb+J1+, and \verb+J2+
+are the logical bounds of the object and are initialized at
+instantiation time. The user can instantiate a \verb+MatrixObject+ by
+specifying its actual bounds:
+
+\begin{quote}
+\begin{verbatim}
+matrix: MatrixObject[1..100,1..100];
+\end{verbatim}
+\end{quote}
+
+Two kinds of operations are defined on partitioned objects.  An
+ordinary sequential operation can be defined just as for any
+nonpartitioned Orca object (for example, see operation
+\verb+PrintMatrix()+ in Figure~\ref{algo:MatrixImp}). The operation
+will be executed sequentially and atomically. The implementation is
+more complicated than for objects that are not partitioned, because
+the elements are distributed among multiple machines, but the
+semantics are the same.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+OBJECT IMPLEMENTATION MatrixObject[integer I1..I2,integer J1..J2];\\
+\hspace*{2em}\= m:\ real;\\
+\\
+\> TYPE RealMatrix = ARRAY[integer,integer] of real;\\
+\\
+\> FUNCTION RealSum(r1, r2:\ SHARED real);\\
+\> BEGIN r1 +:= r2; END;\\
+\\
+\> OPERATION PrintMatrix();\\
+\> BEGIN\\
+\> \hspace*{2em}\= FOR i IN I1..I2 DO\\
+\> \> \hspace*{2em}\=         FOR j IN J1..J2 DO Write(m[i,j], " "); OD;\\
+\> \> \> WriteLine();\\
+\> \> OD;\\
+\> END;\\
+\\
+\> PARALLEL OPERATION[i,j] transpose();\\
+\> BEGIN m[i,j] := m[j,i]; END;\\
+\\
+\> PARALLEL OPERATION[i,j] sum():\ REDUCE real WITH RealSum;\\
+\> BEGIN RETURN m[i,j]; END;\\
+\\
+\> PARALLEL OPERATION[i,j] ReadMatrix():\ GATHER RealMatrix;\\
+\> BEGIN RETURN m[i,j]; END;\\
+\\
+END;
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:MatrixImp} Implementation of one sequential
+and three parallel operations on a \texttt{MatrixObject}.}
+\end{figure}
+
+% \IncludeAlgorithm{MatrixImp}{Implementation of one sequential
+% and three parallel operations on a \texttt{MatrixObject}.}
+
+In addition, {\em parallel} operations may be defined on partitioned
+objects. A parallel operation is executed in a data-parallel way.
+The operation is invoked by one process. For example
+\begin{quote}
+\begin{verbatim}
+matrix$transpose();
+\end{verbatim}
+\end{quote}
+invokes the operation \verb+transpose+ on object \verb+matrix+.
+When a data-parallel operation is invoked,
+all processors apply the operation to their elements. The processor that
+is responsible for executing the code for a given element is called
+the {\em owner} of that element.  Each element is updated by its owner
+and can be read (but not written) by other processors. This is the
+well-known {\em owner-computes} rule. (The compiler checks that all
+assignments satisfy this rule.) An operation is applied to a single
+object, and each operation is executed indivisibly. Processors
+that do not own a given element do not see its new value until the
+operation is completed on all processors.  Internally, a single
+data-parallel operation consists of many concurrent actions (one per
+element) and may access data distributed over multiple machines. If
+multiple data-parallel operations are invoked simultaneously, these
+are executed in a way equivalent to some serial execution of the
+given data-parallel operations.  So, our model guarantees \emph{sequential
+consistency semantics} between multiple operations and \emph{owner-computes
+semantics} within a single data-parallel operation.
+
+Figure~\ref{algo:MatrixImp} shows three parallel
+operations defined on \verb+MatrixObject+.  The first operation,
+\verb+transpose()+, transposes the elements of a matrix. The
+\emph{operation variables} \verb+i+ and \verb+j+ are used to index
+each element and the symmetric one. The processor that updates
+\verb+m[i,j]+ does not see the new value of \verb+m[j,i]+ until the
+operation ends.  In the second operation, \verb+sum()+, the elements
+returned are filtered through a user-defined reduction function,
+\verb+RealSum()+.  The reduction process sums all elements of the
+object and returns the result to the caller.  Reduction functions are
+applied by the system to elements and partial results in a
+nondeterministic order.
+The functions must thus be associative and commutative.
+
+Our model also supports ``gathering'' of the return values obtained
+for each element. For example, the last operation in
+Figure~\ref{algo:MatrixImp} returns
+all elements of the object in an array of floating-point numbers. 
+The array will have the same number of dimensions and the same size as the
+object invoked. 
+
+\subsection{Distribution of Computations}
+
+A critical performance issue is how to distribute the parallel
+computations among the available machines. These computations are
+expressed either through processes (task parallelism) or parallel
+operations (data parallelism).
+
+The user explicitly states the distribution of tasks by specifying the
+processor on which a new process is to run. The following \verb+FORK+
+statement, for example, creates a new process of type \verb+worker+ on
+processor~1. (Processors are numbered sequentially starting at~0.)
+
+\begin{quote}
+\begin{verbatim}
+FORK worker(Q) ON 1;
+\end{verbatim}
+\end{quote}
+This notation provides a simple mechanism for mapping processes to
+processors.
+
+The distribution of data-parallel computations is more complicated.
+%because it has a higher impact on performance.
+Recall that our model uses the owner-computes rule, so the
+distribution of data-parallel computations coincides with the
+distribution of the data elements. Since each element may be read by
+many processors, data may need to be transferred between processors
+during a computation. The distribution of the elements thus greatly
+affects communication overhead. Additionally, before accessing local copies
+of remote data, the system must check whether the copies are
+consistent. These checks can also be time consuming.
+
+For efficiency, we use a two-level mapping notation that assigns
+elements of a partitioned object to processors. The elements are first
+grouped into {\em partitions}, and these partitions are subsequently
+distributed over the processors.
+% The partitioning of an object may be
+% specified to be rowwise, columnwise, or blockwise; the distribution
+% of the partitions can be block or cyclic.
+Both partitioning and
+distribution are expressed using system-defined operations described
+in Figure~\ref{fig:distribution}. These operations are executed
+dynamically (just like user-defined ADT operations), so the
+partitioning and distribution can be changed at run time.
+
+\IncludeTexFigure{distribution}{ To partition an object, the user
+specifies how many partitions there should be along each dimension of
+the object using the system-defined operation
+\texttt{partition()}. (a) The \texttt{MatrixObject} is divided into
+16~partitions: eight along the first dimension and two along the
+second dimension. (b) Using operation \texttt{distribute\_on\_n()},
+the partitions are distributed over four processors: two along each
+dimension.
+The partitions along each dimension are distributed in block
+over two processors: consecutive
+partitions are allocated to the same processor.  (c) This call to operation
+\texttt{distribute\_on\_list()} maps the partitions onto a
+user-specified list of four processors: 0, 2, 4, and 6. The partitions
+are distributed cyclically along the first dimension.}
+
+A suitable object partitioning that reflects the data locality
+in the program will result in lower communication overhead, because
+the unit of transfer will be an entire partition rather than a single
+element. If an element is needed on a certain machine, the
+\emph{entire partition} to which the element belongs (and only that
+partition) will be fetched.
+% A suitable partitioning will also result
+% in a lower consistency checking overhead, because the consistency of
+% the data is checked once per partition and not each time an element is
+% accessed. How the system checks the consistency of partitions and
+% replicates them is described in detail later in the article.
+
+The programmer specifies the distribution of task-parallel and data-parallel
+computations using the notations described above.  Besides
+distribution of computations there is also the issue of distributing
+shared data. For partitioned objects, we have seen that the programmer
+explicitly maps the partitions of an object onto the processors.
+For nonpartitioned objects, placement and replication is
+done transparently to the user, as will be discussed in
+Section~\ref{sec:replication}.
+
+\subsection{Specification of Dependencies}
+\label{sec:depspec}
+
+A data-parallel operation is executed by
+letting every processor apply the operation to the elements it owns.
+An operation applied to a given element may update only this element and
+read (but not write) other elements.
+If the update of an element $e_1$ reads another element $e_2$, 
+then $e_1$ is said to \emph{depend} on $e_2$. In general, an element
+can depend on any number of other elements.
+If these elements are owned by other processors, their values will
+have to be transferred over the network, so
+data dependencies may result in communication.
+
+An important issue is when and how to communicate elements.
+In theory, an operation could simply start executing and
+fetch remote elements when needed. This approach will
+result in much communication overhead, however.
+Also, the invoker has to wait every time it needs a remote element.
+The Orca system therefore takes a different approach and transfers
+all required elements at the beginning of an operation invocation.
+When a data-parallel operation is invoked, the processors first cooperate 
+to make sure that every processor is sent (at least) the elements it 
+is going to need during the execution of the operation.
+This approach is similar to prefetching, except that
+all transfers are initiated by the \emph{owner} of the data,
+which saves the overhead of request messages.
+Depending on the operation, one of two transfer methods is used:
+
+
+\begin{enumerate}
+\item An \emph{all-to-all exchange:} every processor sends all its elements
+to all other processors,
+so every machine will have an up-to-date copy of the entire object before
+the operation begins.
+
+\item A \emph{partial exchange:} Every processor determines for every
+other processor
+which elements it is going to read, and then sends the partitions
+containing those elements.
+
+\end{enumerate}
+
+Several optimizations are used during the data transfers (e.g., to
+overlap communication and computation and to vectorize messages), as
+will be explained in the implementation section.
+The all-to-all exchange is efficient only if every
+processor is going to read all (or most) elements of the object.
+Many operations, however, exhibit locality and read only a small fraction
+of the other elements, in which case the partial exchange is far more efficient.
+The key problem here is how to determine which processors are
+going to read which elements.
+The Orca system uses two methods to acquire this information:
+
+\begin{enumerate}
+\item The compiler will detect \emph{static} data dependencies.
+\item The programmer can specify arbitrary dependencies.
+\end{enumerate}
+
+If the dependencies are neither static nor specified by the programmer,
+the system uses an all-to-all exchange. We now discuss both methods in turn.
+
+The dependencies of an operation are static if
+the index expressions for the elements that the operation accesses
+do not use any run-time variables other than the operation variables.
+As an example, consider the operation below (where \verb+A+
+is part of the object's local data):
+
+\begin{quote}
+\begin{verbatim}
+PARALLEL OPERATION avg[row, col]();
+BEGIN
+    A[row, col] := (A[row, col-1] + A[row, col+1])/2.
+END:
+\end{verbatim}
+\end{quote}
+This operation has static dependencies, because the index expressions
+use only the operation variables \verb+row+ and \verb+col+ and
+compile-time constants.
+In this case, the compiler generates a function that produces the
+dependencies at run-time. In other words, the compiler determines that
+the dependencies will not change, but the actual dependencies are
+computed at run-time. This will be discussed further in
+Section~\ref{sec:dependencies}.
+The operation
+
+\begin{quote}
+\begin{verbatim}
+PARALLEL OPERATION [row, col] foo(i: integer);
+BEGIN
+    A[row, col] := ... computation depending on A[i, col] ...;
+END:
+\end{verbatim}
+\end{quote}
+has dynamic dependencies, because
+the element being accessed depends on the parameter \verb+i+, whose value
+is not known at compile time (and may be different for every invocation of
+the operation).
+
+The Orca compiler detects static data dependencies. In addition,
+Orca allows the programmer to specify (possibly dynamic) dependencies, 
+using a \verb+DEPENDENCIES+ section in an operation.
+For example, the dependencies for the operation \verb+foo+ shown above can
+be expressed as follows:
+
+\begin{quote}
+\begin{verbatim}
+PARALLEL OPERATION [row, col] foo(i: integer);
+    DEPENDENCIES
+       ACCESS [i, col];
+    END;
+BEGIN
+    A[row, col] := ...;
+END:
+\end{verbatim}
+\end{quote}
+which informs the Orca system that the operation will
+access only the element indexed by \verb+[i, col]+.
+The compiler will pass this information to the RTS (as
+will be described in Section~\ref{sec:dependencies}), so the RTS
+can avoid using an all-to-all exchange.
+
+The \verb+DEPENDENCIES+ section may contain regular Orca statements
+(including loops and if-statements), plus \verb+ACCESS+ statements that
+specify the elements that will be accessed.
+For example, if an operation on an element accesses the entire column
+of the element, this can be expressed as
+
+\begin{quote}
+\begin{verbatim}
+PARALLEL OPERATION [row, col] usecolumn();
+    DEPENDENCIES
+       FOR c IN 1..N DO
+         ACCESS [row, c];
+       OD;
+    END;
+    ....
+\end{verbatim}
+\end{quote}
+
+The indices specified in an \verb+ACCESS+ statement may be arbitrarily
+complex. For example, in the operation
+
+\begin{quote}
+\begin{verbatim}
+PARALLEL OPERATION[i] op(k: integer);
+  DEPENDENCIES ACCESS [i ^ (1 << k)]; END;
+    ....
+\end{verbatim}
+\end{quote}
+the update of element \verb+i+ depends on the
+element indexed by \verb+i ^ (1 << k)+
+(using the bitwise exclusive-OR and left-shift operators).
+% Also, a \verb+DEPENDENCIES+ section may contain multiple \verb+ACCESS+
+% statements, allowing complicated dependencies to be expressed.
+
+% User-specified dependencies are useful to access remote data
+% efficiently. On the other hand, the system can guarantee correct
+% execution of an operation only if the dependencies given
+% by the user are correct. To reduce the risk of
+% errors in a dependencies section, the programmer may set a
+% compile-time flag, thereby forcing the system to check the validity of
+% each element actually accessed. With this option, accessing data that
+% are not specified in the dependencies results in a run-time error.
+% To help correct the dependencies, the system notifies the user of the
+% element that caused the error.
+
+\subsection{Example Program: Fast Fourier Transform}
+\label{sec:fft}
+
+We illustrate the language using a single application, for
+which we describe a task-parallel, a data-parallel, and a mixed
+task- and data-parallel program.
+The application, two-dimensional Fast Fourier Transform (2D-FFT)
+is part of the CMU Task Parallel Program Suite~\cite{dinda94}.
+The application is simple enough to serve as example and
+can benefit from using both task and data parallelism.
+% FFT is the name of the Cooley and Tukey algorithm for computing
+% Discrete Fourier Transformations (DFT).
+2D-FFT is used in many
+applications, including digital signal processing and image filtering.
+Given an N$\times$N array \verb+A+, 2D-FFT performs N independent
+N-point FFTs on the rows of \verb+A+, followed by N independent N-point
+FFTs on the columns of \verb+A+.
+% FFT is an efficient procedure for computing certain matrix products that
+% exploits the regularity in the matrices.
+
+\subsubsection*{Data-Parallel 2D-FFT}
+\label{sec:dpfft}
+
+We first describe a data-parallel Orca program that does a 2D-FFT
+on a single matrix.
+A simple way to implement 2D-FFT using data parallelism is to distribute
+the matrix rowwise. The N independent FFTs on the rows can then be
+performed without doing communication.
+A column FFT, however, then requires data from every processor,
+because each column is spread over all processors.
+To express this behavior in a simple way, the matrix is first {\em transposed}.
+The columnwise operations on the original matrix can then be
+implemented by doing rowwise operations on the transposed matrix.
+These operations are also independent, so they can be done without
+communication.
+After they are finished, the matrix is transposed back.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+OBJECT IMPLEMENTATION fftObject[integer lb..ub]; \\
+ \\
+\hspace*{2em} \= TYPE complex{\_}row = ARRAY[1..N] OF complex; \\
+  \\
+\> A{\_}row:\ complex{\_}row;  \# each element is a row \\
+ \\
+\>   PARALLEL OPERATION[row] transpose(); \\
+\>   BEGIN \\
+\> \hspace*{2em} \= FOR j IN 1..N DO \\
+\> \> \hspace*{2em} \= A{\_}row[row][j] := A{\_}row[j][row]; \\
+\> \> OD; \\
+\>   END; \\
+ \\
+\>   FUNCTION do\_FFT(A:\ SHARED complex{\_}row); \\
+\>   BEGIN \\
+\> \> ....           \# implements a single row FFT on A. \\
+\>   END; \\
+ \\
+\>   PARALLEL OPERATION[row] rowFFT(); \\
+\>   BEGIN \\
+\> \> do\_FFT(A{\_}row[row]); \\
+\>   END; \\
+END;
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:fftObject} Partitioned object used by 2D-FFT.}
+\end{figure}
+% \IncludeAlgorithm{fftObject}{Partitioned object used by 2D-FFT.}
+
+In Orca, a parallel operation describes the effect on a single element of
+the object.
+However, an FFT operation updates two elements of a row at a time.
+Therefore, the easiest way to express an FFT in Orca is to represent a row
+as a single, array-valued, element of the object.
+This is easy to express in Orca, since an element can be an arbitrary data
+structure, including an array.
+The N$\times$N array \verb+A+ then is represented as a one-dimensional array
+with N elements, each element being a row of the array \verb+A+.
+This allows us to express a row FFT as a single Orca operation.
+
+Figure ~\ref{algo:fftObject} gives the Orca code for the implementation of
+the partitioned object used by the data-parallel FFT program.
+The \verb+transpose+ operation is easy to express in Orca.
+The \verb+rowFFT+ operation invokes a procedure that transforms
+a given row (the code of this procedure is fairly long and is
+not shown in the figure).
+No dependency specifications are provided for the two operations, so the
+dependency analysis is left to the compiler.
+For the \verb+transpose+ operation, the compiler will determine that an
+all-to-all exchange is needed, as every element (row) depends on
+all other elements.
+For the \verb+rowFFT+ operation, the compiler determines that there are
+no dependencies, because the update of an element (row) depends only
+on the values of this row; this operation therefore does not require any
+communication.
+In other words, all communication is done during the transpose phase.
+Since the transpose operation requires an all-to-all exchange, however,
+the communication overhead of the program is high.
+
+The most important part of the data-parallel program is shown
+in Figure~\ref{algo:fftDataPar}.
+The program creates an object \verb+A+ of type \verb+fftObject+,
+partitions it, and distributes it.
+Each element (row) is one partition, and the rows are distributed blockwise
+over the processors.
+Next, the program implements a 2D-FFT using the rowwise
+FFTs and matrix transpose, as described above.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+PROCESS DataParallelFFT(); \\
+\hspace*{2em}\= A:\ fftObject[1..N]; \hspace*{5em}\= \# the partitioned object \\
+BEGIN \\
+\> A\$\$partition(N); \> \# partitioning/distribution directives \\
+\> A\$\$distribute{\_}on{\_}list(Procs, P, BLOCK); \\
+\> 2Dfft(A); \\
+END; \\
+ \\
+FUNCTION 2Dfft(A:\ SHARED fftObject); \\
+BEGIN \\
+\> A\$rowFFT(); \> \# operations on the rows \\
+\> A\$transpose(); \> \# transpose the matrix \\
+\> A\$rowFFT(); \> \# operations on (transposed) columns \\
+\> A\$transpose(); \> \# transpose matrix back \\
+END;
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:fftDataPar} Data-parallel Orca program for 2D-FFT.}
+\end{figure}
+
+% \IncludeAlgorithm{fftDataPar}{Data-parallel Orca program for 2D-FFT.}
+
+\subsubsection*{Task-Parallel 2D-FFT}
+
+We now discuss a purely task-parallel implementation of 2D-FFT.
+In many applications, the FFT operation has to be applied to
+a sequence of matrices, rather than a single matrix.
+We use task parallelism to do multiple FFTs on different matrices
+in parallel. 
+(As we will see below, this form of task parallelism can be combined
+in an efficient way with the data parallelism described above.)
+The matrices are distributed among the available processors, and each
+processor applies a sequential FFT operation to each matrix.
+To simplify the presentation, we assume that all operations
+take the same amount of time, so we give each processor the same number
+of matrices. (An alternative scheme, which we apply in other programs,
+is to distribute the work dynamically.)
+
+The task-parallel Orca program is shown in Figure~\ref{algo:fftTaskPar}.
+The master process creates several worker processes, one per processor,
+and assigns a subset of all matrices to each worker.
+A worker repeatedly gets the next matrix, stores it in a local data structure,
+and calls a sequential 2D-FFT procedure (not shown in the figure).
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+PROCESS TaskParallelWorker(firstMatrix, lastMatrix:\ integer); \\
+\hspace*{2em}\=\hspace*{2em}\= A:\ ComplexMatrix[1..N, 1..N]; \hspace*{0.5em}\= \# matrix of complex numbers \kill
+\> A:\ ComplexMatrix[1..N, 1..N]; \> \> \# matrix of complex numbers \\
+BEGIN \\
+\>    FOR i IN firstMatrix..lastMatrix DO \\
+\> \>       readMatrix(i, A); \>          \# initialize matrix A \\
+\> \>       seq2Dfft(A);      \>          \# do sequential 2D-FFT \\
+\>    OD; \\
+END; \\
+ \\
+PROCESS TaskParallelMaster(Nmatrices, Ncpus:\ integer); \\
+\>    S:\ integer;     \>        \>        \# number of matrices per worker \\
+BEGIN \\
+\>    S := Nmatrices/Ncpus;  \> \>        \# assume Nmatrices is a multiple of Ncpus \\
+\>    FOR i IN 0..Ncpus-1 DO \\
+\> \>       \# fork a worker on CPU i, give it a subrange of all matrices \\
+\> \>       FORK TaskParallelWorker(i*S, (i+1)*S-1) ON(i); \\
+\>    OD; \\
+END;
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:fftTaskPar} Task-parallel Orca program for 2D-FFT.}
+\end{figure}
+
+% \IncludeAlgorithm{fftTaskPar}{Task-parallel Orca program for 2D-FFT.}
+
+\subsubsection*{Mixed Task- and Data-Parallel 2D-FFT}
+
+We finally discuss a program for 2D-FFT that integrates task and
+data parallelism.
+We first look at the advantages of using both forms of parallelism.
+A problem with data-parallel programs is that, for many applications,
+the size of each matrix is small
+(and fixed by hardware, such as sensor channels).
+A data-parallel program can therefore exploit only a small number of
+processors efficiently.
+Also, communication overhead may become a bottleneck.
+On the other hand, an independent task-parallel program, such as described
+above, scales (almost) perfectly, because it hardly requires any
+communication.
+The task-parallel version, however, does not speed up the processing
+of a single matrix, so the turnaround time for one matrix is high,
+which may be a problem for real-time applications.
+By combining task parallelism and data parallelism, the resulting
+program therefore scales much better than the purely data-parallel
+version, but still has the advantage over the purely task-parallel version
+that the turnaround time for each matrix is lower.
+
+The mixed task- and data-parallel Orca program for 2D-FFT is essentially
+a combination of the two programs described earlier.
+The program is shown in Figure~\ref{algo:fftMixedPar}
+(using pseudo-Orca notation to describe the set data structures).
+A master process distributes the set of matrices statically among
+several worker processes, as with the task-parallel program.
+Each worker, however, is assigned {\em multiple} processors, so it
+can execute each FFT operation in a data-parallel way
+(i.e., using the \verb+2Dfft+ function shown in Figure~\ref{algo:fftDataPar}).
+The master process passes a list of \verb+P+ processors to each worker process.
+The worker process first partitions and distributes the matrix object
+among these processors. Next, it repeatedly reads a matrix, stores
+it in the partitioned object, and invokes the data-parallel FFT code.
+In summary, this program uses task parallelism to process multiple
+matrices concurrently and data parallelism to speed up the processing
+of each single matrix.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+PROCESS MixedWorker(P, firstMatrix, lastMatrix:\ integer; procs:\ CPUlist); \\
+\hspace*{2em}\=    A:\ fftObject[1..N]; \\
+BEGIN \\
+\>   A\$\$partition(N); \\
+\>   A\$\$distribute{\_}on{\_}list(Procs, P, BLOCK); \\
+\>    FOR i IN firstMatrix..lastMatrix DO \\
+\>\hspace*{2em}\=       readMatrix(i, A); \hspace*{2em}\=        \# read next matrix \\
+\> \>        2Dfft(A);              \>  \# do data-parallel 2D-FFT \\
+\>   OD; \\
+END; \\
+ \\
+PROCESS mixedTaskDataParallel(Ncpus, Nworkers, Nmatrices:\ integer); \\
+\>    P, S:\ integer; \\
+BEGIN \\
+\>    P := Ncpus/Nworkers; \> \>        \# number of CPUs per worker \\
+\>    S := Nmatrices/Nworkers;  \> \>   \# number of matrices per worker \\
+\>    FOR i IN  0..Nworkers-1 DO \\
+\>  \>      FORK MixedWorker(P, i*S, (i+1)*S-1, [i*P..(i+1)*P-1]) ON(i*P); \\
+\>   OD; \\
+END;
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:fftMixedPar} Mixed task- and data-parallel Orca program for 2D-FFT.}
+\end{figure}
+
+% \IncludeAlgorithm{fftMixedPar}{Mixed task- and data-parallel Orca program for 2D-FFT.}
+
+\section{Overview of the Language Implementation}
+\label{sec:overview}
+
+We have written a portable programming system that implements the task-
+and data-parallel Orca language. With this system, users write
+parallel programs and execute them on distributed-memory machines. The
+system has been used to write a large number of task-parallel
+applications. Several data-parallel programs or mixed task- and data-parallel
+programs have also been written,
+as will be discussed in Section~\ref{sec:applications}.
+
+The system is designed to be easily portable and runs on top of
+several operating systems such as Solaris, BSD/OS, Amoeba, and AIX (on the
+SP-2).
+% Orca applications can be executed on any distributed memory
+% machine that runs one of these operating systems.
+To obtain high portability, the Orca system is composed of
+three layers (see Figure~\ref{fig:overview}): the Orca compiler, the
+RTS, and a portability layer called Panda~\cite{ruhl96}.
+Next, we discuss
+the integration of the compiler and run-time system, and then we look at
+each layer in turn.
+
+\IncludeFigure{overview}{Overview of the Programming System. It is
+composed of three layers: the compiler, the run-time system, and a
+portable layer.}
+
+\subsection{Integration of the Compiler and Run-Time System}
+
+As noted in Bal and Haines~\citeyear{bal98},
+most task-parallel languages
+are implemented mainly through an extensive run-time system and
+little compiler support, whereas data-parallel languages use
+advanced compile-time analysis and little run-time support.
+A language that supports both task and data parallelism therefore
+calls for both compiler and RTS support.
+The implementation of data-parallel Orca is a good example
+of this integration.
+The Orca system uses much more compiler analysis than task-parallel languages.
+The compiler analysis is less extensive than for data-parallel
+languages like HPF, however, and has to take the dynamic aspects
+of the language into account (e.g., dynamic process creation,
+dynamic partitioning/distribution, and
+specification of dynamic dependencies).
+Below, we discuss the division of work between the compiler and RTS,
+and we look at their integration.
+
+In addition to compiling the source program, the main task of the
+compiler is to provide as much useful information as possible to the RTS.
+The RTS uses this information
+to optimize communication. With most
+HPF systems, the compiler optimizes the communication; with most
+task-parallel languages, the compiler generates little or no information
+for the RTS.
+The information generated by the compiler is summarized below.
+
+\begin{itemize}
+
+\item The compiler recognizes read-only operations on shared objects.
+This information is passed to the RTS in a descriptor
+for the operation.  If the object is replicated, the RTS can
+execute read-only operations on the local copy, without doing
+any communication.
+
+\item The compiler analyzes the code for each process (task), and determines
+how the process accesses (reads and writes) shared objects.
+This information is stored in a descriptor for the process.
+The RTS uses the information (and access counts)
+to decide dynamically which (nonpartitioned) objects
+to replicate~\cite{Bal:1998}.
+
+\item For data-parallel operations, the compiler tries to determine
+the data dependencies. If the dependencies are static (or
+provided by the user, as discussed in Section~\ref{sec:depspec}),
+the compiler passes this information to the RTS, using a
+mechanism called Partition Dependency Graphs.
+
+\item The compiler generates specific marshalling and unmarshalling routines
+for each operation, which convert between Orca data structures
+and flat messages that can be transmitted over the network.
+In several other programming systems, the compiler merely
+generates descriptors that are interpreted during run time
+by generic marshalling routines. We have shown elsewhere
+that specialized marshalling routines are far more
+efficient~\cite{bal97}.
+
+\end{itemize}
+
+In the next two subsections, we look in more detail at
+the compiler and the RTS.
+
+\subsection{The Compiler}
+\label{sec:compiler}
+
+The Orca compiler translates Orca programs to ANSI C, with calls to
+RTS primitives. The RTS primitives are used to fork processes, create
+objects, and invoke operations on these objects.  The compiler
+classifies each operation as a {\em read} or a {\em write} operation.
+A {\em read}
+operation does not update the state of the object; a {\em write}
+operation may do so.  If a process invokes a write operation on a
+replicated object, the RTS keeps all replicas consistent by updating
+them all. The RTS also makes sure that the update is atomic. If the
+operation only reads the state of the object, the operation is
+executed locally.
+
+For each operation, the compiler generates an \emph{operation code}. For a
+sequential operation, the operation code just executes the body
+of the Orca operation. For a parallel operation, the operation
+code executes the body of the Orca operation for \emph{every element
+of a partition} (see Figure~\ref{algo:opcode}).
+To execute a parallel operation, a processor calls
+the corresponding operation code for every partition it owns. As we
+will describe in Section~\ref{sec:dependencies}, if a processor owns more
+than one partition, the system may change the order of the calls to
+the operation code to reduce the execution time of an operation.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+(a)  \= OBJECT IMPLEMENTATION vector[integer N..M]; \\
+\>\hspace*{2em}\=   v:\ real; \\
+ \\
+\> \>    PARALLEL OPERATION[i] shuffle(s:\ ARRAY[integer] OF integer); \\
+\> \>\hspace*{2em}\=      DEPENDENCIES ACCESS [s[i]];  END; \\
+\> \>   BEGIN \\
+\> \> \>      v[i] := v[s[i]]; \\
+\> \>   END; \\
+ \\
+(b)\> void ShuffleOperationCode(int partnum, instance{\_}p instance, void **args) \{ \\
+\>\>        int i; \\
+\>\>        int *s=((int *)(args[1])); \\
+ \\
+\>\>        for every element i in partnum do  \\
+\>\>\>            instance->vcopy[i] = instance->v[s[i]]; \\
+\>    \}
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:opcode} Simplified version of the operation code of
+\texttt{shuffle()}. The body of the Orca operation in (a) updates one
+element of a \texttt{vector} object. The operation code generated by
+the compiler is shown in (b). It takes three arguments: a partition
+number, a pointer to the instance accessed, and the arguments of the
+call.  The operation code applies the update in (a) to all elements of
+partition \texttt{partnum}. The RTS makes a copy of the partition
+before it executes the operation code on it.}
+\end{figure}
+
+% \IncludeAlgorithm{opcode}{Simplified version of the operation code of
+% \texttt{shuffle()}. The body of the Orca operation in (a) updates one
+% element of a \texttt{vector} object. The operation code generated by
+% the compiler is shown in (b). It takes three arguments: a partition
+% number, a pointer to the instance accessed, and the arguments of the
+% call.  The operation code applies the update in (a) to all elements of
+% partition \texttt{partnum}. The RTS makes a copy of the partition
+% before it executes the operation code on it.}
+
+The Orca compiler also determines whether the data dependencies
+for an operation are static (see Section~\ref{sec:depspec}).
+To do this, the compiler analyzes all accesses to the object's local data
+that appear in the operation. For all these accesses, the compiler
+determines whether the index expressions use any variables whose
+values may change during run time. If all index expressions use only
+the operation indices, compile-time constants, or write-once global data
+(declared in a special Orca \verb+DATA MODULE+), the operation
+has static dependencies.
+If an index expression uses any other variables, the compiler
+decides that the dependencies are dynamic.
+Static (and user-defined) dependencies are passed on to the RTS,
+using a representation to be described in Section~\ref{sec:dependencies}.
+
+\subsection{The Run-Time System} 
+
+The RTS provides all necessary primitives for the dynamic creation of
+processes and for the creation and invocation of shared objects. The
+RTS also decides on the most suitable object and partition replication
+scheme using the compiler's directives and using run-time statistics
+about program behavior. The
+distribution of partitioned objects is specified by the
+programmer. The RTS makes sure partitions accessed by each processor
+are consistent, whether the processor owns the partitions or not.
+Below, we describe how the RTS keeps
+track of information about objects and operations. We also outline the
+basic mechanisms the RTS uses for operation execution.
+
+The RTS wraps the operation code with additional code to call the
+operation, guarantee data consistency and atomicity, and return
+results~\cite{oopsla96}.  We now discuss the basic mechanisms the
+RTS uses for operation execution. These mechanisms depend on the type
+of the object accessed and the type of the operation.
+
+\subsubsection{Objects and Operations}
+
+The system keeps track of objects and their operations in descriptors
+that are replicated on all processors. Each descriptor is given a
+systemwide unique identifier. Typically, it contains the shape of the
+object (such as the number of dimensions) and its state, its placement
+and replication, and a description of its operations (including the
+operation code and the number and type of the arguments). For
+parallel operations, the RTS keeps track of the dependencies within
+each parallel operation. These dependencies are discussed in detail in
+Section~\ref{sec:dependencies}.
+
+\subsubsection{Operations on Nonpartitioned Objects}
+\label{sec:replication}
+
+The execution of operations on nonpartitioned objects is closely
+related to the placement and replication of the object. Earlier
+publications~\cite{bal92,Bal:1998,ics96} discuss this issue, so we cover
+it only briefly in this article.
+
+The \emph{system} decides on the placement and replication of
+nonpartitioned objects and uses two different representation schemes:
+single-copy and replicated objects. The simplest scheme is to store
+the object on a single processor.  Processes on other machines can
+execute operations on the object using a remote object invocation,
+which is implemented using Remote Procedure Calls.  An alternative
+scheme is to replicate the object in the local memories of the
+processors.  The advantage of replication is that read-only operations
+(which do not modify the object's local data) can be executed locally,
+without doing communication.
+
+A problem with replication, however, is how to implement write
+operations.  Several different schemes have been studied for Orca.
+The current system implements write operations by broadcasting the
+operation and its parameters to all machines that contain a copy.
+Each machine then executes the operation on its local copy, thus
+updating the copies. This scheme thus uses an update (rather than
+invalidate) protocol.  The broadcast primitive we use is {\em totally
+ordered}~\cite{kaashoek93}. If two machines simultaneously broadcast
+an update message, all machines receive these messages in the same
+order.  The usage of totally ordered broadcast guarantees that all
+copies of an object will always be coherent~\cite{bal92}.
+
+An important issue is how to decide whether or not to replicate a
+given object, and where to store nonreplicated objects.  The Orca
+system makes this decision automatically, as described
+in Bal et al.~\citeyear{Bal:1998}.
+Briefly, the system uses a combination of
+compile-time and run-time techniques. The compiler analyzes the
+behavior of every process and estimates how often it will read and
+write the shared objects that it can access. These estimates are
+passed as hints to the RTS.  The RTS supplements the
+compiler-generated hints with run-time statistics about the actual
+behavior of the program.  The RTS uses all this information to
+determine whether a given object will mainly be read or mainly be
+written.  If the read/write ratio is expected to be high, the RTS will
+replicate the object. If the ratio is low, it will store the object on
+the machine that is expected to do the largest number of operations on
+the object.
+
+\subsubsection{Operations on Partitioned Objects}
+\label{sec:partobjects}
+
+For partitioned objects, partitioning and distribution are
+user-defined; the most important role of the RTS is to execute
+parallel operations on such objects efficiently. Since partitioned
+objects are the most recent part of the Orca model, we dedicate an
+entire section (Section~\ref{sec:dependencies}) to the execution of
+parallel operations. Below, we briefly overview the execution of
+sequential and parallel operations.
+
+A sequential operation on a partitioned object is broadcast to all
+processors. Each processor executes the operation code, which may
+update the entire state of the object. If the local copies of the
+partitions accessed by the operation are not consistent, they are
+sent by their owners before the execution of the operation code,
+using a collective communication algorithm described later.
+When done, the processors reach a
+barrier which guarantees atomic execution of the operation. Results
+are returned by one processor only.
+
+A parallel operation on a partitioned object is also broadcast to all
+processors. If the operation is a {\em write} operation, each
+processor creates temporary copies of the partitions it owns. Then, it
+receives the remote partitions the operation accesses. If a processor
+needs the copy of a remote partition, the original copy is sent,
+containing the value of the partition before the invocation
+started; this value is guaranteed to be consistent. Once the required remote
+partitions are consistent, the processors execute the
+operation code on the partitions they own. All write accesses are
+performed on the temporary copies. At the end of the operation, the
+processors synchronize on a barrier. The return values, if any, are
+then combined, either by gathering them into an array structure or by
+reducing them.  Finally, updates are committed by copying atomically
+the temporary copies to the state of the object.
+
+A partitioned object can be shared just like other Orca objects. If
+two processes invoke a sequential or parallel operation on the same
+partitioned object concurrently, total ordering of the invocations
+ensures that all processors will execute the two operations in the
+same order. The execution mechanisms described above guarantee that
+operations are atomic.
+
+\paragraph{System-Defined Operations} 
+The partitioning
+and distribution information of an object is updated
+atomically, using system-defined operations.
+These operations are indeed executed using the
+same basic mechanisms as sequential operations on replicated
+objects. When a client process sets or modifies the partitioning and
+distribution of an object, it calls a system-defined operation that
+moves the data and updates the partitioning and distribution
+information in all object descriptors atomically.
+
+\subsection{The Panda Portability Layer}
+
+To implement shared objects, the RTS requires from the underlying
+operating system several synchronization and communication primitives,
+such as point-to-point message passing, Remote Procedure Call (RPC), and Group
+Communication~\cite{kaashoek93}. To make porting Orca onto various
+operating systems and distributed-memory machines easier, the RTS is
+written on top of a portable platform, called
+Panda~\cite{ruhl96}. Panda provides threads and communication
+primitives to higher software layers (such as the RTS). Panda provides
+these mechanisms in a machine- and operating-system-independent
+way. Only Panda needs to be rewritten to port the system to a new
+environment.  The other layers that compose the Orca system remain
+unchanged. For higher efficiency, Panda is designed as a flexible
+system consisting of building blocks that can be configured statically
+(i.e., when the system is compiled). For example, if the underlying
+machine provides reliable communication, Panda can be configured to
+make use of that; if the communication is unreliable, Panda can be
+configured to use its own reliability protocols. Either way, the
+semantics of the primitive provided to higher software layers is the
+same.
+
+\section{Execution of Parallel Operations}
+\label{sec:dependencies}
+
+The RTS guarantees that the semantics of parallel
+operations are implemented correctly:
+it makes sure that the values of elements read
+(except for the one being updated) are the values before the execution
+of the operation started. The cost of consistency checks and the
+latency for data transfers have a significant impact on
+performance. The Orca system solves this problem using the two-level
+mapping described in Section~\ref{sec:model}. The system turns
+dependencies between elements into dependencies between
+partitions. These dependencies are stored in {\em Partition Dependency
+Graphs} (PDGs)~\cite{hicss96,jpaa97}. A PDG tells the RTS which
+partitions it will need during the execution of an operation and is
+discussed in more detail shortly.
+
+Using PDGs, consistency checks and data transfers are performed on a
+per-partition basis rather than on a per-element basis. Therefore, the
+related overhead is considerably reduced, even if consistency
+management is done at run time. Below, we describe PDGs, how they are
+built, and how they are used by the system to execute parallel
+operations.
+
+\subsection{Partition Dependency Graphs}
+\label{sec:pdg}
+
+For each parallel operation $op$, the system builds a PDG which
+specifies the dependencies between \emph{partitions} during the
+execution of $op$. All nodes of the PDG are labeled with partition
+numbers. If there is an edge (or \emph{dependency}) ($p_s$,$p_d$)
+between two partitions, then the execution of $op$ on some element of
+partition $p_s$ requires access to some element in partition $p_d$. A
+dependency ($p_s$,$p_d$) is \emph{local} if $p_s$ and $p_d$ belong to
+the same processor. Otherwise, it is a \emph{remote} dependency.
+Before executing $op$, the RTS \emph{resolves} remote dependencies.
+Each processor uses the PDG to determine which other processors
+require some of its partitions. The partitions are thus sent by
+their owner, before the operation starts.
+
+To generate a PDG for an operation, the corresponding object must be
+partitioned, because the graph defines dependencies between
+partitions. To decide whether a dependency is local or remote, the
+system must also know the owner of each partition. Since both
+partitioning and distribution are done at run time, PDGs are also built
+at run time: when a system-defined operation is called to distribute an
+object, the RTS builds a PDG for each parallel operation of the
+object.
+
+\subsection{PDG Constructors}
+\label{sec:pdgcons}
+
+The compiler analyzes the data dependencies of each parallel operation
+(either using the body of the operation or using the \verb+DEPENDENCIES+
+section).
+The compiler generates code to build a PDG for the operation at run time.
+Since partitioning and distribution may change, the compiler does not
+provide a graph for an operation, but rather, provides a \emph{PDG
+constructor} that is used by the RTS to build the graph once the
+object has been instantiated, partitioned, and distributed. In
+addition to being independent of the object's partitioning and
+distribution, the PDG constructor must be independent of the size of
+each dimension, so it can be used for all instances of the same class.
+
+In general, a PDG is constructed as follows. Let $p_i$ denote the
+partition an element $e_i$ belongs to. Let $G_{op}$ be a PDG for
+$op$. Initially, there are no edges in $G_{op}$. For every element
+$e_s$ of the object, if in operation $op$, $e_s$ depends on element
+$e_d$, then an edge ($p_s$,$p_d$) is added to $G_{op}$. If $p_s$ and
+$p_d$ belong to different processors, the dependency is marked as
+being remote. Adding the same edge to the graph more than once has no
+effect. There is no edge from a node to itself.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+void ShufflePDGConstructor(instance{\_}p instance, void **args) \{ \\
+\hspace*{2em}\=    int i, source, dest; \\
+\>    int *s=((int *)(args[1])); \\
+ \\
+\>    for each partition source of instance \\
+\>\hspace*{2em}\=        for each element i in source \{ \\
+\>\>\hspace*{2em}\=           dest = e2p(instance,s[i]); \\
+\>\>\>            AddDependency(instance, shuffle, source, dest); \\
+\>\>        \} \\
+\}
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:dependencies} PDG constructor for operation
+\texttt{shuffle()}. The function \texttt{e2p()} computes the partition
+number of an element.}
+\end{figure}
+
+% \IncludeAlgorithm{dependencies}{PDG constructor for operation
+% \texttt{shuffle()}. The function \texttt{e2p()} computes the partition
+% number of an element.}
+
+For example, consider the operation \verb+shuffle()+ in
+Figure~\ref{algo:opcode}(a). The update of each element indexed by
+\verb+i+ depends on one other element indexed by \verb+s[i]+, where
+\verb+s+ is an argument of the operation. A simplified version of the
+PDG constructor for \verb+shuffle()+ is shown in
+Figure~\ref{algo:dependencies}. In this constructor, a loop goes over
+each partition \verb+source+ of the object, and for each element
+\verb+i+ of the partition, the constructor determines the partition
+\verb+dest+ \verb+v[s[i]]+ belongs to using the function
+\verb+e2p()+. Once \verb+dest+ is determined, the constructor adds an
+edge from \verb+source+ to \verb+dest+ to the graph. The RTS marks the
+dependency as being local or remote according to the current
+distribution of the object. 
+
+The function \verb+e2p()+ computes the partition number of an
+element. It is the most time consuming part of the PDG constructor and
+is explained in detail in Appendix~\ref{app:e2p}. The constructor uses
+the shape, partitioning, and distribution information stored in the
+object descriptors and is thus independent of the size, partitioning,
+and distribution of the object.
+
+If the data dependencies of an operation are dynamic, the RTS has to build
+the PDG before each execution of the operation. For most data-parallel
+Orca applications, however, the data dependencies are static,
+in which case the PDG is built only once. If the partitioning
+or distribution of an object are changed during run time, the PDG also
+has to be built again.
+
+\subsection{Execution of Operations Using PDGs}
+
+\IncludeFigure{overlap}{Execution of operation \texttt{shuffle()} (see
+Figure~\ref{algo:opcode}) using overlap of communication and
+computation. The PDG is shown on top. Each circle represents a
+partition and is labeled with the partition number. Only partitions~1
+and~4 have remote dependencies, represented by the edges. During the
+execution of the operation, the processors start transferring
+partitions.  For example, processors~0 and~2 send respectively
+partitions~0 and~5 to processor~1. On processor~1, while the
+dependencies of partition~1 and~4 are transferred in the background,
+the system executes the operation code on partitions that do not
+access remote data (partitions~2 and~3 in this example). Before
+executing the operation code on partition~1 and~4, the system waits
+until their dependencies are locally valid.}
+
+So far, we have described PDGs and how they are constructed. Now, we
+explain how the RTS uses them to execute parallel operations
+efficiently (see Figure~\ref{fig:overlap}). After receiving an
+invocation, the system examines the operation's PDG to determine which
+partitions it needs to access and initiates their transfer. In
+Figure~\ref{fig:overlap}, this first step is carried out by the RTS
+primitive \verb+SendDependencies()+.  Then the system executes the
+operation code on owned partitions. The RTS attempts to hide
+communication latency by overlapping communication and computation.
+While partitions are being transferred, the system executes the
+operation code on partitions that have no remote dependencies. Then it
+proceeds with the other partitions. For each one of them, the RTS
+first waits until its dependencies are resolved (through a call to
+\verb+WaitForDependencies()+).  Once the copies of all dependencies
+are locally consistent, the operation code is executed without any
+further consistency check.
+
+PDGs have a low space overhead, and the system can do a rapid analysis
+of the dependencies at run time, and determine which partitions have
+to be transferred.
+The actual data transfers are implemented on top of the Panda portability layer.
+For each operation, the RTS determines how many processors must
+receive each partition. 
+If only a few processors need each partition, the partitions are transferred
+using a partial exchange (see Section \ref{sec:depspec}).
+In this case, each processor sends its partitions to the processors
+that need the partitions, using one point-to-point message
+per partition for each processor.
+Since a partition generally contains many elements
+(e.g., an entire row of a matrix), the communication overhead
+per element is usually small.
+
+If many processors need the partitions (or if no dependency
+information is available) the RTS uses an all-to-all exchange
+(see Section \ref{sec:depspec}), in which every processor
+sends all its partitions to all other processors.
+The all-to-all exchange is implemented using \emph{collective communication}.
+The algorithm used depends on whether the underlying network is reliable.
+On reliable networks, we use the algorithm shown in Figure~\ref{algo:alltoall}.
+The processors are logically arranged in a ring. 
+The algorithm executes $\log_2 (P)$ iterations in which each processor
+sends and receives information, in such a way that after the last iteration
+information has been transferred from every processor to every other processor.
+Each processor repeatedly combines the data it has collected so far
+with the new data it receives. For the all-to-all exchange, this means
+appending the new data.
+The same algorithm is also used to transfer the results of an operation
+to all processors. For reduction operations (see Section~\ref{sec:pso}),
+the data are combined by executing the reduction function.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+data = myData; \\
+for (i = 0; i < log2(P); i++) \{ \\
+\hspace*{2em}\=    send data to processor (id + 2**i) mod P; \\
+\>    receive newdata; \\
+\>    data = combine(data, newdata); \\
+\}
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:alltoall} Algorithm used for collective communication
+on reliable networks.
+\texttt{P} denotes the number of processors, and \texttt{id} identifies the current CPU.}
+\end{figure}
+
+% \IncludeAlgorithm{alltoall}{Algorithm used for collective communication
+% on reliable networks.
+% $P$ denotes the number of processors and $id$ identifies the current CPU.}
+
+\section{Applications and Performance}
+\label{sec:applications}
+
+%The Orca programming system can be used to write task-parallel
+%applications, data-parallel applications, and applications that use
+%both task and data parallelism.
+% In other papers, we have described a
+% large number of task-parallel applications in
+% Orca~\cite{bal92,wilson96}. Below, we describe three more applications
+% that are either data-parallel or use mixed task and data
+% parallelism. We use these applications to assess the performance and
+% scalability of the system and to assess the utility of a mixed task-
+% and data-parallel programming language.
+
+In this section we further illustrate the Orca language
+and evaluate the performance of the Orca system,
+using four applications that are run on a modern, 32-node parallel machine.
+The goal of the performance evaluation is twofold:
+
+\begin{itemize}
+\item To determine the efficiency of task parallelism, data parallelism,
+	and mixed task and data parallelism in Orca.
+\item To show that some applications can indeed benefit from using both
+	task and data parallelism in one program.
+\end{itemize}
+
+Evaluating efficiency is important, as the performance penalty paid
+for Orca's high level of abstraction should be acceptable. 
+We therefore compare the parallel Orca programs with
+sequential C or Fortran programs, as well as with sequential Orca programs.
+(The sequential Orca programs contain no processes or shared objects.)
+It is also interesting to determine which form of parallelism is
+most suitable for a given application. We will therefore study the
+performance of several versions of each application, using different
+forms of parallelism.
+
+Since the main idea in our work is to integrate task and data parallelism,
+a second important goal of the performance evaluation is to
+show that some applications can benefit from using both forms.
+Clearly, many applications exist for which one of the
+two forms is adequate, but we will also discuss
+two applications where the integration of both forms is beneficial.
+
+Besides studying performance, it is also interesting to consider
+ease of programming. In general, task parallelism gives more flexibility
+to the programmer, but data parallelism is easier to use.
+Since ease of programming is difficult to quantify, we do not discuss
+this issue in much detail here. However, we will give the number of lines
+of source code for each parallel program, which is
+a very rough indication of the complexity of the programs.
+% As we will see, the data-parallel programs are consistently smaller
+% than the task-parallel programs, which is in line with our expectations.
+
+All programs were executed on a cluster
+of Pentium Pro processors, running BSD/OS (Version 3.0).
+Each node contains a 200MHz Pentium Pro,
+64MB of memory and 256KB L2 cache.
+The processors are connected by Myrinet~\cite{boden95},
+which is a 1.28 Gbit/sec local area network.
+The Myrinet network uses LANai-4.1 interfaces (with 1MB SRAM memory),
+connected by eight-port Myrinet switches.
+The switches are connected in a two-dimensional torus
+(i.e., a grid with ``wraparound'').
+The Panda protocols that Orca uses
+on this hardware system are described elsewhere~\cite{Bal:1998}.
+The low-level communication software we use for Myrinet (i.e., the
+LANai control program) is described in Bhoedjang et al.~\citeyear{bhoedjang98}.
+The Fortran programs were compiled using g77, version 0.5.21, with
+the \verb+-O3+ flag.
+The C programs were compiled using gcc version 2.7.2.3.f.1, also with
+the \verb+-O3+ flag.
+
+Below, we study four applications. For the first two
+(Jacobi and Successive Over-Relaxation),
+we discuss both a task-parallel and a data-parallel version.
+(Using mixed parallelism is not beneficial for these applications.)
+Next, we study two applications (FFT and Narrow-Band Tracking Radar),
+for which mixed task and data parallelism is useful.
+
+% Second, we estimate
+% the overhead for building PDGs using applications with static and
+% dynamic access patterns.
+%We also show that we can write
+%applications that benefit from mixed task and data parallelism not
+%only from a software engineering point of view but also from a
+%performance point of view.
+
+\subsection{Jacobi}
+
+The Jacobi method is an iterative method for solving systems of
+\verb+N+ linear equations with \verb+N+ unknowns. The goal of the algorithm
+is to find a vector \verb+X+ that satisfies the equation
+\verb+AX=b+, where \verb+A+ is an \verb+NxN+ matrix and \verb+X+ and
+\verb+b+ are vectors of size \verb+N+. The algorithm starts with a
+random value of \verb+X+ and updates the vector iteratively using
+Eq.~(\ref{eq:jacobi}) until \verb+X+ reaches a stable value.
+
+\begin{equation}
+x_i = \frac{b_i - \sum_{j=0}^{j=N-1,j \neq i} x_j \ast A_{ij}}{A_{ii}} 
+~~i=0,\ldots,N-1 \label{eq:jacobi}
+\end{equation}
+If \verb+A+ is diagonal dominant~\cite{stoer83}, the stable value of
+\verb+X+ obtained is the solution to the system.
+
+We wrote a task-parallel and a data-parallel implementation of the
+Jacobi method.  The task-parallel version spawns one worker process
+per processor. Each worker stores the values of \verb+X+ it
+updates in a local variable. The entire vector is stored in a shared
+object. For each iteration, each worker reads the entire vector,
+computes its part of the new values, and writes its part in the object to
+communicate it to other processors.
+Barriers are used to synchronize the reads and writes.
+% Barriers are needed to make sure
+% that all processors have read the vector before a worker updates its part
+% and that all processors have updated their part before a worker
+% reads the vector.
+The program terminates when the maximum difference between the old and the
+new value of a vector element is less than a certain threshold.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+\hspace*{2em}\=\hspace*{2em}\=\hspace*{2em}\=\hspace*{2em}\=\hspace*{10em}\=\kill
+OBJECT IMPLEMENTATION vector[lb..ub:integer]; \\
+\>    x:\ real; \\
+ \\
+\> PARALLEL OPERATION[ind] update{\_}x():\ REDUCE real WITH max; \\
+\>\>     val, diff:\ real; \\
+\> BEGIN \\
+\>\>      val := b[ind]; \\
+\>\>      FOR j IN lb..ub DO \>\>\>     \# sum (x[j] * a[ind,j]), for j /= ind \\
+\>\>\>           IF j /= ind THEN \\
+\>\>\>\>                val := val - x[j] * a[ind, j]; \\
+\>\>\>           FI; \\
+\>\>      OD; \\
+\>\>      val /:= a[ind, ind]; \>\>\>    \# divide by a[ind,ind] \\
+\>\>      diff := fabs(val - x[ind]); \\
+\>\>      x[ind] := val; \\
+\>\>      RETURN diff; \>\>\>          \# return difference with previous value \\
+\>\>  END; \\
+END;
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:jacobi} Partitioned object type used by Jacobi.}
+\end{figure}
+
+% \IncludeAlgorithm{jacobi}{Partitioned object type used by Jacobi.}
+
+The data-parallel version of Jacobi uses a
+partitioned object with a parallel operation that implements
+Eq.~(\ref{eq:jacobi}).
+The Orca code is shown in Figure~\ref{algo:jacobi}.
+The object has as many partitions as processors,
+and each processor is allocated one partition.  The compiler
+determines that the update operation has dynamic dependencies, since
+it reads an element \verb+x[j]+, where \verb+j+ is a variable.
+Therefore, an all-to-all exchange is used for the vector at every iteration,
+which is implemented using collective communication.
+
+% \begin{table}
+% \caption{\label{table:jacobi} Execution Times on 1 CPU
+% (for 1024 unknows) and Number of Source Lines for Jacobi.}
+% \begin{center}
+% \begin{tabular}{|l|r|r|} \hline
+% {\bf Version} & {\bf Time (secs)} & {\bf Source lines} \\ \hline
+% C & 411 & 126 \\ \hline
+% Sequential Orca & 509 & 138 \\ \hline
+% Task-parallel Orca & 464 & 297 \\ \hline
+% Data-parallel Orca & 443 & 195 \\ \hline
+% \end{tabular}
+% \end{center}
+% \end{table}
+
+\begin{acmtable}{8cm}
+\centering
+\begin{tabular*}{8cm}{@{\extracolsep\fill}l|r r }
+{\bf Version} & {\bf Time (secs)} & {\bf Source lines} \\
+\hline
+C & 411 & 126 \\
+Sequential Orca & 509 & 138 \\
+Task-parallel Orca & 464 & 297 \\
+Data-parallel Orca & 443 & 195 \\
+\end{tabular*}
+\caption{Jacobi (for 1024 unknowns) on 1 CPU}
+\label{table:jacobi}
+\end{acmtable}
+
+Table \ref{table:jacobi} gives the execution time on a single CPU and the size
+for each of the four programs.
+The task- and data-parallel programs are over 10\% slower than the
+sequential C program. The sequential Orca program is even slower, but
+this is probably due to caching effects. (We have observed such
+behavior for some other applications as well~\cite{Bal:1998}).
+The execution times and speedups of the programs are shown in
+Figure~\ref{plot:jacobi}.
+The speedups are computed relative to the sequential C program.
+% The plain lines show the performance of the data-parallel version and the
+% dotted lines the one of the task-parallel version.
+The data-parallel version obtains lower execution times than the
+task-parallel version. Also, the data-parallel version scales better.
+
+\IncludeTwoPlots{jacobi}{jacobi}{jacobi.spd}{Performance
+of the Jacobi method with 1024 unknowns.}
+
+The difference in performance is caused by the difference in
+communication behavior of the two programs.
+The Jacobi application is communication intensive: at every
+iteration, each processor communicates its part of \verb+X+ to all
+other processors. The communication overhead is therefore
+proportional to the number of unknowns (\verb+N+).
+In the task-parallel version, these values are communicated by letting
+each processor write its values into a replicated shared object, resulting
+in one broadcast message per processor.
+With the data-parallel version, the values of \verb+X+ are exchanged using
+collective communication (see Figure~\ref{algo:alltoall}), which is
+more efficient than using one broadcast message per machine.
+Also, the task-parallel version needs additional synchronization (barriers),
+which increases the overhead even further.
+
+For the Jacobi application, data parallelism is much more suitable
+than task parallelism. The application uses a regular communication pattern
+that is easy to express with data parallelism. The data-parallel program
+therefore is simpler and substantially shorter
+than the task-parallel one (see Table~\ref{table:jacobi}).
+Moreover, the communication pattern is implemented efficiently,
+because the RTS optimizes the communication of all processors together, using
+collective communication. The task-parallel program is implemented using
+many independent broadcast messages, which is less efficient.
+In conclusion, the data-parallel Jacobi program is easier to write
+and more efficient than the task-parallel program.
+
+\subsection{Successive Over-Relaxation}
+\label{sec:sor}
+
+The second application, successive over-relaxation (SOR), has a quite different,
+less regular, communication pattern and
+gives different performance results as Jacobi.
+The SOR method is used to solve discretized Laplace
+equations~\cite{stoer83}. The algorithm iterates over a grid \verb+G+
+of \verb+N+ rows and \verb+M+ columns. The grid is organized using a
+checkerboard-like pattern, with \verb+RED+ and \verb+BLACK+
+colors. The algorithm alternates between \verb+RED+ and \verb+BLACK+
+iterations.
+During each iteration, only the cells with the given color are updated.
+Each update of a cell applies
+Eq.~(\ref{eq:sor}) and uses the values of the four neighboring
+cells. Neighbors of boundary cells are set to be zero. The iterative
+process ends when the average of the neighboring values of every cell
+differs less than a certain threshold from the cell value.
+
+\begin{eqnarray}
+avg & = & (G[r-1,c] + G[r+1,c] + G[r,c-1] + G[r,c+1])/4 \nonumber \\ 
+G[r,c] & = & G[r,c] + \omega * (avg - G[r,c]) \label{eq:sor}
+\end{eqnarray}
+
+We implemented a task-parallel and a data-parallel Orca program for SOR.
+In the task-parallel
+program, the main process spawns one worker process per processor,
+each holding a set of adjacent rows of the grid in a local array. The
+grid is partitioned and allocated to the workers manually. During each
+iteration, the workers update their rows locally. At the end of the
+iteration, the workers exchange their boundary rows using shared
+objects, one for each row. The system places each shared object on the
+processor that updates it.
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+OBJECT IMPLEMENTATION grid[lb1..ub1:integer,lb2..ub2:integer]; \\
+\hspace*{2em}\=    G:\ real; \\
+ \\
+\> PARALLEL OPERATION[row, col] sor(c:color):\ REDUCE real WITH max; \\
+\>\hspace*{2em}\=    avg, diff:\ real; \\
+\> BEGIN \\
+\>\>      diff := 0; \\
+\>\>      IF (iscolor(row,col) = c) AND (row > lb1) AND \\
+\>\>      \ \ \ (col > lb2) AND (row < ub1) AND (col < ub2) THEN \\
+\>\>\hspace*{2em}\= avg := \= (G[row-1,col] + G[row+1,col] + \\
+\>\>\>\>    G[row,col-1] + G[row,col+1])/4.0; \\
+\>\>\>        diff := ABS(avg - G[row,col]); \\
+\>\>\>        G[row,col] := G[row,col] + OMEGA * (avg - G[row,col]); \\
+\>\>    FI; \\
+\>\>    RETURN diff; \\
+\> END; \\
+END;
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:sor} Partitioned object type used by SOR.}
+\end{figure}
+
+% \IncludeAlgorithm{sor}{Partitioned object type used by SOR.}
+
+In the data-parallel program, the grid is stored in a partitioned
+object. The object is partitioned rowwise and distributed in block
+using the Orca directives. The main process iteratively calls a
+parallel operation on the partitioned object to update the grid.
+The operation returns the maximum change over all grid elements,
+which is expressed using a reduction. The main process terminates
+the program when the maximum change is below a certain threshold.
+
+The Orca code for the partitioned object and the parallel operation
+is shown in Figure~\ref{algo:sor}.
+No dependencies specification is given for the operation, so the
+compiler analyzes the dependencies. The compiler
+detects that these dependencies are static (as explained
+in Section~\ref{sec:compiler}), since the index expressions
+used in the operation do not use any run-time variables (besides
+the operation indices \verb+row+ and \verb+col+).
+As a result, this operation will use the partial exchange method
+(see Section~\ref{sec:depspec}),
+which the run-time system implements using a PDG.
+
+% \begin{table}
+% \caption{\label{table:sor} Execution Times on 1 CPU (for
+% a grid of 768~$\times$~768 elements) and Number of Source Lines for SOR.}
+% \begin{center}
+% \begin{tabular}{|l|r|r|} \hline
+% {\bf Version} & {\bf Time (secs)} & {\bf Source lines} \\ \hline
+% C & 76 & 133 \\ \hline
+% Sequential Orca & 83 & 105 \\ \hline
+% Task-parallel Orca & 97 & 263 \\ \hline
+% Data-parallel Orca & 125 & 149 \\ \hline
+% \end{tabular}
+% \end{center}
+% \end{table}
+
+\begin{acmtable}{8cm}
+\centering
+\begin{tabular*}{8cm}{@{\extracolsep\fill}l|r r}
+{\bf Version} & {\bf Time (secs)} & {\bf Source lines} \\
+\hline
+C & 76 & 133 \\
+Sequential Orca & 83 & 105 \\
+Task-parallel Orca & 97 & 263 \\
+Data-parallel Orca & 125 & 149 \\
+\end{tabular*}
+\caption{SOR (for a grid of 768~$\times$~768 elements) on 1 CPU}
+\label{table:sor}
+\end{acmtable}
+
+Table \ref{table:sor} shows the execution times (on one CPU) and sizes
+for the four versions of the program.
+The C version and the sequential Orca version have about the same
+execution time, but the two parallel versions are slower on one CPU.
+Moreover, the data-parallel version takes 29\% longer than the task-parallel
+version.
+The overhead of the data-parallel version is mostly due to an extra memory copy.
+At the beginning of each iteration, every processor makes a temporary
+copy of all partitions it owns.  This extra copy is required to implement
+the appropriate semantics (i.e., other processors should not see the updates
+until the iteration has completed; see Section \ref{sec:partobjects}).
+For the task-parallel program, on the other hand, the programmer has
+avoided the memory copy by exploiting the \verb+RED+/\verb+BLACK+ partitioning
+scheme (using the knowledge that the values updated during
+an iteration are never read during the same iteration).
+
+Although the extra memory copy is inherent in the data-parallel model
+being used, its very high costs are due to the specific processor
+architecture (Pentium Pro) we use. As explained in
+Brown and Seltzer~\citeyear{Brown:1997},
+the Pentium Pro has an inferior memory copy performance. On writes
+to main memory, a 200MHz Pentium Pro even obtains a lower bandwidth
+than a 90MHz Pentium.\footnote{This inferior performance is due to
+extra memory-bus transactions that the Pentium Pro performs, which
+are needed if the processor is used as part of a shared-memory multiprocessor.
+In our system the extra bus transactions are useless, but they substantially
+decrease the memory bandwidth.}
+
+It is also interesting to study the overhead of PDGs, since (as explained
+above) the RTS uses PDGs to implement the \verb+sor+ operation
+of Figure~\ref{algo:sor}.
+We measured that the cost of building a PDG for this operation
+% is about 160 milliseconds for the 384$\times$384 problem set
+is about 660 milliseconds for the 768~$\times$~768 problem set.
+(As explained in Section~\ref{sec:pdgcons}, the PDG constructor checks
+the dependencies of each element, so its execution time is proportional
+to the number of elements.)
+Since the dependencies do not change during run-time, however, the PDG
+needs to be built only once, so the overhead of PDG construction
+is relatively small (about 0.5\% on a single processor).
+
+\IncludeTwoPlots{sor}{sor}{sor.spd}{Performance
+of a data-parallel and a task-parallel implementation of SOR on grids
+of 768~$\times$~768 elements.}
+
+Figure~\ref{plot:sor} shows the execution times and speedups (relative
+to the sequential C program) of the two parallel
+programs on a grid of 768~$\times$~768 elements.
+Both programs scale well:
+the task-parallel program runs 23.2 times faster on 32 nodes than on
+one node; the data-parallel programs runs 22.6 times faster on 32
+nodes than on one node.
+The performance differences and limited speedups (relative to the C program)
+thus are due mainly to the sequential execution times of the programs.
+Below, we nevertheless also look at differences in communication behavior
+between the two programs.
+
+In the task-parallel program, at the end of an
+iteration, each processor votes for or against the termination of the
+algorithm. A worker starts the next iteration as soon as at least one
+member (possibly itself) votes against termination. In the data-parallel
+implementation, the termination is detected through a
+reduction operation, and the next iteration does not start until all
+processors have finished the current one.
+% (To confirm that some
+% performance was lost during the termination detection step, we
+% replaced the voting process in the task-parallel program by a
+% barrier; the modified version indeed did not scale as well as the original
+% task-parallel version.)
+To some extent, the data-parallel version makes up for this overhead
+by taking much advantage of overlap of communication and
+computation. For example, if SOR is executed by 4~processors on a grid
+of 768~rows and each row is a partition, each processor owns 192~rows,
+of which only two have remote dependencies. While resolving the
+dependencies of these two partitions, the system executes the
+operation on the 190~remaining partitions.
+% The task-parallel version,
+% on the other hand, scales well because it uses the efficient voting
+% algorithm for termination detection that we described earlier.
+
+As for Jacobi, the data-parallel version of SOR is significantly
+simpler and shorter than the task-parallel version (see Table~\ref{table:sor}).
+SOR, however, has a more irregular communication pattern (due to
+the \verb+RED+/\verb+BLACK+ scheme), making the task-parallel program
+more efficient.
+In the next two subsections, we look at applications that (unlike Jacobi
+and SOR) use mixed task and data parallelism.
+
+\subsection{Fast Fourier Transform}
+
+We now discuss the performance of the Fast Fourier Transform (FFT)
+programs described in Section~\ref{sec:fft}.
+We use four versions of FFT (see Table~\ref{tab:fft}).
+The sequential Fortran 77 version was taken from the CMU suite~\cite{dinda94}.
+The sequential Orca program uses no processes or shared objects.
+The task-parallel Orca version distributes the set of input matrices
+among its processors and applies the sequential Orca algorithm
+to each matrix (see Section~\ref{sec:fft}); this version thus
+exploits trivial (job-level) parallelism and has hardly any
+communication overhead.
+The mixed task- and data-parallel program also handles multiple matrices
+concurrently, but now each matrix is processed by multiple processors,
+using a data-parallel algorithm. In the extreme case, all processors
+work on the same matrix, resulting in a purely data-parallel execution.
+The overhead of the mixed task- and data-parallel version on one CPU is mostly due to
+the copying of partitions before each operation (as with the SOR application
+described above).
+
+% \begin{table}
+% \caption{\label{tab:fft} Execution Times on 1 CPU (for
+% 32 matrices of size 1024~$\times$~1024) and Number of Source Lines for FFT.}
+% \begin{center}
+% \begin{tabular}{|l|r|r|} \hline
+% {\bf Version} & {\bf Time (secs)} & {\bf Source lines} \\ \hline
+% Fortran77 & 109 & 270 \\ \hline
+% Sequential Orca & 99 & 258 \\ \hline
+% Task-parallel Orca & 99 & 276 \\ \hline
+% Mixed task/data-parallel Orca & 117 & 345 \\ \hline
+% \end{tabular}
+% \end{center}
+% \end{table}
+
+\begin{acmtable}{10cm}
+\centering
+\begin{tabular*}{10cm}{@{\extracolsep\fill}l|r r}
+{\bf Version} & {\bf Time (secs)} & {\bf Source lines} \\
+\hline
+Fortran77 & 109 & 270 \\
+Sequential Orca & 99 & 258 \\
+Task-parallel Orca & 99 & 276 \\
+Mixed task/data-parallel Orca & 117 & 345 \\
+\end{tabular*}
+\caption{FFT (for 32 matrices of size 1024~$\times$~1024) on 1 CPU}
+\label{tab:fft}
+\end{acmtable}
+
+\IncludeTwoPlots{fft}{fft}{fft.spd}{Performance
+of FFT for 32 matrices of size 1024~$\times$~1024.}
+
+Figure~\ref{plot:fft} gives the speedup and execution time
+of the two parallel programs, relative to the sequential Fortran program.
+For the mixed task- and data-parallel program we show multiple graphs,
+where we vary the number of processors allocated to a single matrix
+(i.e., the amount of data parallelism).
+For example, graph DP-8 uses eight-way data parallelism; it contains
+only three data points, using 8, 16, and 32 processors in total.
+The pure data-parallel version uses $P$-way data parallelism on $P$ processors
+(for values of $P$ between 1 and 32),
+so the data points for this version are on different graphs. These
+data points are marked in the figure using boxes.
+
+The task-parallel program (DP-1) achieves almost perfect performance, because
+it exploits job-level parallelism and has hardly any communication overhead.
+Obviously, the mixed task- and data-parallel program results in higher
+execution times than the task-parallel program, because
+it requires much communication
+(an all-to-all transfer; see Section~\ref{sec:dpfft}), whereas the task-parallel
+version is trivially parallel.
+Also, it is clear that the data-parallel version does not scale well.
+% the DP-16 version is slower on 16 CPUs than the DP-8 version is on 8 CPUs.
+This is due to the communication overhead in the all-to-all exchange.
+% (We also experimented with a more complicated implementation, which
+% divided the 1024~$\times$~1024 matrix into 32~$\times$~32 blocks. This version has a
+% much better data-parallel speedup (it is about 20 times as fast on 32 CPUs
+% as it is on one), but a much higher sequential overhead, about a factor 2.)
+
+Let us now discuss the advantages of the mixed task- and data-parallel program.
+The task-parallel program assigns one processor to each matrix, so
+the time to process a single matrix is about the same as in the sequential
+program.
+Many applications that use FFT, however, take a series of matrices
+as input and have real-time constraints on when they require outputs.
+On, say, 32 nodes, the task-parallel program does not produce any results
+during the first 3.1 seconds and then outputs 32 matrices all at the same time.
+The DP-8 mixed task- and data-parallel variant, on the other hand, produces 4
+output matrices once every 1.1 seconds. While the overall throughput
+is lower than that of the task-parallel program, its real-time behavior
+is better.
+
+% \begin{table}
+% \caption{\label{tab:fftrpf} Response Times of FFT per Matrix (for
+% matrices of size 1024~$\times$~1024).}
+% \begin{center}
+% \begin{tabular}{|l|r|r|r|r|} \hline
+%           & task parallel & DP-2 & DP-4 & DP-8 \\ \hline
+% on 8 CPUs & 3.093 & 2.195 & 1.458 & 1.089 \\ \hline
+% on 16 CPUs & 3.087 & 2.207 & 1.469 & 1.094 \\ \hline
+% on 32 CPUs & 3.087 & 2.226 & 1.493 & 1.111 \\ \hline
+% \end{tabular}
+% \end{center}
+% \end{table}
+
+\begin{acmtable}{10cm}
+\centering
+\begin{tabular*}{10cm}{@{\extracolsep\fill}l|r r r r}
+          & task parallel & DP-2 & DP-4 & DP-8 \\
+\hline
+on 8 CPUs & 3.093 & 2.195 & 1.458 & 1.089 \\
+on 16 CPUs & 3.087 & 2.207 & 1.469 & 1.094 \\
+on 32 CPUs & 3.087 & 2.226 & 1.493 & 1.111 \\
+\end{tabular*}
+\caption{Response Times of FFT per Matrix}
+\label{tab:fftrpf}
+\end{acmtable}
+
+% \IncludeTwoPlots{fftrpf}{fft.rpf}{fft.rss}{Response times
+% of FFT for 32 matrices of size 1024~$\times$~1024.}
+To quantify this behavior, Table~\ref{tab:fftrpf} shows the
+average \emph{response time} per matrix for several versions of the program.
+The response time is defined as the time to process one matrix (i.e., the
+elapsed time from the start of the computation for the matrix until
+the computation for this matrix is finished).
+As can be seen, the usage of data parallelism
+improves the response times.  Using combined task and data parallelism
+results in slightly higher response times than pure data parallelism,
+probably because of more contention on the network switches.
+For example, with eight-way data parallelism (the last column of
+Table~\ref{tab:fftrpf}), the response times increase slightly as
+the amount of task parallelism (and the number of processors) is increased.
+% Also shown is the average elapsed time between the start of the program and
+% the time the transformed matrix is produced.
+
+Which version of the program is most efficient thus depends on the
+underlying application. If only throughput matters, the task-parallel
+program is best. If real-time response matters, the mixed variant
+is best.
+For example, if the result matrices should
+be produced within two seconds, the DP-4 variant is best, since it
+meets the deadline and has a higher throughput than the DP-8
+variant.
+
+\remark{
+\subsection{FFT}
+
+FFT is the name of the Cooley and Tukey algorithm for computing
+Discrete Fourier Transformations (DFT). It is used in many
+applications, including digital signal processing and image filtering.
+FFT maps a vector $X$ of \verb+n+ complex values from a
+temporal domain to a vector $Y$ of \verb+n+ complex values of a
+frequency domain using a linear transformation.
+For conciseness, we will not present
+the details of the transformation (they can be found in other
+publications, for example,~\cite{kumar94}). We have
+implemented FFT by encapsulating the complex values in a partitioned
+object. The transformation is applied by calling a
+parallel operation \verb+fft()+ iteratively. For a vector of size
+\verb+N+, \verb+fft()+ is called $\log_2$ \verb+N+ times. The access
+patterns in the transformation are dynamic and change at every call.
+The system thus executes the PDG constructor
+for \verb+fft()+ before each execution of the operation.
+}
+
+\subsection{Narrow-Band Tracking Radar}
+
+Like the 2D-FFT application, the Narrow-Band Tracking Radar (NTR) application
+is part of the CMU Task Parallel Program Suite~\cite{dinda94}.
+The application inputs data from a sensor along 4 independent channels.
+Every 5 milliseconds,
+for each channel the application receives 512 complex vectors of length 10.
+Therefore the size of each input set is 160KB
+(4~$\times$~10~$\times$~512~$\times$~8).
+For each channel, the application must corner-turn the 512~$\times$~10 array,
+perform 10 independent 512-point FFTs,
+convert the resulting 10~$\times$~512 array to a 10~$\times$~40 array of real
+numbers by replacing each element in the 10~$\times$~40 subarray
+with its scaled magnitude, and then threshold each element in this subarray
+using a cutoff that is a function of its value and the sum of the subarray
+elements.
+
+% \begin{table}
+% \caption{\label{tab:ntr} Execution Times on 1 CPU (for
+% 1024 input sets) and Number of Source Lines for NTR.}
+% \begin{center}
+% \begin{tabular}{|l|r|r|} \hline
+% {\bf Version} & {\bf Time (secs)} & {\bf Source lines} \\ \hline
+% Fortran77 & 25 & 406 \\ \hline
+% Sequential Orca & 21 & 362 \\ \hline
+% Task-parallel Orca & 21 & 373 \\ \hline
+% Mixed task/data-parallel Orca & 29 & 501 \\ \hline
+% \end{tabular}
+% \end{center}
+% \end{table}
+
+\begin{acmtable}{10cm}
+\centering
+\begin{tabular*}{10cm}{@{\extracolsep\fill}l|r r}
+{\bf Version} & {\bf Time (secs)} & {\bf Source lines} \\
+\hline
+Fortran77 & 25 & 406 \\
+Sequential Orca & 21 & 362 \\
+Task-parallel Orca & 21 & 373 \\
+Mixed task/data-parallel Orca & 29 & 501 \\
+\end{tabular*}
+\caption{NTR (for 1024 input sets) on 1 CPU}
+\label{tab:ntr}
+\end{acmtable}
+
+As we did for the 2D-FFT application, we use four versions of NTR (see
+Table~\ref{tab:ntr}).
+In our experiments, we generated the input sets at random, and
+all processors have the input sets available in advance.
+The task-parallel version of the application uses job-level parallelism,
+just as in the 2D-FFT application, so different processors work
+on different input sets.
+
+\IncludeTwoPlots{ntr}{ntr}{ntr.spd}{Performance
+of NTR for 1024 input sets.}
+
+The mixed task- and data-parallel program uses multiple processors for each input
+set, using a similar master/worker arrangement as for 2D-FFT.
+An input set is organized as a 4~$\times$~10 matrix of partitions, where each
+partition contains one element: a vector of 512 complex numbers.
+A worker distributes the partitions over the processors available to it, and
+the processors perform the FFTs and convert
+each vector to a subvector of 40~real numbers,
+representing the scaled magnitude of the first 40~elements.
+Next a reduction operation is applied to compute the sum of the
+10~$\times$~40 vector elements.
+Finally, each vector element is matched against a threshold as described
+above.
+
+The communication overhead of the data parallelism thus is
+due to the reduction operation that computes the sums; all other operations
+are local. Reduction operations are implemented using the collective
+communication algorithm of Figure~\ref{algo:alltoall}. Reductions
+require less communication than an all-to-all exchange, however, since
+every processor forwards only the result of the reduction operation
+(a floating-point number for NTR) instead of all its partitions.
+So, NTR has much less communication overhead than FFT.
+
+Figure~\ref{plot:ntr} gives the speedup and execution time
+of the two parallel programs, relative to the sequential Fortran program.
+As with 2D-FFT, the task-parallel program achieves almost perfect performance,
+because it uses job-level parallelism.
+For the mixed task- and data-parallel program we again show multiple graphs,
+where we vary the number of processors allocated to a single input set
+(i.e., the amount of data parallelism).
+As there are 40 partitions, and 16 and 32 are not divisors of 40,
+we use at most eight-way data parallelism.
+The data-parallel variant scales
+well too, because it has little communication overhead.
+It is almost eight times as fast on eight CPUs as it is on one CPU.
+
+% \begin{table}
+% \caption{\label{tab:ntrrpf} Response Times of NTR per Input Set
+% (in milliseconds).}
+% \begin{center}
+% \begin{tabular}{|l|r|r|r|r|} \hline
+%           & task parallel & DP-2 & DP-4 & DP-8 \\ \hline
+% on 8 CPUs & 21.4 & 13.8 & 6.2 & 3.1 \\ \hline
+% on 16 CPUs & 21.3 & 14.4 & 6.5 & 3.4 \\ \hline
+% on 32 CPUs & 21.7 & 15.8 & 7.2 & 3.6 \\ \hline
+% \end{tabular}
+% \end{center}
+% \end{table}
+
+\begin{acmtable}{10cm}
+\centering
+\begin{tabular*}{10cm}{@{\extracolsep\fill}l|r r r r }
+          & task parallel & DP-2 & DP-4 & DP-8 \\
+\hline
+on 8 CPUs & 21.4 & 13.8 & 6.2 & 3.1 \\
+on 16 CPUs & 21.3 & 14.4 & 6.5 & 3.4 \\
+on 32 CPUs & 21.7 & 15.8 & 7.2 & 3.6 \\
+\end{tabular*}
+\caption{Response Times of NTR per Input Set (in milliseconds)}
+\label{tab:ntrrpf}
+\end{acmtable}
+% \IncludeTwoPlots{ntrrpf}{ntr.rpf}{ntr.rss}{Response times
+% of NTR for 1024 input sets.}
+
+In this application, the response time per input set is particularly
+important, because the sensor delivers a new input set every five milliseconds.
+Table~\ref{tab:ntrrpf} shows the response times.
+The version with eight CPUs per worker meets the real-time requirements,
+and could process the output of four sensors using four workers on 32 CPUs.
+
+%Using our model, it was easy
+%to write a program that allows the modification of partitioning and
+%distribution of workers and objects to determine the most
+%adequate configuration. During program start-up, the user specifies the
+%number of processors and the number of workers. After performing a number
+%of sanity checks on these numbers, the program does the rest.
+
+\section{Related Work}
+\label{sec:RelatedWork}
+
+Many parallel languages support only data parallelism, for example
+High Performance Fortran (HPF)~\cite{Loveman93} and
+pC++~\cite{bodin93}. Likewise, many task-parallel languages have been
+designed, such as Mentat~\cite{grimshaw93} and Compositional
+C++~\cite{chandy92}.
+
+A task-parallel language can be used to write data-parallel
+applications, but doing so is often awkward. With task-parallel languages,
+the shared data structures usually are partitioned by hand, so the partitioning
+is hard-wired into the program and difficult to change.
+With data-parallel language constructs, the partitioning is expressed in
+a simpler way (e.g., using directives) and is much easier to change.
+
+Several other languages have integrated task and data parallelism.
+The Fx language~\cite{gross94} is based on HPF. The task-parallel
+extensions of Fx have several restrictions, however. The mapping of
+processes to processors is fixed at compile time. Also, processes can
+only communicate with each other through their input parameters and
+result values. So, it is not possible for two concurrent processes to
+interact during their execution.  In our model, processes can
+communicate through their shared objects, which is a general,
+easy-to-use communication model.  The restrictions in Fx make it
+easier to automatically determine an efficient mapping of parallel
+computations to processors.
+Recent work on Fx has increased its flexibility
+by allowing more general forms of task parallelism
+(including nested parallelism) 
+and by giving the programmer control over the mapping
+of computations to processors~\cite{Subhlok:1997}.
+The programmer can divide the processors into subgroups and
+map data and computations onto the subgroups.
+A similar approach is used in HPF 2.0~\cite{hpf-2}, which extends
+the original High Performance Fortran language.
+Task parallelism is expressed implicitly in HPF 2.0,
+by mapping data objects onto processors. The programmer can also specify
+that disjoint processor subsets should execute blocks of code concurrently.
+
+Another related language is Fortran-M~\cite{foster94}, which extends
+Fortran 77 with primitives for explicit task parallelism,
+communication, and synchronization.  Fortran-M has also been used for
+HPF, resulting in a mixed task- and data-parallel system.
+Task parallelism in Fortran-M is based on the
+traditional model of sequential processes that communicate through
+message passing.  A disadvantage of this approach is that the
+different processes do not share a common address space. In contrast,
+HPF provides one logically shared address space for the
+program. Likewise, our model provides shared objects for communication
+between processes.  Many researchers believe that message passing is
+more difficult to use than communication with shared data.
+
+A language closer to our work is Braid~\cite{west95}, which is a data-parallel
+extension to Mentat. Braid uses a so-called ``data-parallel
+Mentat class,'' which supports operations similar to our data-parallel
+operations. Our model and Braid use very different approaches for
+expressing the distribution of computations and objects.  Braid allows
+the programmer to specify the communication patterns of objects, which
+the compiler uses to distribute objects.
+
+The Opus language and system is also related to
+ours~\cite{haines95}. It extends HPF with tasks and shared data
+abstractions (SDAs) similar to shared objects. In Opus, tasks are used
+to coordinate the execution of several data-parallel programs and are
+coarser grained than Orca processes. SDAs are used either as
+computation servers or as data servers. A \emph{computation} server
+encapsulates a number of data-parallel computations; a \emph{data}
+server encapsulates data shared by concurrent computation servers. A
+coordinating task controls the computation servers by calling their
+methods. For example, NTR may be written using two computation
+servers: one for the reader and one for each worker. The shared queue
+may be implemented as a data SDA.
+
+The Orca language can be regarded as an object-based Distributed
+Shared Memory (DSM) system. DSM systems try to simulate shared
+memory on a distributed-memory machine. Most DSM systems
+(e.g., TreadMarks~\cite{amza94,lu95} and Shasta~\cite{Scales:1996})
+simulate physical shared memory and provide a flat address space
+to the programmer. Orca, on the other hand, provides shared objects.
+The advantage of TreadMarks is that it uses memory management hardware to
+detect whether pages are locally consistent or not. When a variable
+stored on an invalidated page is accessed, a page-fault occurs and the
+system fetches the page on which the variable is stored.
+Consistency checking thus is done only once for
+all elements stored on the same page, transparently to the user, whereas
+the Orca system requires the user to partition objects and in some cases to
+explicitly specify dependencies.  A disadvantage of TreadMarks is
+that the page size is fixed, and the mapping of data onto pages is
+nontrivial and may be inappropriate, as illustrated in Lu et al.~\citeyear{lu95}.
+
+A detailed performance comparison between the original Orca system,
+TreadMarks, and another object-based DSM (CRL~\cite{Johnson:1995})
+is given in Bal et al.~\citeyear{Bal:1998}.
+The conclusion of that paper is that Orca requires somewhat more work
+from the programmer than TreadMarks (especially for existing
+shared-memory applications), but that encapsulating
+shared data in shared objects substantially reduces communication overhead,
+resulting in better performance.
+
+The idea of allowing the user to specify the dependencies between parallel
+computations is used in several other systems.
+The Jade language, for example, provides a \emph{withonly} construct
+with which programmers can specify the data that a given task
+will access~\cite{rinard93}.
+These specifications are evaluated dynamically, so they
+can be used for irregular access patterns. Jade uses the specifications
+to determine which tasks can run concurrently and which data to transfer
+between processors.
+
+A problem with data-parallel languages is how to deal with irregular
+communication patterns.
+As described extensively in this article, our general approach is to write
+irregular applications in the (more flexible) task-parallel programming style.
+Other languages take a different approach and
+try to make data parallelism more general by also supporting
+irregular communication patterns. A good examle is
+the CHAOS library~\cite{sharma94}.
+CHAOS supports applications in which data arrays are
+accessed via indirection arrays.
+CHAOS uses the inspector-executor model, in which
+the execution phase of a data-parallel statement is
+preceded by an identification of its communication requirements: the
+\emph{inspector} generates a list of elements to be sent and received
+by each processor. During the execution of the statement, the
+\emph{executor} fetches remote data using the information generated by
+the inspector. The major difference between this model and 
+our Partition Dependency Graph (PDG) model lies
+in the granularity of data transfers. In our model, only entire
+partitions can be transferred from one processor to another, and a
+processor may hold multiple partitions. In systems using the original
+inspector-executor model, such as CHAOS~\cite{sharma94}, each
+processor holds exactly one partition, and elements may be transferred
+individually.
+
+The Orca system is implemented using both compiler and run-time techniques.
+Below, we compare our work with that of other systems that also
+integrate these two techniques.
+Cox et al.~\citeyear{Cox:1997} use
+a shared-memory parallelizing compiler
+in combination with a DSM system (TreadMarks). The goal of this work
+is to provide an alternative approach for dealing with
+irregular communication patterns that
+avoids the complexity of the inspector-executor model.
+The DSM system described in Cox et al.~\citeyear{Cox:1997}
+provides on-demand fetching
+of data and automatic caching of data, which is used instead of
+the inspector-executor mechanism. The performance evaluation
+indicates that this approach works well
+for irregular applications.
+Another study using a parallelizing compiler and a DSM system
+is described in Keleher and Tseng~\citeyear{Keleher:1997}.
+
+Dwarkadas et al.~\citeyear{dwarkadas96} use
+compiler techniques to improve the
+performance of a DSM system (Treadmarks), in particular to do
+communication aggregation, reduce consistency overhead,
+merge communication and synchronization, and do data prefetching.
+The compiler analyzes shared variable accesses and passes a summary
+of this information to the RTS. The RTS uses this information to
+reduce the overhead for communication, synchronization, and consistency.
+Also, the compiler can instruct the RTS to do a data exchange during a barrier,
+resulting in data prefetching. An experimental performance evaluation shows that
+most optimizations (except the barrier optimization) are very effective.
+
+Our work differs significantly from the DSM systems described above, 
+because we use an object-based programming model. The compiler analysis
+in the Orca system is applied to objects and their operations,
+instead of to regions of physical memory. Our system, for example,
+prefetches objects or partitions of objects, whereas DSM systems
+transfer physical pages. Objects and partitions are defined by the user,
+so they typically contain data that logically belong together.
+With page-based DSM systems, a single page may easily contain unrelated
+shared variables, resulting in false sharing.
+Also, the consistency protocol used in the Orca system is very different
+from that based in DSM systems like Treadmarks. Orca uses an update protocol,
+whereas most other DSMs use a directory-based invalidation
+protocol~\cite{Bal:1998}.
+
+\section{Discussion}
+\label{sec:discussion}
+
+As in most task-parallel or data-parallel languages, in our system
+there are several restrictions that are either related to our model or
+its implementation. In this section, we discuss the most important
+problems and any solutions we will investigate in the future.
+
+\subsection{Distributed Irregular Data Structures and Computations}
+
+Even though each element of a partitioned object can be of any Orca
+type (including records and arrays), partitioning can only be
+applied to array data structures. This restriction exists in most data-parallel
+languages because array-like distributed structures are
+sufficient for most data-parallel applications and because
+partitioning irregular data structures is a hard problem. In Orca,
+nonpartitioned objects can be used to implement such structures. For
+example, to implement a partitioned graph, the programmer can create
+one shared object per partition and a shared ``lock'' object to handle
+concurrent accesses to the graph.
+
+Parallel operations do not support irregular computations, since they
+use the owner-computes rule. Working around the rule can also be done
+using tasks and nonpartitioned shared objects.
+
+\subsection{Operations on Multiple Objects}
+
+\begin{figure}
+\texttt{
+\centerline{
+\begin{minipage}{\textwidth}
+\begin{tabbing}
+OBJECT IMPLEMENTATION MatrixObject[integer I1..I2, integer J1..J2]; \\
+\hspace*{2em}\=    m:\ real; \\
+ \\
+\> PARALLEL OPERATION[i,j] multiply( m1, m2:\ SHARED MatrixObject); \\
+\> BEGIN \\
+\>\hspace*{2em}\=     m[i,j] := DotProduct( m1\$GetRow(i), m2\$GetColumn(j)); \\
+\> END; \\
+\> ... \\
+END; \\
+... \\
+\> PROCESS OrcaMain(); \\
+\>\>      m1, m2:\ MatrixObject[1..100,1..100]; \\
+\> BEGIN \\
+\>\>      m1\$partition(100,1); \\
+\>\>      m2\$partition(1,100); \\
+\>\>      m1\$distribute{\_}on{\_}n(NCPUS(),100, BLOCK, 1, BLOCK); \\
+\>\>      m2\$distribute{\_}on{\_}n(NCPUS(),1, BLOCK, 100, BLOCK); \\
+\>\>      m1\$multiply(m1,m2); \\
+\>\>    ... \\
+\> END;
+\end{tabbing}
+\end{minipage}}}
+\caption{\label{algo:multiply} Implementation of matrix multiplication
+using nested calls. The two matrices to be multiplied are arguments to
+a parallel operation \texttt{multiply()}. Operations \texttt{GetRow()}
+and \texttt{GetColumn()} (not shown in the figure) return respectively
+a row and a column of a \texttt{MatrixObject}.}
+\end{figure}
+
+% \IncludeAlgorithm{multiply}{Implementation of matrix multiplication
+% using nested calls. The two matrices to be multiplied are arguments to
+% a parallel operation \texttt{multiply()}. Operations \texttt{GetRow()}
+% and \texttt{GetColumn()} (not shown in the figure) return respectively
+% a row and a column of a \texttt{MatrixObject}.}
+
+There is another important restriction to the Orca model: parallel
+operations are applied to one object only. Some applications may need
+to \emph{atomically} update more than one partitioned array in
+parallel. This can be done in three ways.
+
+\begin{itemize}
+\item
+If the arrays have the same partitioning and distribution, they can be
+stored in the same partitioned object and can be accessed within the
+same parallel operation. The system guarantees that the operation is
+executed atomically.
+\item
+If the partitioning and distribution of the structures are different,
+each array must be stored in different partitioned objects. In Orca,
+the atomic update of the objects can be handled explicitly by the
+programmer through a shared ``lock'' object.
+\item
+We are investigating a third solution: nested calls. For example, to
+multiply two matrices \verb+m1+ and \verb+m2+ of type
+\verb+MatrixObject+, the programmer could write a parallel operation
+that takes the two matrices as input arguments and computes the dot
+product of each (row,column) pair of the arguments. This is shown in
+Figure~\ref{algo:multiply}, where the rows and columns are
+obtained through (nested) operation calls. The matrices are
+partitioned rowwise and columnwise respectively, and distributed in
+blocks over several processors.
+% Nested calls are not supported in Orca
+% but we are investigating a possible implementation.
+In the example of
+Figure~\ref{algo:multiply}, the system could transfer rows and columns
+of the objects transparently to the user. For that purpose, PDGs could
+be extended to span partitions of multiple objects. In the case of
+matrix multiplication, the inner calls only read the input arguments,
+so the implementation is simple and requires no concurrency
+control. We are studying a group communication protocol that would
+support nested write operation calls efficiently.
+\end{itemize}
+
+\subsection{Granularity of PDGs}
+
+PDGs are not accurate enough to handle all irregular applications. If
+there is no data locality in the execution of an operation, the access
+of only one element might unnecessarily trigger the transfer of the
+entire partition it belongs to. For example, in the SOR application,
+entire rows are transferred even though only half of the rows (red
+cells only or black cells only) would be sufficient. In this
+application, the overhead for sending entire rows is small. In other
+applications, where there is no data locality, this overhead may be
+too high. Such applications can be implemented efficiently using task
+parallelism, which is also supported by our system.
+
+Choosing to implement an application with one model or the other
+involves a clear trade-off. On the one hand, task parallelism allows
+the user to take advantage of many optimizations the system cannot
+detect automatically. On the other hand, with data parallelism, the
+system relieves the programmer from handling data transfers and
+concurrent accesses to the data.
+
+\subsection{Dependency Analysis}
+
+For parallel operations with dynamic access patterns, a programmer may
+have to analyze dependencies manually to improve performance.
+The current system takes care of dependencies transparently to the
+user only for operations with static access patterns, because it can do
+so easily and efficiently.
+
+To render remote data access completely transparent to the user, we
+can use one of two solutions. Each requires substantial changes in the
+system but uses techniques that have been already applied in other
+systems.
+
+The first solution is to apply techniques used in parallelizing
+compilers to analyze access patterns and determine which data must be
+transferred between processors. This solution would mainly call for
+changes in the compiler. The RTS could be used as is to perform data
+transfers and execute parallel operations. A disadvantage of this
+approach is that compile-time analysis cannot always handle irregular
+computations efficiently.
+
+Another alternative is to use the virtual memory management system the
+way DSM systems do. In such case, no dependency analysis is necessary,
+but the hardware detects pages that contain inconsistent shared data
+and trigger their transfers (as it is done in
+TreadMarks~\cite{dwarkadas96}, for example). This second approach is
+certainly the easiest to implement. False sharing would not be a
+problem because the ownership of partitions does not change when data
+are transferred from one processor to another: it remains valid on the
+first processor and is validated on the second one. So pages would
+never be transferred back and forth between the two processors. On the
+other hand, we would need to map partitions onto pages. The
+partitioning of objects and PDGs would still allow many optimizations
+such as prefetching and overlapping of communication and computation.
+This approach would require to change the portable layer Panda, which
+does not export virtual memory management facilities of operating
+systems.
+
+While we investigate these issues, the current state of the language
+and system allows users to implement static or dynamic applications
+using either task or data parallelism without a severe performance
+penalty.
+
+\subsection{Minimizing Memory Space}
+
+In the current prototype, each processor allocates a contiguous area
+of memory large enough for the entire state of a partitioned object.
+The advantage of this approach is that it simplifies the address
+arithmetic needed for accessing elements. This arithmetic is very
+costly, especially in fine-grained parallel computations.
+The disadvantage of the approach is that it wastes memory space and thus
+may be inappropriate for applications with large data sets. 
+There are two possible solutions to this problem: compiler analysis
+or the usage of virtual-memory techniques.
+
+The memory problem can be solved by only allocating memory regions for
+the partitions that are needed locally, and address these regions
+using a table of pointers or extra computations for addressing array
+elements. This would require more extensive compile-time analysis to
+minimize the cost of address computations.
+For data-parallel languages like HPF,
+much research has been done on minimizing both the storage overhead
+and address calculation time for arrays~\cite{chatterjee93,reeuwijk:1996}.
+van Reeuwijk et al. [1996], for example,
+describe advanced compiler techniques that address both problems
+in an efficient way.
+The general idea is to use an efficient global-to-local mapping to transform
+indices in the global (shared) array into indices in the local partition
+of the array. 
+The techniques designed for HPF could also be applied to data-parallel Orca,
+except that the distribution and partitioning of arrays would then
+have to be specified at compile-time.
+
+Another approach is to exploit virtual-memory hardware.
+On systems supporting paging, our current approach of allocating memory
+for the entire object only wastes swap space, but not necessarily
+physical memory.
+The waste of swap space, however, can often be reduced significantly.
+Most operating systems (including BSD/OS, which we use) support
+an \verb+mmap+ system call that reserves
+part of the address space, and only allocates swap space as far as this
+address space is actually used.
+We experimented with this approach, using the \verb+mmap+
+system call to allocate
+space for the entire state of a partitioned object.
+The increase in run-time resulting from this approach was less than 5\%
+for all applications discussed above.
+With this approach, the overhead on physical memory and swap space
+depends on how much data each processor actually accesses. For applications
+that exhibit data locality, the memory overhead thus will be small.
+
+% Another solution is to use virtual memory (since unused parts of the
+% object's state would be swapped to disk) without requiring extra
+% address arithmetics.
+An interesting research
+problem is to look at how virtual memory can be used for minimizing
+both memory consumption and consistency checking overhead related to
+remote data transfers.
+A similar idea, implemented in the Pandore system, is to use
+a software page-based scheme~\cite{maheo:1993}.
+Instead of using the hardware virtual memory, the Pandore system
+itself maintains page tables in software.
+By using page sizes that are a power of two, the translation
+from indices to page numbers and offsets becomes very efficient and
+requires only simple logical operations.
+The memory and run-time overhead of this technique was found to be
+small~\cite{maheo:1993}.
+This technique requires much less compiler support than
+approaches like van Reeuwijk et al.~\citeyear{reeuwijk:1996}
+and would therefore be easier
+to apply to data-parallel Orca.
+
+\section{Conclusions}
+\label{sec:conclusions}
+
+We have described a new model for integrating task and data
+parallelism.  The model is based on one unifying concept, the shared
+object, which is a generalization of shared objects in Orca.
+We have also extended the Orca language (and its implementation),
+based on this new model.
+Objects in Orca are used for communication between processes and for storing
+shared (possibly replicated) state information. In the extended language
+objects can also be partitioned,
+and they are used to express data parallelism.
+In this way, we have increased the range of applications that can
+be implemented easily in Orca.
+
+The new model is a smooth integration of task and data parallelism,
+rather than the union of two models. Both types of parallelism use
+shared objects. Objects can be stored on one machine, be replicated,
+or be partitioned. Partitioning is mainly useful for data parallelism,
+but, if required, it can just as well be applied to objects that are
+used for interprocess communication.  Operations on shared objects
+always have the same semantics (i.e., they are executed indivisibly),
+no matter how the object is implemented or used. Finally,
+we have shown that good performance can be obtained for
+several applications that were developed using the model.
+
+\appendix
+\section*{APPENDIX}
+\section*{From Element to Partition}
+\label{app:e2p}
+\setcounter{section}{1}
+
+The most time-consuming operation in a PDG constructor is to determine
+the partitions the source and destination elements of a dependency
+belong to. In Figure~\ref{algo:dependencies}, this is computed by the
+function \verb+e2p()+. The system must also know the owner of the
+source and destination partitions to mark each dependency as local or
+remote.  The owners of the partitions are stored in an array indexed
+by partition numbers. Since there are generally much fewer partitions
+than elements in an object, the array is replicated on all processors
+and can be accessed efficiently to determine ownership.  Below, we
+focus on the implementation of the function \verb+e2p()+.
+
+When an object is partitioned, the RTS places approximately the same
+number of elements in each partition. Consider a one-dimensional
+object with $P$ partitions and $N$ elements. If $N$ is divisible by
+$P$, all partitions have the same number of elements: $\lceil N / P
+\rceil = N/P$. The partition number an element belongs to is simply
+determined by Eq.~(\ref{eqn:e2p}).
+
+\begin{equation}
+e2p1(e,N,P) = e / \lceil N / P \rceil  \label{eqn:e2p}
+\end{equation}
+
+If $N$ is not divisible by $P$, computing the partition number of an
+element requires an extra step.
+The system partitions the object so that the
+sizes of the partitions differ by at most one element.
+The first $N~ mod ~P$ partitions of
+the object have $\lceil N / P \rceil$ elements, one element more than
+the remaining partitions. For example, consider a
+one-dimensional array with 18 elements and 5 partitions (see
+Figure~\ref{fig:e2p}). All partitions below element $x=12$ have 4
+elements. All partitions starting at $x$ have only 3 elements. In
+general, $x$ is determined using Eq.~(\ref{eqn:x}).
+
+\begin{equation}
+x = \lceil N / P \rceil * (N~ mod ~P)  \label{eqn:x}
+\end{equation}
+
+\IncludeFigure{e2p}{Partitioning of a one-dimensional object. The
+object is divided in two parts. In the first part (below element~12),
+partitions have size~4. In the second part (starting at element~12),
+partitions have size~3.}
+
+Eq.~(\ref{eqn:e2p}) can be applied
+differently for elements below element $x$ or starting at $x$:
+
+\begin{eqnarray}
+e2p(e) & = & e2p1(e,N,P), 0 \leq e < x \label{eqn:e2p1}~or~x = 0 \\
+ & = & e2p1(e - x, N - x, P - N~mod~P) + N~mod~P, \nonumber \\
+ &   & x \leq e < N~and~x \neq 0 \label{eqn:e2p2}
+\end{eqnarray}
+
+Eq.~(\ref{eqn:e2p1}) applies \verb+e2p1()+ to the portion of the
+object before element $x$ and Eq.~(\ref{eqn:e2p2}) to the portion
+of the object starting at $x$. The elements in the second portion are
+renumbered so that $x$ becomes $0$, $x+1$ becomes $1$, and so on (see
+Figure~\ref{fig:e2p}). The second and the third arguments of
+\verb+e2p1()+ are also adjusted: there are $N-x$ elements and
+$P - N~mod~P$ partitions in the second portion of the
+array. The partition number obtained is
+increased by the number of partitions below element $x$ to obtain the
+actual partition number. For objects with more than one dimension,
+\verb+e2p()+ is applied for each dimension, and the system converts the
+values computed into a single integer using simple array address
+calculation.
+
+Many subexpressions in the equations above are computed ahead of time
+to minimize the overhead of constructing PDGs. The parameters $N$,
+$P$, and $x$ can be computed after the object has been partitioned,
+the second and third arguments in Eq.~(\ref{eqn:e2p2}) as well.
+
+\begin{acks}
+We would like to thank the reviewers for their very useful
+and thorough comments on the article.
+We thank Raoul Bhoedjang, Thilo Kielmann, Tim R\"{u}hl, and Kees
+Verstoep for reading draft versions of this article. Raoul Bhoedjang,
+Fabian Breg, Heinz-Peter Heinzle, Rutger Hofman, Marco Oey, and Tim
+R\"{u}hl ported Panda to several operating systems. Raoul Bhoedjang
+and Koen Langendoen wrote the RTS for nonpartitioned objects.
+Raoul Bhoedjang and Tim R\"{u}hl implemented the low-level Myrinet
+communication software.
+\end{acks}
+
+\bibliographystyle{acmtrans}
+\bibliography{biblio,publications}
+\begin{received}
+Received March 1997; revised May 1998; accepted August 1998
+\end{received}
+
+\end{document}

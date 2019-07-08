@@ -1,0 +1,121 @@
+OBJECT IMPLEMENTATION Report;
+
+	FROM AtpgTypes IMPORT Logic_Value;
+
+	FROM Circuit IMPORT Testvector;
+
+	TYPE ListPtr = NODENAME OF Test_Vector_List;
+
+	TYPE Test_Vector_List = GRAPH
+					processor:ARRAY [integer 0..NCPUS()] OF
+							ListPtr;
+				NODES
+					testvector:Testvector;
+					next: ListPtr;
+				END;
+
+	TYPE Administration = RECORD
+				no_of_faults: integer;
+				no_detected: integer;
+				no_aborted: integer;
+				no_testvectors: integer;
+			      END;
+
+	admin: Administration;
+	tvlist: Test_Vector_List;
+
+        OPERATION Initialize();
+
+	BEGIN
+		FOR i IN 0..NCPUS() DO
+			tvlist.processor[i]:=NIL;
+		OD;
+		admin.no_detected:=0;
+		admin.no_aborted:=0;
+		admin.no_testvectors:=0;
+	END; # OPERATION Initialize
+
+
+        OPERATION Assign_No_Faults(no_of_faults:integer);
+
+	BEGIN
+		admin.no_of_faults:=no_of_faults;
+	END; # OPERATION Assign_No_Faults
+
+        OPERATION Inc_Detected();
+
+	BEGIN
+		admin.no_detected+:=1;
+	END; # OPERATION Inc_Detected
+
+
+        OPERATION Inc_Aborted();
+
+	BEGIN
+		admin.no_aborted+:=1;
+	END; # OPERATION Inc_Aborted
+
+
+        OPERATION Inc_Testvectors();
+	
+	BEGIN
+		admin.no_testvectors+:=1;
+	END; # OPERATION Inc_Testvectors
+
+
+        OPERATION Communicate_Tv(i:integer;input_value:Testvector);
+
+        # Processor no i reports a testvector. Put this input value in the
+        # list associated with all the other processors.
+
+	ptr: ListPtr;
+
+	BEGIN
+# DEBUG, remember this depends on no of CPUs used !
+		FOR k IN 0..NCPUS()-1 DO
+			IF k/=i THEN
+				# Add node
+				ptr:=ADDNODE(tvlist);
+				tvlist[ptr].testvector:=input_value;
+				# Append node to list asscociated with
+				# processor k
+				tvlist[ptr].next:=tvlist.processor[k];
+				tvlist.processor[k]:=ptr;
+			FI;
+		OD;
+	END; # OPERATION Communicate_Tv
+
+
+        OPERATION Get_Tv(i:integer;testvector:OUT Testvector):boolean;
+
+        # Return a testvector from the list associated with processor i.
+        # If this list is empty the operation returns false else true
+        # is returned.
+
+	ptr: ListPtr;
+
+	BEGIN
+		IF tvlist.processor[i]/=NIL THEN
+			ptr:=tvlist.processor[i];
+			testvector:=tvlist[ptr].testvector;
+			tvlist.processor[i]:=tvlist[ptr].next;
+			DELETENODE(tvlist,ptr);
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	END; # OPERATION Get_Tv
+
+
+        OPERATION Write_Results();
+
+	BEGIN
+		WriteLine("=================Report=====================");
+		WriteLine("Total faults          : ",admin.no_of_faults);
+		WriteLine("Faults detected       : ",admin.no_detected);
+		WriteLine("Total aborted         : ",admin.no_aborted);
+		WriteLine("Testvectors generated : ",admin.no_testvectors);
+		WriteLine("============================================");
+	END; # OPERATION Write_Results
+
+END; # MODULE IMPLEMENTATION Report

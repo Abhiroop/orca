@@ -1,0 +1,958 @@
+# Object TourObject
+#
+# This file implements the TourObject. A TourObject represents
+# a tour through a set of nodes, and can, using heuristics
+# such as NearestNeighbour, two-opt and r-opt, create a tour
+# given a set of nodes, and as well improve this tour. 
+# The control of when creation and improvement is to be
+# done is given to the procedure using the object since
+# these functions can be quite time consuming.
+#  This module is the most complicated one, since it also contains
+# the heuristic algorithms for TSP solving. These are found at the 
+# end of the file, and are described in detail in the documentation
+# of the program.
+
+
+OBJECT IMPLEMENTATION TourObject;
+
+IMPORT Random;
+IMPORT SpecificationObject;
+FROM TourModule IMPORT
+	Node, 
+	Tour,
+	Next,
+	Prev,
+	First,
+	Last,
+	Index,
+	Empty,
+	TwoOptReorder,
+	ROptReorder,
+	InsertAtBest,
+	InsertAtEnd,
+	RemoveNode,
+	DirectionType,
+	Size,
+	ClearTour,
+	TourValue,
+	PrintTour,
+	Swap,
+	SwapCost,
+	ConsistentTour,
+	UnorderedFirst,
+	UnorderedNext,
+	InitializeTour;
+FROM ConstructionModule IMPORT 
+		NearestNeighbour;
+FROM Strings IMPORT
+		EmptyString,
+		NextInteger,
+		ReduceString;
+FROM TspTypes IMPORT 
+		NodeSubset,
+		MSelectionMode,
+		ValueArray,
+		NSelectionMode;
+FROM TspFunctions IMPORT
+		AppendString;		
+FROM PresentationModule IMPORT
+		Warning,
+		PrintMessage,
+		PrintMessageInt,
+		PrintSubMessage;
+FROM conversions IMPORT
+		IntToString;
+FROM Time IMPORT
+		SysMilli;
+TYPE ImprovementStatus = 
+	RECORD
+		# R-Opt functional parameters
+		removed_length : integer;
+		inserted_length_open : integer;
+		open_improvement : integer;
+		closed_improvement : integer;
+		best_improvement : integer;
+		problem_size : integer;
+
+		# R-Opt statistical parameters
+		r_improvement : real;
+		r_time : integer;   	# Milliseconds 
+
+		# Two-Opt statistical parameters
+		t_improvement : real;
+		t_time : integer;		# Milliseconds
+
+		# Error analysis
+		mNodeNotFound : integer;
+	END;
+
+
+
+CONST ValueEstimation = false;
+
+
+
+Status  : ImprovementStatus;	# Collects some statistics and status info
+spec    : SpecificationObject;	# Problem specification
+t           : Tour;		# The actual tour
+NSelection  : NSelectionMode;	# Mode selector for r-opt
+MSelection  : MSelectionMode;	# Mode selector for r-opt
+LowerBound, 		# Lower bound of the r-opt algorithm
+UpperBound  : integer;	# Upper bound of the r-opt algorithm
+valueSet    : boolean;	# True if value is set
+value       : integer;  # The value of the tour.
+id	    : string;	# Unique ID for a tour. Used for hashing.
+undo_n1,
+undo_n2     : Node;	# Used for undo-function of Swap
+
+
+#######################################
+# Initialization
+#######################################
+
+OPERATION Initialize (nodes : NodeSubset; 
+		s : SpecificationObject);
+BEGIN
+	spec := s;
+	NearestNeighbour (t, nodes, 0, s);
+	NSelection := always_previous;
+	MSelection := terminating;
+
+	# After testing all ranges from 3..10 to 3..25 on the
+	# bier127 problem I found that the interval 17..20 gave the
+	# best result. More testing on this should be done with the
+	# target problem.
+	#
+	# 961014: I have lowered the values to 3 and 15 respectivly
+	# for speedup reasons.
+	#
+	LowerBound := 3;
+	UpperBound := 15;
+	valueSet := false;
+
+	SELF$GenerateID ();
+END;
+
+
+
+OPERATION SetLower (l : integer);
+BEGIN
+	LowerBound := l;
+END;
+
+
+OPERATION SetUpper (u : integer);
+BEGIN
+	UpperBound := u;
+END;
+
+
+
+OPERATION FromStringInt (s : string; val : integer);
+	new_t : Tour;
+	i : integer;
+BEGIN
+	new_t := InitializeTour ();
+
+	valueSet := true;
+	value := val;
+	id := "";
+
+	WHILE NOT EmptyString (s) DO
+		i := NextInteger (s);
+		s := ReduceString (s);
+		new_t := InsertAtEnd (i, new_t);
+	OD;
+
+	t := new_t;
+	SELF$GenerateID ();
+END;
+
+
+#######################################
+# Printing
+#######################################
+OPERATION Print ();
+BEGIN
+	PrintTour (t);
+	PrintSubMessage (AppendString ("Subtour value: ", IntToString (SELF$Value ())));
+END;
+
+
+
+#######################################
+# Debug functions
+#######################################
+OPERATION Consistent () : boolean;
+	val : integer;
+BEGIN	# Note that I have not set the check of spec$DebugMode here
+	# since there are opportunities when we have to know for sure
+	# that the tour is correct. For instance when the algorithm
+	# is finished, the job of calculating the consistency once
+	# is very small.
+
+	val := TourValue (t, spec);
+	IF valueSet AND (value /= val) THEN
+		PrintMessageInt ("Old value: ", value);
+		PrintMessageInt ("Correct value: ", val);
+		PrintMessage ("The value of the tour was not correct. Updated.");
+		value := val;
+	FI;
+	RETURN ConsistentTour (t);
+
+END;
+
+
+
+
+#######################################
+# Status functions
+#######################################
+OPERATION ResetStatus ();
+BEGIN
+	Status.removed_length := 0;
+	Status.inserted_length_open := 0;
+	Status.open_improvement := 0;
+	Status.closed_improvement := 0;
+	Status.best_improvement := 0;
+	Status.mNodeNotFound := 0;
+END;
+
+
+# Value
+#
+# Value calculates the value of the tour. It also accumulates this
+# value so as long as the tour doesn't change, the value will not be
+# recalculated regardless of how many times Value is called.
+#
+OPERATION Value () : integer;
+BEGIN
+	IF ((NOT valueSet) OR (value = 0)) THEN
+		value := TourValue (t, spec);
+		valueSet := true;
+	FI;
+	RETURN value;
+END;
+
+
+
+
+
+#######################################
+# Inspectors
+#######################################
+
+OPERATION Nodes_Set () : NodeSubset;
+	n : Node;
+	set : NodeSubset;
+BEGIN
+	n := UnorderedFirst (t);
+	WHILE n /= NIL DO
+		INSERT (Index (n, t), set);
+		n := UnorderedNext (n, t);
+	OD;
+	RETURN set;
+END;
+
+
+
+OPERATION Nodes_ArrayHelpFun (size : integer) : ValueArray;
+	n : Node;
+	a : ValueArray [1..size];
+	i : integer;
+BEGIN
+	i := 1;
+	n := First (t);
+	WHILE n /= Last (t) DO
+		a[i] := Index (n, t);
+		n := Next (n, t);
+		i +:= 1;
+	OD;
+	a[i] := Index (n, t);
+	IF i /= size THEN
+		Warning ("TourObject.imp: Nodes_ArrayHelpFun: Not filling array");
+	FI;
+	RETURN a;
+END;
+
+
+
+
+OPERATION Nodes_Array () : ValueArray;
+BEGIN
+	RETURN SELF$Nodes_ArrayHelpFun (Size (t));	
+END;
+
+
+
+OPERATION NoOfNodes () : integer;
+BEGIN
+	RETURN t.nodes;
+END;
+
+
+
+
+#######################################
+# Modifiers
+#######################################
+
+# ChangeNodes
+#
+# When a new distribution is given, this function is called to change
+# the nodes. Possible different implementation could be to estimate 
+# the value and not set the valueSet to false. In this way the Improve
+# would be avoided and the loop in the processing quicker.
+#
+OPERATION ChangeNodes (nodes : NodeSubset);
+BEGIN
+	t := ClearTour (t);
+	valueSet := false;
+	NearestNeighbour (t, nodes, 0, spec);
+	SELF$GenerateID ();
+END;
+
+
+
+# BestInsert
+#
+# Given a set of nodes, insert these into the tsp path using the criteria
+# that a node shall be inserted in the path, where the cost for it is
+# the least.
+#
+OPERATION BestInsert (nodes : NodeSubset);
+	val : integer;
+BEGIN
+	FOR n IN nodes DO
+		t := InsertAtBest (n, t, val, spec);
+		IF ValueEstimation THEN
+			value := value + val;
+		ELSE
+			valueSet := false;
+		FI;
+	OD;
+	SELF$GenerateID ();	
+END;
+
+
+
+
+# BestInsertArray
+#
+# Given an array of nodes, insert these into the tsp path using the criteria
+# that a node shall be inserted in the path, where the cost for it is
+# the least.
+#
+OPERATION BestInsertArray (nodes : ValueArray);
+	val : integer;
+BEGIN
+	FOR i IN LB(nodes)..UB(nodes) DO
+		t := InsertAtBest (nodes[i], t, val, spec);
+		IF ValueEstimation THEN
+			value := value + val;
+		ELSE
+			valueSet := false;
+		FI;
+	OD;
+	SELF$GenerateID ();	
+END;
+
+
+
+
+# BestRemove
+#
+# BestRemove
+#
+OPERATION BestRemove (nodes : NodeSubset);
+	val : integer;
+BEGIN
+	FOR n IN nodes DO
+		t := RemoveNode (n, t, val, spec);
+	OD;
+		IF ValueEstimation THEN
+			value := value + val;
+		ELSE
+			valueSet := false;
+		FI;
+	SELF$GenerateID ();
+END;
+
+
+
+# Clear
+#
+# Clear
+#
+OPERATION Clear ();
+BEGIN
+	t := ClearTour (t);
+	valueSet := true;
+	value := 0;
+	id := "";
+END;
+
+
+
+
+# RandomElement
+#
+# RandomElement
+#
+OPERATION RandomElement (r : Random) : Node;
+	a : integer;
+	n : Node;
+BEGIN
+	a := TRUNC (r$val01 () * FLOAT (Size (t) - 1));
+	n := First (t);
+	FOR i IN 0..a DO
+		n := Next (n, t);
+	OD;
+	RETURN n;
+END;
+
+
+OPERATION UndoSwap ();
+BEGIN
+	t := Swap (undo_n1, undo_n2, t);
+END;
+
+
+# SwapRandom
+#
+# SwapRandom swaps two randomly chosen items in the tour and
+# recalculates the tour value given this swap.
+OPERATION SwapRandom (r : Random);
+BEGIN
+	# 1. Select two elements randomly
+	undo_n1 := SELF$RandomElement (r);
+	undo_n2 := SELF$RandomElement (r);
+	WHILE ((undo_n1 = undo_n2) OR (undo_n1 = Prev (undo_n2, t)) OR (undo_n1 = Next (undo_n2, t))) DO
+		undo_n2 := SELF$RandomElement (r);
+	OD;
+
+	# 2. Calculate new value
+	IF ValueEstimation THEN
+		value := value + SwapCost (undo_n1, undo_n2, t, spec);
+	ELSE
+		valueSet := false;
+	FI;
+
+	# 3. Swap them
+	t := Swap (undo_n1, undo_n2, t);
+	SELF$GenerateID ();
+END;
+
+
+
+########################################
+# Functions for Tsp-TourObject interface
+########################################
+
+# SetTour
+#
+# This function is needed when we want to create a tour object with
+# an already specified tour. A tour that is set like this will not
+# be affected by an Improve message.
+#
+OPERATION SetTour (newTour : Tour);
+BEGIN
+	valueSet := false;
+	t := newTour;
+	SELF$GenerateID ();
+END;
+
+
+
+# SetTourConditional
+#
+# This function sets changes the tour if the condition specified is
+# evaluated to true.
+#
+OPERATION SetTourConditional (cond : boolean; nt : Tour);
+BEGIN
+	IF cond THEN
+		SELF$SetTour (nt);
+	FI;
+	SELF$GenerateID ();
+END;
+
+
+
+#######################################
+# Functions for ID generation 
+#######################################
+OPERATION GenerateID ();
+	n,
+	last : Node;
+BEGIN
+	id := "";
+	IF Empty (t) THEN RETURN; FI;
+	n := First (t);
+	last := Last (t);
+	WHILE n /= last DO
+		id := AppendString (id, AppendString (IntToString (Index (n, t)), " "));
+		n := Next (n, t);
+	OD;	
+	id := AppendString (id, AppendString (IntToString (Index (last, t)), " "));	
+END;
+
+
+OPERATION Id () : string;
+BEGIN
+	RETURN id;
+END;
+
+
+#######################################
+# Functions for improving a solution  
+#######################################
+
+
+
+###############################################################
+###############################################################
+##							     ##
+##  TWO OPT						     ##
+##							     ##
+###############################################################
+###############################################################
+
+
+
+OPERATION TwoOptMovePrimitive (pivot : Node;
+			iterator : Node;
+			improved : OUT boolean);
+	a, b : integer;
+BEGIN
+	
+	# IF Index (pivot, t) = 0 THEN
+	# Not needed. Does not affect the outcome
+
+	a := spec$Distance (Index (pivot, t), Index (Next (pivot, t), t)) +
+	     spec$Distance (Index (iterator, t), Index (Next (iterator, t), t));
+	b := spec$Distance (Index (pivot, t), Index (iterator, t)) +
+	     spec$Distance (Index (Next (pivot, t), t), Index (Next (iterator, t), t));		
+
+	IF (a > b) THEN
+		improved := true;
+		valueSet := false;
+		t := TwoOptReorder (pivot, iterator, t);
+	ELSE
+		improved := false;
+	FI;	     
+END;
+
+
+
+
+
+OPERATION TwoOptMove (n : Node;
+		improved : OUT boolean) : Tour;
+	performed : boolean;
+	m : Node;
+BEGIN
+	#
+	# Performing the two opt move we must look at
+	# all edges not adjacent to the current edge.
+	#
+	performed := false;   # Avoid compiler warning	
+	improved := false;
+
+	m := UnorderedFirst (t);
+	WHILE m /= NIL DO
+		IF ((m /= n) AND (m /= Next (n, t)) AND (m /= Prev (n, t))) THEN
+			SELF$TwoOptMovePrimitive (n, m, performed);
+			improved := improved OR performed;
+		FI;
+		m := UnorderedNext (m, t);
+	OD;
+	
+
+	RETURN t;
+
+END;
+
+
+
+
+OPERATION TwoOpt ();
+	failure : boolean;
+	improved : boolean;
+	performed : boolean;
+	n : Node;
+	dummy : integer;
+BEGIN
+	Status.t_time := SysMilli ();
+	Status.t_improvement := FLOAT (SELF$Value ());
+	failure := false;
+	improved := false;
+	performed := false;
+	WHILE NOT failure DO
+		n := UnorderedFirst (t);
+		WHILE n /= NIL DO
+			t := SELF$TwoOptMove (n, performed);
+			improved := improved OR performed;
+			n := UnorderedNext (n, t);
+		OD;
+		failure := NOT improved;
+		improved := false;
+	OD;
+	dummy := SELF$Value ();	# Has to be done this way, otherwise strange errors occur
+		
+	Status.t_time := SysMilli () - Status.t_time;
+	IF dummy = 0 THEN
+		Status.t_improvement := FLOAT(MAX(integer));
+	ELSE
+		Status.t_improvement := (Status.t_improvement / FLOAT (dummy)) - 1.0;
+	FI;
+
+#	IF spec$DebugMode () THEN
+#		PrintMessageReal ("Tour: Statistics: Two-Opt Improvement (%): ", Status.t_improvement * 100.0);
+#		PrintMessageInt ("Tour: Statistics: Two-Opt Time: ", Status.t_time);
+#		PrintMessageReal ("Tour: Statistics: Two-Opt Efficiency (nodes/sec): ", Status.t_improvement / (FLOAT(Status.t_time) / 1000.0));
+#	FI; 
+
+END;
+
+
+
+###############################################################
+###############################################################
+##							     ##
+##  R - OPT						     ##
+##							     ##
+###############################################################
+###############################################################
+
+
+OPERATION ROptSelectN (n : Node) : Node;
+	result : Node;
+BEGIN
+	IF NSelection = always_previous THEN
+		result := Prev (n, t);
+	FI;
+	IF NSelection = always_next THEN
+		result := Next (n, t);
+	FI;
+	IF NSelection = optimized THEN
+		IF spec$Distance (Index (n, t), Index (Next (n, t), t)) >
+		   spec$Distance (Index (n, t), Index (Prev (n, t), t)) THEN
+			result := Next (n, t);
+		ELSE
+			result := Prev (n, t);
+		FI;
+	FI;
+	RETURN result;
+END;
+
+
+
+
+OPERATION ROptSelectK (start : Node;
+		  n : Node;
+		  m : Node;
+		  reorderDirection : OUT DirectionType ) : Node;
+	iNode : Node;
+	mNode : Node;
+BEGIN
+	iNode := m;
+	mNode := m;
+
+	WHILE ((iNode /= n) AND
+	       (iNode /= start)) DO
+		iNode := Next (iNode, t);
+	OD;
+
+	IF iNode = n THEN
+		reorderDirection := previous;
+		RETURN Next (mNode, t);
+	ELSE
+		reorderDirection := next;
+		RETURN Prev (mNode, t);
+	FI;
+
+END;
+
+
+
+FUNCTION RealDistance (a, b : Node; t : Tour; spec : SpecificationObject) : integer;
+BEGIN
+	IF NOT (((Next (a, t) = b) AND (Index (b, t) = 0)) OR ((Next (b, t) = a) AND (Index (a, t) = 0))) THEN
+		RETURN spec$Distance (Index (a, t), Index (b, t));
+	ELSE
+		RETURN 0;
+	FI;
+END;
+
+
+
+FUNCTION MFunction (start, n, iNode, k: Node; t : Tour; spec : SpecificationObject; mode : MSelectionMode) : integer;
+	result : integer;
+BEGIN
+	result := 0;
+	IF mode = blind THEN
+		result := RealDistance (start, n, t, spec) - RealDistance (n, iNode, t, spec);
+	ELSE
+		result := RealDistance (start, n, t, spec) -
+			  RealDistance (n, iNode, t, spec) +
+			  RealDistance (k, iNode, t, spec) -
+			  RealDistance (start, k, t, spec);
+	FI;
+
+	RETURN result;
+END;
+
+
+
+
+OPERATION ROptSelectM (start : Node;
+		  n : Node;
+		  lookedAt : NodeSubset) : Node;
+	max : integer;
+	funcRes : integer;
+	result : Node;
+	k : Node;
+	iNode : Node;
+	dir : DirectionType;
+BEGIN
+	max := MIN(integer);
+	iNode := UnorderedFirst (t);
+
+	WHILE iNode /= NIL DO
+		k := SELF$ROptSelectK (start, n, iNode, dir);
+		funcRes := MFunction (start, n, iNode, k, t, spec, MSelection); 
+		
+		# Observe that funcRes in the following if statement can be
+		# lower than 0, in order to follow paths which are not 
+		# improving the solution.
+		IF ((funcRes > max) AND 
+		    (iNode /= n) AND
+		    (Next (iNode, t) /= n) AND
+		    (Prev (iNode, t) /= n) AND
+		    (NOT (Index (iNode, t) IN lookedAt))) THEN
+			max := funcRes;
+			result := iNode;
+		FI;
+		iNode := UnorderedNext (iNode, t);
+	OD;
+
+	IF max = MIN(integer) THEN
+#		PrintMessage ("TourObject: ROptSelectM: No suitable m node was found");
+#		Returning random node. Is this really good? Does it ever occur? Yes it does!
+#		When this occurs it creates a loop.
+		Status.mNodeNotFound +:= 1;
+		RETURN NIL;
+	ELSE
+		RETURN result;
+	FI;
+END;
+
+
+
+
+
+
+OPERATION ROptMove (start : Node; improved : OUT boolean);
+	n : Node;         # Neighbouring node
+	m : Node;         # Selected node to improve tour
+	k : Node;         # Node to connect to start node for full path
+	r : integer; 
+	dir : DirectionType;
+	bestSoFar : Tour;
+	lookedAt : NodeSubset;
+BEGIN
+	bestSoFar := t;
+
+	SELF$ResetStatus ();
+
+	# Step 1
+	# Select n as a neighbouring node to start.
+	# Select m as the node which maximizes the function:
+	#   distance (start, n) - distance (n, m)
+	# Select k as a neighbouring node to m which can be connected
+	# to the start node to form a full path.
+	# Add m, start to the set of nodes looked at.
+
+	n := SELF$ROptSelectN (start);
+	m := SELF$ROptSelectM (start, n, lookedAt);
+	IF m = NIL THEN
+		improved := false;
+		t := bestSoFar;
+		RETURN;
+	FI;
+	k := SELF$ROptSelectK (start, n, m, dir);
+	INSERT (Index (start, t), lookedAt);
+	INSERT (Index (m, t), lookedAt);
+	INSERT (Index (k, t), lookedAt);
+	Status.removed_length +:= spec$Distance (Index (n, t), Index (start, t));
+	Status.removed_length +:= spec$Distance (Index (m, t), Index (k, t));
+	Status.inserted_length_open +:= spec$Distance (Index (n, t), Index (m, t));
+
+
+
+	# Step 2
+	# Connect node n to node m and reorder the tour directions so 
+	# that they are consistent. Insert the k - start connection also.
+	t := ROptReorder (start, n, m, k, dir, t);
+	valueSet := false;
+
+
+	# Step 4
+	# r := 1
+	r := 1;
+
+
+	# Step 5
+	# Try to select a new node m where the following function is
+	# maximized:
+	#    distance (k, start) - distance (k, m)
+	# If such a node is found, call the new nodes apropriate neighbour 
+	# k and let n point at the old k.
+	# If not, connect start with k and the optimization is completed.
+	n := k;
+	m := SELF$ROptSelectM (start, n, lookedAt);
+	IF m = NIL THEN
+		improved := false;
+		t := bestSoFar;
+		RETURN;
+	FI;
+
+
+
+
+	# Step 6
+	# While the following conditions hold:
+	#      (r < LowerBound) OR
+	#      ((r < UpperBound) AND
+	#       (There is no new node maximizing the distance function) AND
+	# 	( r < UB(tour)))
+
+
+
+	WHILE ((r < LowerBound) OR
+           ((r < UpperBound) AND
+            (Status.open_improvement > 0) AND
+            (r <= Size (t)))) DO
+		
+		
+
+		# Step 6.1
+		# Try to select k.
+		# Insert k and m into the lookedAt set.
+		k := SELF$ROptSelectK (start, n, m, dir);
+		INSERT (Index (m, t), lookedAt);
+		INSERT (Index (k, t), lookedAt);
+
+
+		# Step 6.2
+		# Reordering step
+		t := ROptReorder (start, n, m, k, dir, t);
+		valueSet := false;
+
+		# Step 6.3
+		# Increment r and calculate new status
+		Status.removed_length +:= spec$Distance (Index (m, t), Index (k, t));
+		Status.inserted_length_open +:= spec$Distance (Index (n, t), Index (m, t));
+		Status.open_improvement := Status.removed_length - Status.inserted_length_open;
+		Status.closed_improvement := Status.removed_length - Status.inserted_length_open - spec$Distance (Index (start, t), Index (k, t));
+		r +:= 1;
+		IF Status.closed_improvement > Status.best_improvement THEN
+			Status.best_improvement := Status.closed_improvement;
+			bestSoFar := t;
+			improved := true;
+		FI;
+		
+		# Step 6.4
+		# Selection step
+		n := k;
+		m := SELF$ROptSelectM (start, n, lookedAt);	
+		IF m = NIL THEN
+			improved := false;
+			t := bestSoFar;
+			RETURN;
+		FI;
+
+	OD;
+
+	# Step 7
+	# Return the correct value
+	t := bestSoFar;
+
+END;
+
+
+
+OPERATION ROpt ();
+	n : Node;
+	performed : boolean;
+	improved : boolean;
+	dummy : integer;
+BEGIN
+	Status.r_time := SysMilli ();
+	Status.r_improvement := FLOAT (SELF$Value ());
+
+	n := UnorderedFirst (t);
+	WHILE n /= NIL DO
+		SELF$ROptMove (n, performed);
+		improved := improved OR performed;
+		n := UnorderedNext (n, t);
+	OD;
+
+	dummy := SELF$Value (); 	# Has to be done this way, otherwise strange errors occur
+	Status.r_time := SysMilli () - Status.t_time;
+	IF dummy = 0 THEN
+		# If the value is zero, the improvement is infinite.
+		# More importantly we have to sort out the divide by zero case.
+		Status.r_improvement := FLOAT(MAX(integer));
+	ELSE
+		Status.r_improvement := (Status.r_improvement / FLOAT (dummy)) - 1.0;
+	FI;
+
+#	IF spec$DebugMode () THEN
+#		PrintMessageReal ("Tour: Statistics: R-Opt Improvement (%): ", Status.r_improvement * 100.0);
+#		PrintMessageInt ("Tour: Statistics: R-Opt Time: ", Status.r_time);
+#		PrintMessageReal ("Tour: Statistics: R-Opt Efficiency (nodes/sec): ", Status.r_improvement / (FLOAT(Status.r_time) / 1000.0));
+#	FI; 
+
+
+		
+END;
+
+
+
+OPERATION Improve ();
+	val,
+	oldval : integer;
+BEGIN
+	# Testing has shown that the best efficiency
+	# is given when two-opt is run first and thereafter
+	# threeopt.
+
+	# Improve each object until it doesn't improve anymore
+	# Experiments have shown that this is usually two or
+	# three times.
+
+	oldval := SELF$Value ();
+	SELF$TwoOpt ();
+	SELF$ROpt ();
+	val := SELF$Value ();
+
+	WHILE oldval > val DO
+		SELF$TwoOpt ();
+		SELF$ROpt ();
+		oldval := val;
+		val := SELF$Value ();
+	OD;
+
+	IF oldval < val THEN
+		SELF$FromStringInt (id, oldval);
+	ELSE
+		SELF$GenerateID ();
+	FI;
+END;
+
+
+
+END;
+

@@ -1,0 +1,26 @@
+# platform-dependent macros
+
+# platform
+OS		= linux
+PROC		= i386
+BINSUF		= linux
+
+# C compiler
+CC		= gcc
+EXT_FLAGS	= -O -ansi -pedantic
+LDFLAGS		=
+
+# archiver
+AR 		= ar
+ARFLAGS		= crs
+RANLIB		= :
+
+# lint
+LINT		= gcc -Wall
+LINTFLAGS	=
+LINTPREF	= 
+LINTSUF		= 
+LINTMKLIB	= 
+
+# dependency generator
+MAKEDEPEND	= /usr/bin/X11/makedepend

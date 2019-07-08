@@ -1,0 +1,7 @@
+MODULE SPECIFICATION graphdef;
+  IMPORT  RowCollection;
+  CONST NVertices = 128;
+  CONST Diameter = 25;  # The maximal distance between two vertices of the graph
+  FUNCTION createDistanceMatrix(dm: SHARED RowCollection);
+  
+END;

@@ -1,0 +1,14 @@
+#!/bin/sh
+
+PANDA_PROJ=/usr/proj/panda
+UPSHOT_ROOT=$PANDA_PROJ/upshot
+LIB_VERSION=lib
+PANDA_VERSION=panda2.0
+ARCH_OS=sparc_solaris2
+
+ROOT=$PANDA_PROJ/$PANDA_VERSION/bin
+
+FILTERS="level=4000;thread=logged:'do operation'"
+ORCA_ROOT=/net/orca
+
+$ROOT/upshot -filter "$FILTERS" -root $ROOT -e $ORCA_ROOT/orca_obj_ops -s $ORCA_ROOT/orca_states "$@"

@@ -1,0 +1,14 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+RTS_DATAMAN = {
+	$PWD/array.c,
+	$PWD/bag.c,
+	$PWD/graph.c,
+	$PWD/marshall.c,
+	$PWD/misc.c,
+	$PWD/object.c,
+	$PWD/set.c,
+	$PWD/tp_descr.c,
+};

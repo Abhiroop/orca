@@ -1,0 +1,173 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/* Table of group ids versus group struct pointers.
+ * Operations:
+ *  - register(id, pan_group_p);
+ *  - unregister(id);
+ *  - lookup(id) : pan_group_p;
+ */
+
+#ifndef __PAN_GRP_TAB_CI__
+#define __PAN_GRP_TAB_CI__
+
+#include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "pan_sys.h"
+
+	/*--- #include "grp_group.h" ---*/
+#include "grp_types.h"
+#include "grp_tab.h"
+
+
+/* List of group pointer blocks. Implementation should be reentrant for atomic
+ * read/write word */
+
+
+#define GROUP_TAB_SIZE      16
+
+typedef struct GROUP_TAB_LST_T group_tab_lst_t, *group_tab_lst_p;
+
+struct GROUP_TAB_LST_T {
+    pan_group_p             group[GROUP_TAB_SIZE];
+    int                     n;
+    group_tab_lst_p         next;
+};
+
+
+
+static group_tab_lst_p	group_tab = NULL;
+static int		n_groups = 0;
+static pan_cond_p	n_groups_changed;
+static pan_mutex_p	group_tab_lock;
+
+
+static group_tab_lst_p
+new_group_tab_block(void)
+{
+    group_tab_lst_p block;
+    int             i;
+
+    block = pan_malloc(sizeof(group_tab_lst_t));
+    for (i = 0; i < GROUP_TAB_SIZE; i++) {
+	block->group[i] = NULL;
+    }
+    block->next = 0;
+    return block;
+}
+
+
+pan_group_p
+pan_gtab_add(pan_group_p g, int gid)
+{
+    group_tab_lst_p block;
+
+    pan_mutex_lock(group_tab_lock);
+
+    block = group_tab;
+    while (gid >= GROUP_TAB_SIZE) {
+	if (block->next == NULL) {
+	    block->next = new_group_tab_block();
+	}
+	block = block->next;
+	gid -= GROUP_TAB_SIZE;
+    }
+    assert(block->group[gid] == NULL);
+
+    block->group[gid] = g;
+    ++n_groups;
+    pan_cond_broadcast(n_groups_changed);
+
+    pan_mutex_unlock(group_tab_lock);
+
+    return g;
+}
+
+
+void
+pan_gtab_delete(pan_group_p g, int gid)
+{
+    group_tab_lst_p block;
+
+    block = group_tab;
+    while (gid >= GROUP_TAB_SIZE) {
+	gid -= GROUP_TAB_SIZE;
+	block = block->next;
+	assert(block != NULL);
+    }
+
+    block->group[gid] = NULL;
+    --n_groups;
+    pan_cond_broadcast(n_groups_changed);
+}
+
+
+INLINE pan_group_p
+pan_gtab_locate(int gid)
+{
+    pan_group_p     g;
+    group_tab_lst_p block;
+
+    block = group_tab;
+    while (block != NULL && gid >= GROUP_TAB_SIZE) {
+	gid -= GROUP_TAB_SIZE;
+	block = block->next;
+    }
+    if (block == NULL) {
+	g = NULL;
+    } else {
+	g = block->group[gid];
+    }
+
+    return g;
+}
+
+
+void
+pan_gtab_await_size(int n)
+{
+    pan_mutex_lock(group_tab_lock);
+    while (n_groups != n) {
+	pan_cond_wait(n_groups_changed);
+    }
+    pan_mutex_unlock(group_tab_lock);
+}
+
+
+void
+pan_gtab_init(pan_mutex_p lock)
+{
+    group_tab = new_group_tab_block();
+    n_groups = 0;
+
+    group_tab_lock = lock;
+    n_groups_changed = pan_cond_create(group_tab_lock);
+}
+
+
+void
+pan_gtab_clear(void)
+{
+    group_tab_lst_p block;
+
+    pan_mutex_lock(group_tab_lock);
+
+    while (group_tab != NULL) {
+	block = group_tab;
+	group_tab = group_tab->next;
+	pan_free(block);
+    }
+    n_groups = 0;
+
+    pan_cond_clear(n_groups_changed);
+
+    pan_mutex_unlock(group_tab_lock);
+}
+
+#endif

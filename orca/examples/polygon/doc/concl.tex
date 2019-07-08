@@ -1,0 +1,43 @@
+\sectionLabel{Conclusions}
+
+The main conclusion is that the Overlay Problem is hard to parallelize,
+because of the bad ratio between communication and computation.
+This make the Overlay Problem a killer application for parallel
+programming systems.
+
+The outcome of the experiments comparing the two algorithms for solving the
+Overlay Problem is that Patchwised Overlay is better than 
+Data-Parallel Overlay for the following reasons:
+\begin{itemize}
+  \item Patchwised Overlay is faster than Data-Parallel Overlay
+  as the problem size increases, because sorting of the B map takes less time.
+  In Patchwised Overlay the B map is sorted in parallel
+  by the workers; each worker sorts a sub-map.
+  In contrast, in Data-Parallel Overlay the B map is primarily
+  sorted by the master; each worker only merges sorted parts of the
+  B map.
+
+  \item The workers in Patchwised Overlay use less memory than the
+  workers in Data-Parallel Overlay, because the B map is partitioned in
+  the former case, whereas it is replicated in the latter case. The
+  difference in memory usage is especially important for large input
+  maps.
+
+  \item Performance tuning in Patchwised Overlay was easier
+  than in Data-Parallel Overlay where it was hard to find a
+  good solution for balancing the sorting load between Master
+  and workers. Note, however, that
+  the algorithm of Data-Parallel Overlay itself is less complex.
+\end{itemize}
+
+Writing the parallel Overlay programs in Orca was easy because of
+the shared data objects, which supports communication and
+synchronization in parallel programs at a high level. 
+Performance tuning of the programs, however, was rather difficult since the
+Orca system hides important low level details like communication
+overhead, object distribution, and message fragmentation.
+
+Orca programs perform well as was demonstrated by the comparison
+between sequential solutions of the Overlay problem written both in
+C and Orca; the observed difference between Orca and C was less than
+3\%.

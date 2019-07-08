@@ -1,0 +1,54 @@
+% character tables for Orca compiler
+% $Id: char.tab,v 1.5 1996/10/09 13:23:11 ceriel Exp $
+%S129
+%F	%s,
+%
+%	CHARACTER CLASSES
+%
+%iSTGARB
+STSKIP: \t\013\014\015
+STNL:\012
+STSIMP:,;()[]#{}!~
+STCHAR:'
+STCOMP:-<>:+*/%=$.&^|
+STIDF:a-zA-Z_
+STSTR:"
+STNUM:0-9
+STEOI:\200
+%T#include "class.h"
+%Tchar tkclass[] = {
+%p
+%T};
+%
+%	INIDF
+%
+%C
+1:a-zA-Z_0-9
+%Tchar inidf[] = {
+%F	%s,
+%p
+%T};
+%
+%	ISDIG
+%
+%C
+1:0-9
+%Tchar isdig[] = {
+%p
+%T};
+%
+%	ISOCT
+%
+%C
+1:0-7
+%Tchar isoct[] = {
+%p
+%T};
+%
+%	ISHEX
+%
+%C
+1:0-9A-F
+%Tchar ishex[] = {
+%p
+%T};

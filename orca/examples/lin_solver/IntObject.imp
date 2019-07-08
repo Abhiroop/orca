@@ -1,0 +1,61 @@
+OBJECT IMPLEMENTATION IntObject;
+
+x: integer;
+
+OPERATION dummy();  # used for benchmarks
+BEGIN
+END;
+
+OPERATION value(): integer;
+BEGIN
+    RETURN x;
+END;
+
+OPERATION assign(v: integer);
+BEGIN
+    x := v;
+END;
+
+OPERATION add(v: integer);
+BEGIN
+    x +:= v;
+END;
+
+OPERATION subs(v: integer);
+BEGIN
+    x -:= v;
+END;
+
+OPERATION inc();
+BEGIN
+    x +:= 1;
+END;
+
+OPERATION dec();
+BEGIN
+    x -:= 1;
+END;
+
+# FUNCTION test(x, v : integer) : boolean;
+# BEGIN
+#     WriteLine("Test: ", v, " now equals guarded x = ", x, " ?");
+#     RETURN(x = v);
+# END;
+
+OPERATION await(v: integer);
+BEGIN
+    GUARD x = v DO ; OD;
+END;
+
+FUNCTION DynIntObjectVector(N : integer) : IntObjectVector;
+
+a_dyn : IntObjectVector[1 .. N];
+
+BEGIN
+    RETURN a_dyn;
+END;
+
+
+BEGIN
+    x := 0;
+END;

@@ -1,0 +1,16 @@
+MODULE IMPLEMENTATION TestRead;
+
+IMPORT TourCollectionObject;
+IMPORT SpecificationObject;
+
+PROCESS OrcaMain ();
+	tco : TourCollectionObject;
+	spec : SpecificationObject;
+BEGIN
+	spec$FromFile ("./problem.tsp");
+	tco$Load ("InitialDistribution", spec);
+
+	tco$Print ();
+END;
+
+END;

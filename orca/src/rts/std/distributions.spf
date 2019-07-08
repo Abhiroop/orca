@@ -1,0 +1,29 @@
+MODULE SPECIFICATION distributions;
+
+  # Distributions module for data-parallel Orca.
+
+  # Parameters for the distribute_on_n or distribute_on_list directives.
+  CONST CYCLIC	= 0;
+  CONST	BLOCK	= 1;
+
+  # Type for the distribute_on_list directive.
+  TYPE CPUListType = ARRAY[integer] OF integer;
+
+  # Type for the distribute directive.
+  TYPE DistributionType = ARRAY[integer] OF integer;
+
+  # For backwards compatibility the following two functions exist.
+  # They can be used with the distribute directive.
+  # However, the prefered method is to use the distribute_on_n or the
+  # distribute_on_list directive.
+
+  FUNCTION block(npart, ncpus: integer) : DistributionType;
+  # Block distribution: each cpu gets npart/ncpus adjacent partitions.
+  # If npart%ncpus is not 0, the first npart%ncpus cpus get one more.
+
+  FUNCTION cyclic(npart, ncpus: integer) : DistributionType;
+  # The partitions are divided circularly among the processors: processor
+  # 0 gets partition 0, processor 1 gets partition 1, ..., processor 0 gets
+  # partition ncpus, processor 1 gets partition ncpus+1, ...
+
+END;

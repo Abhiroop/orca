@@ -1,0 +1,11 @@
+MODULE SPECIFICATION MoveGen;
+ 
+FROM Types IMPORT DataRecord,MoveArray;
+ 
+	FUNCTION Moves(dr : SHARED DataRecord; color : integer;
+		       movelist : SHARED MoveArray; lmove : integer);
+ 
+	FUNCTION FieldMoves(dr : SHARED DataRecord; color : integer;
+			    x : integer; y : integer; ml : SHARED MoveArray;
+			    index : SHARED integer; lmove : integer);
+END;

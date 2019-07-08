@@ -1,0 +1,553 @@
+ ## ===========================================================================
+ ##
+ ##    File:    worker_p.imp
+ ##    Type:    module implementation
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ MODULE IMPLEMENTATION worker_p ;
+
+
+ ## ===========================================================================
+ ##
+ ##  What's needed:
+ ##
+ ## ---------------------------------------------------------------------------
+
+
+ FROM barrier    IMPORT barrier
+		      , sync
+		     ;
+
+ FROM types_m    IMPORT intvec_bin
+		      , vec_bin
+		      , intvec_mbin
+		      , real_worm
+		      , twovec
+		      , twovec_worm
+		     ;
+
+ FROM matrix_m   IMPORT intvec
+		      , vector
+		      , vectors
+		      , matrix
+		      , getreal
+		    ;
+
+
+ ## ===========================================================================
+ ##
+ ##  Local Types:
+ ##
+ ## ---------------------------------------------------------------------------
+
+
+.ifdef TRACE
+
+ TYPE   int_record = RECORD iter : integer ;
+		     END    ;
+
+ MODULE iter_event = NEW trace_gen( int_record, "iter", "pvt_idx = %d", 5000 );
+
+.endif
+
+ ## ===========================================================================
+ ##
+ ##  Local Functions:
+ ##
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ vv_prod         - Determine inner product
+ ##
+ ##    from : integer  - over a specified
+ ##      to : integer  - common range.
+ ##      v1 : vector   - of two
+ ##      v2 : vector   - vectors,
+ ##
+ ##         : real     - and return the result.
+ ##
+ ##  The function is directly copied from out of `matrix_m.imp', to benefit
+ ##  from function inlining.
+ ##
+ 
+ FUNCTION vv_prod( from : integer
+                 ;   to : integer
+                 ;   v1 : vector
+                 ;   v2 : vector
+                )       : real ; 
+ 
+ r : real    ;
+ 
+ BEGIN r := 0.0 ;
+ 
+       FOR i IN from .. to
+       DO  r +:= v1[ i ] * v2[ i ] ;
+       OD  ;
+ 
+       RETURN r ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ max          - determine the maximum value
+ ##
+ ##    a : integer  - of two
+ ##    b : integer  - integers
+ ##      : integer  - and return the result.
+ ##  
+
+ FUNCTION max( a,b : integer ) : integer ;
+
+ BEGIN IF a < b
+       THEN RETURN b ;
+       ELSE RETURN a ;
+       FI   ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ get_A_vecs            - Receive our local vectors (out of the total
+ ##
+ ##          N : integer     - of `N' vectors that the master process is
+ ##     NWORKS : integer     - cyclically distributing among `NWORKS' workers)
+ ##    vecdist : intvec_bin  - by means of the `intvec_bin' object shared with
+ ##                            the master,
+ ##       vecs : vectors     - and fill each one in at the appropriate position
+ ##                            out of the `N' available in the vecs array.
+ ##      
+
+ FUNCTION get_A_vecs( N       :        integer
+                    ; NWORKS  :        integer 
+		    ; vecdist : SHARED intvec_bin
+		    ; vecs    : OUT    vectors[ 1 .. N ]
+		   );
+
+ j : integer ;  
+ v : intvec  ;
+
+ BEGIN j := MYCPU()+1;
+
+       WHILE j <= N
+       DO    vecdist $ get( v ); getreal( v, vecs[ j ]);
+	     j +:= NWORKS ;
+       OD    ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ eliminate_u   - Perform the elimination step of A.U[j][i]. 
+ ##
+ ##    Uj : vector   - Column A.U[j].
+ ##    Li : vector   -    Row A.L[i]. 
+ ##     i : integer  - index i.
+ ##
+ 
+ FUNCTION eliminate_u( Uj    : SHARED vector
+                     ; Li    :        vector
+                     ; i     :        integer  
+                    );
+ 
+ BEGIN Uj[ i ] -:=     vv_prod( max( LB( Uj ), LB( Li )), i-1, Li, Uj );
+ END   ;
+ 
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ eliminate_l   - Perform the elimination step of A.L[j][i].
+ ##
+ ##    Lj : vector   -    Row A.L[j]. 
+ ##    Ui : vector   - Column A.U[i].
+ ##     i : integer  - index i.
+ ##
+ 
+ FUNCTION eliminate_l( Lj    : SHARED vector
+                     ; Ui    :        vector
+                     ; i     :        integer  
+                    );
+ 
+ BEGIN Lj[ i ]  := (   Lj[ i ]
+                     - vv_prod( max( LB( Lj ), LB( Ui )), i-1, Ui, Lj )
+                   ) / Ui[ i ];
+ END   ;
+ 
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ eliminate_ul  - Perform the elimination steps of both A.U[j][i]
+ ##                    and A.L[j][i], _if_ the elements are defined. 
+ ##
+ ##    Uj : vector   - Column A.U[j].
+ ##    Lj : vector   -    Row A.L[j]. 
+ ##    Ui : vector   - Column A.U[i].
+ ##    Li : vector   -    Row A.L[i]. 
+ ##     i : integer  - index i.
+ ##
+ 
+ FUNCTION eliminate_ul( Uj  : SHARED vector
+                      ; Lj  : SHARED vector 
+                      ; Ui  :        vector
+                      ; Li  :        vector
+                      ; i   :        integer  
+                     );
+ 
+ BEGIN IF   i >= LB( Lj )
+       THEN eliminate_l( Lj, Ui, i );
+       FI   ;
+ 
+       IF   i >  LB( Uj ) 
+       THEN eliminate_u( Uj, Li, i );
+       FI   ;
+ END   ;
+ 
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ eliminate         - Perform elimination of
+ ##
+ ##         A : matrix   - all elements of A.U[k][i] and A.L[k][i], where k
+ ##         j : integer  - subsequently equals j, j+NWORKS, j+2NWORKS, ..
+ ##    NWORKS : integer  - until j + x * NWORKS > N (exclusive).
+ ##        Ui : vector   - Requires Column A.U[i]
+ ##        Li : vector   - and Row A.L[i].
+ ##         i : integer  - index i
+
+ FUNCTION eliminate( A       : SHARED matrix
+		   ; j       :        integer 
+                   ; NWORKS  :        integer
+		   ; Ui      :        vector
+		   ; Li      :        vector
+		   ; i       :        integer  
+                  );
+
+ BEGIN WHILE j <= A.N
+       DO    eliminate_ul( A.U[j], A.L[j], Ui, Li, i );
+	     j +:= NWORKS ;
+       OD    ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ LU_decompose          -  Perform in-place LU decomposition
+ ##
+ ##    NWORKS : integer      -  in co-operation with NWORKS-1 other processes
+ ##         A : matrix       -  of the distributedly stored matrix A
+ ##       CRD : twovec_worm  -  using this object to communicate data at each
+ ##                             iteration.
+ ##
+ ##  Note that the current setup requires at least two worker processes.
+ ##
+
+ FUNCTION LU_decompose( NWORKS : integer
+                      ; A      : SHARED matrix
+                      ; CRD    : SHARED twovec_worm
+                     );
+                          
+ cr  : twovec  ;  # Receiving variable of remote U and L vectors
+ i   : integer ;  # current iteration.
+ np  : integer ;  # keeps track of next locally stored "pivot" position.
+ 
+ BEGIN np := MYCPU()+1 ;
+       i  := 1       ;
+ 
+       IF   i = np 
+       THEN 
+       
+        ##  Announce first row (empty) of L and column (pivot element only)
+        ##  of U.
+
+	    CRD $ put( twovec : { A.U[ np ], A.L[ np ]}, np );
+ 
+            np +:= NWORKS ;
+ 
+        ##  Elimination using local data that was just broadcasted.
+
+            eliminate( A, np, NWORKS, A.U[ i ], A.L[ i ], i );
+ 
+	    IF (NCPUS() > 1) THEN
+		i + := 1 ;
+	    FI;
+       FI   ;
+ 
+       DO
+ 
+.ifdef TRACE
+           iter_event.event( int_record:{ i });
+.endif
+           CRD $ get( cr, i );
+ 
+           IF   i+1 = np
+	   THEN
+
+	    ##  Next iteration is one we have to provide data for.
+	    ##  Perform work necessary to complete that data and broadcast now
+	    ##  before doing the remaining work for the current iteration
+
+		eliminate_ul( A.U[ np ], A.L[ np ], cr.c, cr.r, i  );
+                eliminate_u ( A.U[ np ], A.L[ np ],             np );
+
+                CRD $ put( twovec : { A.U[ np ], A.L[ np ]}, np );
+ 
+                np +:= NWORKS ;
+ 
+                IF   np >= A.N
+                THEN
+
+                 ##  There's no more data to provide and, except when np = A.N,
+		 ##  no more eliminations to perform.
+
+		     EXIT ;
+                FI   ;
+ 
+            ##  Remaining eliminations for current iteration using remotely
+	    ##  acquired data.
+
+                eliminate( A, np, NWORKS, cr.c  , cr.r  , i );
+		
+	        IF NCPUS() > 1 THEN
+		    i +:= 1 ;
+
+            ##  Elimination using local data that was just broadcasted.
+
+		    eliminate( A, np, NWORKS, A.U[i], A.L[i], i );
+		FI;
+	   ELSE
+		
+            ##  Elimination using remote data.
+		
+		eliminate( A, np, NWORKS, cr.c  , cr.r  , i );
+           FI   ;
+
+	   i +:= 1 ;
+       OD  ;
+ 
+       IF   np = A.N
+
+         ##  Remaining eliminations for last row A.L[A.N] and column A.U[A.N] 
+
+       THEN 
+
+        ##  Elimination using remote data:
+
+	    eliminate_ul( A.U[ np ], A.L[ np ], cr.c  , cr.r  , i );
+            i +:= 1 ;
+
+        ##  Elimination using local data:
+
+            eliminate_ul( A.U[ np ], A.L[ np ], A.U[i], A.L[i], i );
+            i +:= 1 ;
+ 
+        ##  Elimination using remote data only:
+
+            WHILE i < A.N 
+            DO    CRD $ get( cr, i );
+                  eliminate_ul( A.U[ np ],A.L[ np ], cr.c, cr.r, i );
+                  i +:= 1 ;
+            OD    ;
+
+        ##  One local elimination left: A.U[A.N][A.N]:
+
+	    eliminate_u ( A.U[ np ], A.L[ np ], np );
+       FI   ;
+ END   ;
+ 
+
+ ## ===========================================================================
+ ##
+ ##  @ forward_isub( )      - Forward substition: Solving Ly = b.
+ ##
+ ##     NWORKS : integer    - Nr of workers involved.
+ ##          L : matrix     - Lower unit-triangular matrix L
+ ##         by : vector     - Enter b. Return y.
+ ##      S_elt : real_worm  - Get elements of y to and from other workers.
+ ##
+ 
+ FUNCTION forward_isub ( NWORKS :        integer
+		       ; L      :        matrix
+                       ; by     : SHARED vector
+                       ; S_elt  : SHARED real_worm
+                      );
+ 
+ Lidx : integer ;  # Index of our current row into the matrix L.
+ 
+ BEGIN
+ 
+       Lidx := MYCPU()+1 ;  # Keep track of the current index into the
+                          # matrix L of the rows we possess.
+ 
+       FOR i IN 1 .. L.N
+       DO  IF   i = Lidx
+           THEN
+   
+            ##  We own this row of L, compute y[ i ]:
+ 
+                FOR j IN LB( L.L[ Lidx ]) .. i - 1
+                DO  by[ i ] -:= L.L[ Lidx ][ j ] * by[ j ] ;
+                OD  ;
+ 
+            ##  Tell the others:
+ 
+                S_elt $ put( by[ i ], i );
+ 
+            ##  Next time we need to compute y[ i ]
+ 
+                Lidx +:= NWORKS ;
+ 
+           ELSE S_elt $ get( by[ i ], i ) ;
+           FI   ;
+       OD  ;
+ END   ;
+
+
+ ## ===========================================================================
+ ##
+ ##  @ backward_sub( )    - Forward substition: Solving Ux = y.
+ ##
+ ##     NWORKS : integer  - Nr of workers involved.
+ ##          U : matrix   - Upper triangular matrix U
+ ##     U_send : vec_bin  - Send a whole vector of U.
+ ##
+ ##  While substitution is normally performed by row, the division of U by
+ ##  column prevents this to be efficiently implemented. So instead each worker
+ ##  sends the columns of U in reverse order back to the master process which will
+ ##  perform the actual substition.
+ ##
+
+ 
+ FUNCTION backward_sub ( NWORKS :        integer
+                       ; U      :        matrix
+                       ; U_send : SHARED vec_bin
+                      );
+
+ i : integer ;
+
+ BEGIN i := U.N - ( U.N - (MYCPU()+1) ) % NWORKS ;
+       
+       WHILE i > 0
+       DO    U_send $ put( U.U[ i ]);
+	     i -:= NWORKS ;
+       OD    ;
+ END   ;
+ 
+
+ ## ===========================================================================
+ ##
+ ##  Exported Process:
+ ##
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ worker()
+ ##
+
+
+ PROCESS worker( N        :        integer
+	       ; vecdist  : SHARED intvec_bin
+	       ; S_intvec : SHARED intvec_mbin
+	       ; U_send   : SHARED vec_bin
+	       ; S_elt    : SHARED real_worm
+	       ; CRD      : SHARED twovec_worm
+.ifdef MRUNS
+	       ; nruns    :        integer
+.endif
+.ifdef TIMING
+               ; ready    : SHARED barrier
+.endif
+	       ; the_end  : SHARED barrier
+	      );
+
+ NWORKS : integer          ;  # nr of workers involved.
+ A      : matrix           ;  # Matrix A. Rows and columns not stored locally
+			      # remain empty.
+
+ b      : vector[ 1 .. N ] ;
+ y      : vector           ;
+ v      : intvec           ;
+
+ BEGIN NWORKS := NCPUS();
+
+.ifdef TIMING
+       sync( ready );
+.endif
+   
+   ##  Get the columns, main diagonal and rows that OrcaMain will hand to us.
+
+       A.N := N ;
+
+.ifdef MRUNS
+       get_A_vecs( N, NWORKS, vecdist, A.U );
+       get_A_vecs( N, NWORKS, vecdist, A.L );
+
+.ifdef TIMING
+       sync( ready );
+.endif
+
+   ##  Get the b-vector data
+
+       S_intvec $ get( v ); getreal( v, b );
+
+.ifdef TIMING
+       sync( ready );
+.endif
+
+
+REPEAT
+
+.endif
+       get_A_vecs( N, NWORKS, vecdist, A.U );
+       get_A_vecs( N, NWORKS, vecdist, A.L );
+
+.ifdef TIMING
+       sync( ready );
+.endif
+
+   ##  Get the b-vector data
+
+       S_intvec $ get( v ); getreal( v, b );
+
+.ifdef TIMING
+       sync( ready );
+.endif
+
+       LU_decompose( NWORKS, A, CRD );
+
+.ifdef TIMING
+       sync( ready );
+.endif
+
+       y := b ; forward_isub( NWORKS, A, y, S_elt );
+
+   ##  Tell OrcaMain about y.
+   ##  It's a dirty job, but somebody's got to do it:
+
+       IF   MYCPU() = 0 
+       THEN U_send $ put( y );
+       FI   ;
+
+.ifdef TIMING
+       sync( ready );
+.endif
+
+       backward_sub( NWORKS, A, U_send );
+
+.ifdef TIMING
+       sync( ready );
+.endif
+
+.ifdef MRUNS
+      
+       nruns -:= 1;
+ UNTIL nruns = 0 ;
+
+.endif
+
+       sync( the_end );
+ END   ;
+
+ ## ===========================================================================
+
+ END;

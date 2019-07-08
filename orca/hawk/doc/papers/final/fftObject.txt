@@ -1,0 +1,23 @@
+OBJECT IMPLEMENTATION fftObject[integer lb .. ub];
+
+    TYPE complex_row = ARRAY[1..N] OF complex;
+ 
+    A_row: complex_row;  # each element is a row
+
+    PARALLEL OPERATION[row] transpose();
+    BEGIN
+        FOR j IN 1..N DO
+            A_row[row][j] := A_row[j][row];
+        OD;
+    END;
+
+    FUNCTION do_FFT(A: SHARED complex_row);
+    BEGIN
+        ....   	# implements a single row FFT on A.
+    END;
+
+    PARALLEL OPERATION[row] rowFFT();
+    BEGIN
+        do_FFT(A_row[row]);
+    END;
+END;

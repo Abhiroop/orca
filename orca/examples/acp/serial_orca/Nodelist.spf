@@ -1,0 +1,72 @@
+# ========================================================================
+# == File:      Nodelist.spf   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  data structure for a list of nodes			==
+# ========================================================================
+MODULE SPECIFICATION Nodelist;
+
+FROM EdgeCollection IMPORT edge_p;
+FROM Node IMPORT node_t;
+
+# ========================================================================
+# == types								==
+# ========================================================================
+
+TYPE nl_node_t 	 = NODENAME OF node_list_t;
+TYPE node_list_t = 
+		GRAPH
+			head, tail : nl_node_t;		# head and tail of the list
+			num_elts : integer;		# nr of elements
+		NODES
+			node : node_t;			# info on a node
+			next : nl_node_t;		# pointer to next element
+		END;
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+FUNCTION create_nl(
+	nl 	:  SHARED node_list_t;						
+	num_elts : integer			# number of elements of the list
+) : boolean;
+
+
+FUNCTION delete_nl(
+	nl      :  SHARED node_list_t
+);
+
+
+FUNCTION add_incoming_nl(
+	nl      :  SHARED node_list_t;
+	node_nr  : integer; 			# index in list
+	edge     : edge_p			# edge to be added
+) : boolean;
+
+
+FUNCTION add_outgoing_nl(
+	nl      :  SHARED node_list_t;
+	node_nr  : integer; 			# index in list	
+	edge 	 : edge_p			# edge to be added
+) : boolean;
+
+
+FUNCTION num_elts_nl(
+	nl      :  node_list_t
+) : integer;					# nr of elements in list
+
+
+FUNCTION give_ith_elt_nl(
+	nl      : node_list_t;
+	index   : integer; 			# index in list
+	node    : SHARED nl_node_t		# node on position i
+) : boolean;
+
+END;
+
+
+
+
+
+

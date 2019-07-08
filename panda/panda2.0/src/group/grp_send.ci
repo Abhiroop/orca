@@ -1,0 +1,742 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/*
+ *  This module implements group communication. It exports the following
+ *  functions:
+ *	- pan_group_send()
+ *	- pan_group_leave()
+ * 	- pan_group_join()		installs receive daemon threads
+ *
+ * If you are unfamiliar with the protocol, please read one of the group
+ * communication papers and the manual page.
+ *
+ * The group communication can be implemented in two ways. In the PB method, a
+ * point-to-point message is sent to the sequencer and the sequenecer
+ * broadcasts the message to the group. In the BB method, a member sends a
+ * broadcast message to the group and the sequencer broadcasts an accept
+ * message. This module implements both and uses them possibly intermixed.
+ * The method used is determined by the variable pan_grp_bb_large. If a message
+ * is larger than the value stored in bb_large, the BB method is used.
+ * Otherwise, the PB method is used.
+ *
+ * The code does not implement a protocol to recover from processor failures.
+ * However, the network is made reliable, the protocol copes with lost network
+ * packets.
+ *
+ * There is at most one member for each group at each platform; the special
+ * case of 0 members: there was a member once; this platform happened to become
+ * the sequencer, and at a certain moment the home member left the group. The
+ * sequencer must continue running until the group is empty, then it may shut
+ * down.
+ */
+
+
+#ifndef __PAN_GRP_SEND_CI__
+#define __PAN_GRP_SEND_CI__
+
+
+#ifdef RUTGER
+static int retries = 0;
+static int home_retries = 0;
+#endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+
+#include "pan_sys.h"
+
+#include "pan_trace.h"
+
+#include "pan_group.h"
+
+#include "grp_header.h"
+#include "grp_ns.h"
+#include "grp_group.h"
+#include "grp_global.h"
+#include "grp_tab.ci"
+#include "grp_sweep.h"
+#include "grp_stats.h"
+
+#include "grp_send.h"
+#include "grp_rcve.h"
+#include "grp_seq.h"
+#include "grp_mem.h"
+
+#include "grp_ttab.ci"
+
+
+
+
+typedef struct SEND_EV_INFO_T {
+    short int mem;
+    short int messid;
+} send_ev_info_t;
+
+
+static trc_event_t send_pb_ev;
+static trc_event_t send_bb_ev;
+static trc_event_t resend_pb_ev;
+static trc_event_t resend_bb_ev;
+static trc_event_t msg_send_ev;
+
+
+
+/*----------------------------------------------------------------------------
+ *
+ * Sender routines
+ *
+ *----------------------------------------------------------------------------*/
+
+
+
+
+/* Send out a fragment:
+ * if to the sequencer at this platform, perform a sequencer upcall;
+ * if to the member at this platform, perform a member upcall (suicide!);
+ * if to the sequencer at another platform, unicast;
+ * if to the group, multicast.
+ */
+static void
+send_out_fragment(pan_group_p g, ttab_usr_p t, pan_fragment_p frag,
+		  grp_hdr_p hdr)
+{
+    int        old_prio;
+
+					/* Lock this ttab entry to control
+					 * handling of it during the release
+					 * in send_out_fragment */
+    t->is_msg_locked = TRUE;
+
+
+    hdr->seqno = g->next_accept;		/* Ack our received seqnos */
+						/* In the case of suicide,
+						 * ensure our suicide is the
+						 * next to be accepted */
+    if (hdr->seqno > g->last_status) {
+	g->last_status = hdr->seqno;		/* Remember our ack */
+    }
+
+    if (pan_grp_me == g->seq) {			/* msg from member at seq's */
+
+	if (t->is_home_msg_discarded) {
+	    t->is_home_msg_discarded = FALSE;
+#ifdef RUTGER
+home_retries++;
+#endif
+
+	    old_prio = pan_thread_setprio(pan_thread_maxprio());
+	    pan_grp_sequence_data_upcall(g, frag, hdr);
+	    pan_thread_setprio(old_prio);
+	}
+
+    } else if (hdr->flags & HDR_is_suicide) {
+						/* suicide msg */
+	if (t->is_home_msg_discarded) {
+	    t->is_home_msg_discarded = FALSE;
+
+	    pan_grp_orderer_data_upcall(g, frag, hdr);
+	}
+
+    } else if (hdr->type == GRP_BB_REQ) {	/* normal BB msg */
+
+	pan_mutex_unlock(pan_grp_upcall_lock);
+	pan_comm_multicast_fragment(pan_grp_others, frag);
+	pan_mutex_lock(pan_grp_upcall_lock);
+
+    } else {					/* normal PB msg */
+
+	pan_mutex_unlock(pan_grp_upcall_lock);
+	pan_comm_unicast_fragment(g->seq, frag);
+	pan_mutex_lock(pan_grp_upcall_lock);
+    }
+
+    t->is_msg_locked = FALSE;
+
+    if (t->is_frag_arrived) {
+					/* Ack has arrived while we released
+					 * the lock during the resend. Handle
+					 * all continuations. */
+	pan_grp_handle_ordr_cont(g);
+    } else {
+	ttab_enqueue(t, pan_grp_sync_ticks);
+    }
+}
+
+
+
+static void
+check_suicide(pan_group_p g, ttab_usr_p t, grp_hdr_p hdr)
+{
+
+    if (t->max_attempts > 0) {
+	assert(hdr->type == GRP_LEAVEREQ);
+
+	++t->attempts;
+	if (t->attempts == t->max_attempts) {
+
+	    if (! g->is_seq_alive) {
+					/* Leave accept missed and sequencer
+					 * seems dead. Commit suicide by
+					 * feeding ourself the leave_accept. */
+		hdr->type = GRP_LEAVE;
+		hdr->flags |= HDR_is_suicide;
+		g->is_in_suicide = TRUE;
+		t->max_attempts = 0;	/* Keep trying forever */
+		t->is_home_msg_discarded = TRUE;
+#ifndef NDEBUG
+		printf("%2d: commit suicide since sequencer seems dead\n",
+			pan_grp_me);
+#endif
+						STATINC(g, ST_SUICIDE);
+
+	    } else {
+					/* Sequencer is still alive.
+					 * Try another round. */
+		g->is_seq_alive = FALSE;
+		t->attempts = 0;
+#ifndef NDEBUG
+		printf("%2d: retry leave protocol since sequencer seems alive; hdr->seqno %d; g->next_accept %d\n",
+			pan_grp_me, hdr->seqno, g->next_accept);
+#endif
+	    }
+	}
+    }
+}
+
+
+
+static void
+handle_timeout(ttab_usr_p t)
+{
+    pan_group_p    g;
+    pan_fragment_p frag;
+    grp_hdr_p      hdr;
+#ifdef TRACING
+    send_ev_info_t send_info;
+#endif
+
+#ifdef RUTGER
+retries++;
+#endif
+
+    assert(! t->is_frag_arrived);
+    assert(! t->is_msg_locked);
+
+    ttab_dequeue(t);
+
+    g    = t->group;
+    frag = t->frag;
+    hdr  = pan_fragment_header(frag);
+
+    check_suicide(g, t, hdr);
+
+#ifdef TRACING
+    send_info.mem = pan_grp_me;
+    send_info.messid = hdr->messid;
+    if (hdr->type == GRP_BB_REQ) {
+	trc_event(resend_bb_ev, &send_info);
+    } else {
+	trc_event(resend_pb_ev, &send_info);
+    }
+#endif
+
+#ifdef STATISTICS
+					if (hdr->type == GRP_BB_REQ) {
+					    STATINC(g, ST_RETRY_BB);
+					} else {
+					    STATINC(g, ST_RETRY_PB);
+					}
+#endif
+
+    send_out_fragment(g, t, frag, hdr);
+}
+
+
+
+static void
+pan_grp_send_sweep(void *arg)
+{
+    ttab_usr_p     t;
+
+    ttab_freeze_list();
+				/* During our timeout handling, the list may
+				 * change. Traverse a frozen copy of the list.
+				 * If entries are deleted during a timeout
+				 * handling (of another entry), they are
+				 * skipped since the SND_frag_arrived flag is
+				 * set.
+				 */
+
+    t = ttab_frozen_first();
+    while (t != NULL) {
+
+	if (! t->is_frag_arrived) {
+	    --t->ticks;
+	    if (t->ticks == 0) {
+		handle_timeout(t);
+	    }
+	}
+
+	t = ttab_frozen_next(t);
+    }
+}
+
+
+
+
+
+/*
+ * Code shared between sending of first and higher fragments -- for the first
+ * trial.
+ */
+static void
+send_fragment(pan_group_p g, ttab_usr_p t, pan_fragment_p frag, grp_hdr_p hdr)
+{
+#ifdef TRACING
+    send_ev_info_t send_info;
+#endif
+
+    assert(frag == t->frag);
+
+#ifdef RUTGER
+if (g->seq == pan_grp_me)
+home_retries--;
+#endif
+
+    t->is_frag_arrived = FALSE;
+
+    if (t->max_attempts > 0) {
+	t->attempts  = 0;
+    }
+
+    if (g->seq == pan_grp_me) {
+	t->is_home_msg_discarded = TRUE;
+						STATINC(g, ST_SEND_PB);
+
+    } else if (hdr->type == GRP_PB_REQ &&
+	       pan_fragment_length(frag) >= pan_grp_bb_large) {
+					/* BB message */
+						STATINC(g, ST_SEND_BB);
+	hdr->type = GRP_BB_REQ;
+    } else {
+					/* PB style message */
+						STATINC(g, ST_SEND_PB);
+    }
+
+    hdr->messid = g->messid;
+    ++g->messid;
+
+
+#ifdef TRACING
+    send_info.mem = pan_grp_me;
+    send_info.messid = hdr->messid;
+    if (hdr->type == GRP_BB_REQ) {
+	trc_event(send_bb_ev, &send_info);
+    } else {
+	trc_event(send_pb_ev, &send_info);
+    }
+#endif
+
+    send_out_fragment(g, t, frag, hdr);
+}
+
+
+
+
+static void
+fragment_and_send(pan_group_p g, grp_msg_t msg_type, pan_msg_p msg,
+		  int max_attempts, boolean sync_send)
+/* Fragmentation layer.
+ * If the message is too big to send in one packet, fragment it.
+ *
+ * Parameter max_attempts does not mean exactly what the name suggests.
+ * Since platforms never fail in this world, we can keep trying until the
+ * sequencer responds. Only leave is different: it is possible we have missed
+ * "our" leave accept from the sequencer, whereas the sequencer is content to
+ * die when a leave accept for every member has been sent out.
+ * Therefore the receiver daemons set a flag "is_seq_alive" whenever they
+ * receive a message from the sequencer. If this flag is still not set after
+ * max_attempts trials, the sequencer is assumed to be dead, and the value
+ * FALSE is returned. If the sequencer is not dead, we try again for
+ * pan_grp_Leave_attempts trials.
+ * A value max_attempts == 0 means infinite retrial.
+ *
+ * Optimisation to avoid copy of home message (argghhhhh...):
+ *    At home, the fragments at the receive side are ignored.
+ *    After accept by the receiver daemon of the last fragment, the
+ *    original message is passed on as a pointer. Synchronise with accept
+ *    at that level!
+ *
+ * {Lots of stuff deleted:}
+ *    Conclusion: fragmented leave/join msgs can only be done by the
+ *    layer _below_ the group code.
+ */
+{
+    pan_fragment_p   frag;
+    grp_hdr_p        hdr;
+    ttab_usr_p       t;
+
+    if (max_attempts != 0 && msg_type != GRP_LEAVEREQ) {
+	pan_panic("fragmented messages must be (re)sent forever");
+    }
+
+    frag = pan_msg_fragment(msg, pan_grp_data_nsap);
+
+    pan_mutex_lock(pan_grp_upcall_lock);
+
+    ++g->waiting_senders;
+    while (g->outstanding_msg) {
+	pan_cond_wait(g->send_is_free);
+    }
+    --g->waiting_senders;
+
+    if (! (pan_fragment_flags(frag) & PAN_FRAGMENT_LAST)) {
+	g->outstanding_msg = TRUE;
+    }
+
+    ++g->outstanding_frags;
+
+    t                = ttab_get();
+    t->msg           = msg;
+    t->max_attempts  = max_attempts;
+    t->frag          = frag;
+    t->group         = g;
+
+    t->is_msg_arrived        = FALSE;
+    t->is_home_msg_discarded = FALSE;
+    t->is_msg_locked         = FALSE;
+    t->is_frag_arrived       = FALSE;
+    t->is_sync_send          = sync_send;
+
+    hdr = &t->hdr;
+    hdr->flags     = 0;
+    hdr->gid       = g->gid;
+    hdr->sender    = pan_grp_me;
+    hdr->type      = msg_type;
+    hdr->sender_id = ttab_ticket(t);
+
+    hdr  = pan_fragment_header(frag);
+    *hdr = t->hdr;
+
+    send_fragment(g, t, frag, hdr);
+
+    if (sync_send) {
+	while (! t->is_msg_arrived) {
+	    pan_cond_wait(t->msg_arrived);
+	}
+
+	ttab_free(t);
+    }
+
+    pan_mutex_unlock(pan_grp_upcall_lock);
+
+    return;
+}
+
+
+
+void
+pan_group_send(pan_group_p g, pan_msg_p msg)
+{
+    trc_event(msg_send_ev, NULL);
+    fragment_and_send(g, GRP_PB_REQ, msg, 0, FALSE);
+}
+
+
+pan_group_p
+pan_group_join(char *group_name, void (*receive)(pan_msg_p msg_in))
+{
+/* Make the caller member of the group specified by group_name.
+ * The steps in the join protocol:
+ * 1.  The first action is a (look-up or register) of the group name
+ *     from the group name server, that is provided by the system layer.
+ * 2a. If the group does not exist yet, the group name server binds the group
+ *     name to the caller's platform address, and the caller must become the
+ * 3a. new group's sequencer. A new global group number is also handed out by
+ *     the group name server.
+ * 2b. Else, if somebody else was first in registering the group, the name
+ *     server returns the network address of the sequencer's _platform_.
+ * 3b. The group number is also returned by the group name server.
+ *
+ * Returns a pointer to the group struct.
+ */
+    pan_group_p     g;
+    int             gid;
+    pan_msg_p       join_msg;
+    int             sequencer;
+
+    pan_ns_register_or_lookup(group_name, &gid, &sequencer);
+    g = pan_group_create(group_name, receive, gid, sequencer);
+
+    join_msg = pan_msg_create();
+    fragment_and_send(g, GRP_JOINREQ, join_msg, 0, TRUE);
+					/* When this returns, our join
+					 * has been accepted */
+    return g;
+}
+
+
+void
+pan_group_leave(pan_group_p g)
+{
+/* At most pan_grp_Leave_attempts retrials: leave with unreliable network can
+ * miss the acknowledge.
+ */
+    pan_msg_p    leave_msg;
+    int          attempts;
+
+    leave_msg = pan_msg_create();
+
+					/* Ensure that no asynchronous group
+					 * fragments are outstanding.
+					 */
+    pan_mutex_lock(pan_grp_upcall_lock);
+    assert(g == pan_gtab_locate(g->gid));
+    g->is_want_to_leave = TRUE;
+    while (g->outstanding_frags != 0) {
+	pan_cond_wait(g->no_outstanding_frags);
+    }
+    g->is_seq_alive = FALSE;
+    pan_mutex_unlock(pan_grp_upcall_lock);
+
+    if (g->seq == pan_grp_me) {
+	attempts = 0;			/* Go on trying forever */
+    } else {
+	attempts = pan_grp_Leave_attempts;	/* suicide after # attempts */
+    }
+
+    fragment_and_send(g, GRP_LEAVEREQ, leave_msg, attempts, TRUE);
+					/* When this returns, our leave
+					 * has been accepted and delivered;
+					 * we expect no more upcalls */
+    if (g->seq == pan_grp_me) {
+	pan_grp_seq_await(g);
+    }
+}
+
+
+/*-----------------------------------------------------------------------------
+ *
+ *    Actions to communicate between sender and receiver threads.
+ *
+ *----------------------------------------------------------------------------*/
+
+
+#ifndef NDEBUG
+
+STATIC_CI boolean
+pan_grp_frag_acked(grp_hdr_p hdr)
+{
+    ttab_usr_p     t;
+
+    t = ttab_entry(hdr->sender_id);
+    assert(t != NULL);
+    assert(t->frag != NULL);
+    assert(t->hdr.sender_id == hdr->sender_id);
+
+    return (t->is_frag_arrived);
+}
+
+#endif
+
+
+STATIC_CI boolean
+pan_grp_trylock_frag(grp_hdr_p hdr)
+{
+    ttab_usr_p     t;
+    boolean        unlocked;
+
+    t = ttab_entry(hdr->sender_id);
+    assert(t != NULL);
+    assert(t->frag != NULL);
+    assert(t->hdr.sender_id == hdr->sender_id);
+
+    unlocked = ! t->is_msg_locked;
+
+    if (! t->is_frag_arrived) {
+	if (unlocked) {
+	    ttab_dequeue(t);
+	}
+	t->is_frag_arrived = TRUE;
+    }
+
+    return unlocked;
+}
+
+
+/* Remove this fragment from the timer queue, if necessary synchronise with the
+ * sender thread.
+ *
+ * If this message has more fragments to be sent, obtain the next one
+ * and send it out.
+ *
+ * This is followed in-line by a ttab action to retrieve the original,
+ * unfragmented, message.
+ * Make a difference between synchronous and asynchronous group msgs:
+ *   synch:	the sender thread has suspended itself on the ttab entry's
+ *		condition var. The sender thread is signalled. When awoken,
+ *		it clears the ttab entry. The ttab entry cannot be cleared
+ *		here, because the sender thread still waits on its condition
+ *		variable.
+ *   asynch:	the sender thread has continued. The timer queue entry is
+ *		cleared here by the orderer "thread".
+ */
+STATIC_CI pan_msg_p
+pan_grp_frag_arrived(pan_group_p g, grp_hdr_p hdr, int is_last)
+{
+    ttab_usr_p     t;
+    pan_fragment_p frag;
+    grp_hdr_p      new_hdr;
+    pan_msg_p      msg;
+
+    t = ttab_entry(hdr->sender_id);
+    assert(t != NULL);
+    assert(t->frag != NULL);
+    assert(t->hdr.sender_id == hdr->sender_id);
+
+    assert(t->is_frag_arrived);
+
+    msg = t->msg;
+
+    if (! is_last) {
+	frag = pan_msg_next(msg);
+
+	new_hdr = pan_fragment_header(frag);
+	*new_hdr = t->hdr;
+	if (new_hdr->type == GRP_JOINREQ || new_hdr->type == GRP_LEAVEREQ) {
+	    pan_panic("join/leave does not fit in 1 fragment\n");
+	}
+
+	assert(g->outstanding_msg);
+
+					/* Do the test here since recursive
+					 * calls may come in between */
+	is_last = (pan_fragment_flags(frag) & PAN_FRAGMENT_LAST);
+
+	send_fragment(g, t, frag, new_hdr);
+
+	if (is_last) {
+	    g->outstanding_msg = FALSE;
+	    if (g->waiting_senders > 0) {
+		pan_cond_broadcast(g->send_is_free);
+	    }
+	}
+
+	return msg;
+    }
+
+    if (t->is_sync_send) {
+				    /* sender clears admin and tt */
+	t->is_msg_arrived = TRUE;
+	pan_cond_signal(t->msg_arrived);
+    } else {
+	ttab_free(t);
+    }
+
+    --g->outstanding_frags;
+    if (g->is_want_to_leave && g->outstanding_frags == 0) {
+	pan_cond_signal(g->no_outstanding_frags);
+    }
+
+    return msg;
+}
+
+
+/* Retrieve a BB data frag from sender to receiver
+ */
+STATIC_CI pan_fragment_p
+pan_grp_get_home_bb_data(pan_group_p g, grp_hdr_p acpt)
+{
+    ttab_usr_p     t;
+
+    t = ttab_entry(acpt->sender_id);
+
+    assert(t->frag != NULL);
+    assert(t->hdr.sender_id == acpt->sender_id);
+
+    assert(t->is_frag_arrived);
+
+    return t->frag;
+}
+
+
+STATIC_CI void
+pan_grp_flag_discard(pan_group_p g, short int sender_id)
+{
+    ttab_usr_p     t;
+
+    t = ttab_entry(sender_id);
+
+    assert(t != NULL);
+    assert(t->frag != NULL);
+    assert(t->hdr.sender_id == sender_id);
+
+    t->is_home_msg_discarded = TRUE;
+}
+
+
+
+STATIC_CI void
+pan_grp_init_send(pan_group_p g)
+{
+    g->messid = 0;
+
+    g->no_outstanding_frags = pan_cond_create(pan_grp_upcall_lock);
+    g->outstanding_frags = 0;
+
+    g->outstanding_msg = FALSE;
+    g->waiting_senders = 0;
+    g->send_is_free    = pan_cond_create(pan_grp_upcall_lock);
+}
+
+
+
+STATIC_CI void
+pan_grp_clear_send(pan_group_p g)
+{
+    pan_cond_clear(g->no_outstanding_frags);
+    pan_cond_clear(g->send_is_free);
+}
+
+
+
+STATIC_CI void
+pan_grp_send_start(void)
+{
+    send_pb_ev   = trc_new_event(3400, sizeof(send_ev_info_t),
+				 "grp pb frag send",
+				 "mem %h, msg-id %h");
+    send_bb_ev   = trc_new_event(3400, sizeof(send_ev_info_t),
+				 "grp bb frag send",
+				 "mem %h, msg-id %h");
+    resend_pb_ev = trc_new_event(3350, sizeof(send_ev_info_t),
+				 "grp pb resend", "mem %h, msg-id %h");
+    resend_bb_ev = trc_new_event(3350, sizeof(send_ev_info_t),
+				 "grp bb resend", "mem %h, msg-id %h");
+    msg_send_ev  = trc_new_event(3800, 0, "grp msg send", "grp msg send");
+
+    ttab_start(pan_grp_upcall_lock);
+
+				/* Do not use the sweeper's ticks mechanism,
+				 * since the ttab has its own, finer ticks
+				 * mechanism. */
+    pan_grp_sweep_register(pan_grp_send_sweep, NULL, 1);
+}
+
+
+STATIC_CI void
+pan_grp_send_end(void)
+{
+    ttab_end();
+#ifdef RUTGER
+printf("%2d: %d retries %d home retries\n", pan_grp_me, retries, home_retries);
+#endif
+}
+
+
+#endif

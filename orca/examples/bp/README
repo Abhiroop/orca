@@ -1,0 +1,36 @@
+This directory contains the ORCA program that implements the
+backpropagation learning algorithm. This algorithm is used to teach an
+arbitrary set of input-output pairs to a feedforward network.
+
+The execution of the program consists of several phases: a teaching
+phase, during which the network is taught a specified set of patterns,
+and testing phases during which a set of input patterns is applied to
+the network.
+
+Two files are needed to train and test a network (there are test files
+available for testing the program: DIGITS.IN, DIGITS.TEST, ADD.IN, and
+ADD.TEST).
+
+The first file, for the teaching phase, describes the input-output
+pairs that must be taught to the network and its architecture. There
+are two such files, "digits.in" and "add.in" (2 bits adder), available
+that store training patterns.  The files contain:
+
+	- the number of input units (or neurons)
+	- the number of output units
+	- the number of patterns
+	- the input-output pairs
+	- the number of layers (including input and output layers)
+	- for each hidden layer, the number of units in the layer.
+
+The second file contains a set of test patterns. Each pattern is
+applied in turn, and the output computed by the network is displayed,
+along with the input and the desired output. The files "digits.test"
+and "add.test" contain respectively a set of noisy digits and test
+patterns for the adder.
+
+The files contain:
+
+	- the number of patterns
+	- the input-output pairs
+

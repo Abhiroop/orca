@@ -1,0 +1,17 @@
+(a) OBJECT IMPLEMENTATION vector[integer N..M];
+    v: real;
+
+    PARALLEL OPERATION[i] shuffle(s: ARRAY[integer] OF integer);
+        DEPENDENCIES ACCESS [s[i]];  END;
+    BEGIN
+        v[i] := v[s[i]];
+    END;
+
+(b) void ShuffleOperationCode(int partnum, instance_p instance, 
+                              void **args) {
+        int i;
+        int *s=((int *)(args[1]));
+
+        for every element i in partnum do 
+            instance->vcopy[i] = instance->v[s[i]];
+    }

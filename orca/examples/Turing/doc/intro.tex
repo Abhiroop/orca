@@ -1,0 +1,60 @@
+\section{Introduction}
+\label{sIntroduction}
+
+\begin{sloppypar}
+Parallel programming is becoming more important as the speed of
+single-processor
+systems approach the limit imposed by the speed of light. While
+communication in multi-computers (such as hypercubes and transputer
+grids) is still faster than communication on a local area network such
+as an Ethernet, distributed
+systems based on LANs of workstations are becoming more attractive for
+coarse-grained parallel applications because of their wide availability
+and because they can easily be expanded with off-the-shelf components.
+\end{sloppypar}
+
+Parallel programming, however, raises new difficulties for the
+programmer. Since multiple CPUs work at the same time, a program's
+behaviour cannot simply be deduced by reading its lines of code
+step-by-step. It is difficult to determine which processor is doing
+what at a certain moment. So synchronisation of the
+processes is something the programmer has to think about. Another
+problem is keeping data consistent between processors. As different
+processors all apply different operations to copies of the same data,
+these copies become different. To ensure that the copies remain consistent,
+the same operations should be applied to all copies in the same
+order.
+
+These problems seem to be more easily solved on systems which offer
+shared memory than on systems which use message passing as a model.
+Distributed systems, however, do not have shared memory. This is why the
+Orca programming language \cite{tse92,bal} provides
+{\em logically shared data}, even on
+systems that do not have physical shared memory. This model is called
+{\em Distributed Shared Memory}.
+
+Orca was designed at the Vrije Universiteit for implementing parallel
+applications on distributed systems. It is not an extension to an
+existing programming language, but is designed from scratch to integrate
+sequential and parallel constructs cleanly. As part of an effort to
+investigate the suitability of Orca for larger software projects, a
+discrete simulation of a chaotic dynamic system, the Turing
+Ring, was implemented. During the development of the program, special
+attention was given to the ease of programming. Performance results
+were then gathered to examine the performance of Orca-based programs.
+
+This paper is organised as follows. First, the Turing Ring is described
+in detail, and some background information is given. Next, the Orca
+programming language and its implementation on top of the 
+Amoeba operating system is described. Several possible
+implementations of the Turing
+Ring are considered, and the final program is described. Finally,
+performance results are presented and the usability of Orca is
+discussed.
+
+The work presented here has been performed at the Vrije Universiteit,
+Amsterdam as an afstudeerproject under the supervision of Gregory V.
+Wilson \nocite{Cowichan}. Thanks for the other things he did, too.
+Thanks to Marc Baehr for his numerous comments;
+I would also like to thank everyone who listened to me and then sent me back to
+work again.

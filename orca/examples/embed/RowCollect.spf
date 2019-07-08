@@ -1,0 +1,26 @@
+# $Id: RowCollect.spf,v 1.1 1997/05/27 13:08:58 ceriel Exp $
+
+OBJECT SPECIFICATION RowCollection;
+	TYPE RowType = ARRAY[integer] OF integer;
+
+	OPERATION init(size: integer);
+	   # Set size of the collection
+	OPERATION AddRow(iter: integer; R: RowType);
+	   # Add the row for the given iteration number
+	OPERATION AwaitRow(iter: integer): RowType;
+	   # Wait until the row for the given iteration is available,
+	   # then return it.
+
+        OPERATION at(row, column: integer) : integer;
+	   # return the value at row, column
+	OPERATION rowAt(row: integer) : RowType;
+	   # return the row
+        OPERATION atPut(i,j: integer; k : integer);
+           # put k at row i, column j
+	OPERATION printIt();
+	   # print the contents
+	OPERATION printItA();
+	   # print the contents suitable for compact storage
+	   # "a" indicates 0, "b" indicates 1, ...
+	   # "*" indicates > 30
+END;

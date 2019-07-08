@@ -1,0 +1,60 @@
+MODULE SPECIFICATION Matrix;
+
+ 
+CONST MISMATCH = -0.33 ;
+CONST MATCH    =  1.00 ;
+CONST NAMELEN  =  40;
+
+
+TYPE Vertex = RECORD 
+	      VALUE  : real;
+	      IVALUE : integer;
+	      JVALUE : integer;
+	      END;
+
+TYPE Partition =  RECORD
+                        NR : integer;
+                        I1,J1 : integer;
+                        I2,J2 : integer;
+                        I3,J3 : integer;
+                        I4,J4 : integer;
+                  END;
+
+TYPE RowType  = ARRAY [integer] OF Vertex;
+TYPE SeqMatrix = ARRAY [integer] OF RowType;
+
+TYPE Result = RECORD
+	        SEQNAME   : string[1..NAMELEN];
+	        STARTI    : integer;
+	        STARTJ    : integer;
+	        ENDI      : integer;
+	        ENDJ      : integer;
+	        SCORE     : real;
+	        MATCH     : integer;
+    	        MISMATCH  : integer;
+                GAPS      : integer;
+                MATCH_PER : real;
+                AL_LEN    : integer;
+              END;
+
+
+FUNCTION InitMatrix( Row, Col : integer; 
+                     Mat : OUT SeqMatrix[0..Row][0..Col] );
+
+FUNCTION ComputeScoreMatrix( Seq1, Seq2 : string;
+                             Part       : Partition;
+                             InMat      : SHARED SeqMatrix;
+                             Imax, Jmax : OUT integer ): Vertex;
+
+FUNCTION FindBestLalign( Imax, Jmax : integer;
+                         Max_vertex : Vertex;
+			 Seq1, Seq2 : string;
+                         Mat        : SeqMatrix ): Result;
+
+FUNCTION PlotMatrix( Row, Col : integer; Mat : SeqMatrix );
+
+FUNCTION ShowResult( n : Result );
+
+END;
+
+

@@ -1,0 +1,6 @@
+MODULE SPECIFICATION MiscUtil;
+
+FUNCTION random1(a: SHARED integer): real;
+FUNCTION gauss1(a: SHARED integer; mean, sigma: real): real;
+
+END;

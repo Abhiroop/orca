@@ -1,0 +1,28 @@
+MODULE SPECIFICATION AtpgTypes;
+
+	# CONFIG_FILE specifies where to look for the configuration file
+
+        CONST CONFIG_FILE = "CONFIG";
+
+	# Constants used to indicate gatetype
+	CONST BUFF_G = 1;
+	CONST NOT_G  = 2;
+	CONST FO_BR  = 3;
+	CONST INPT   = 4;
+	CONST AND_G  = 5;
+	CONST OR_G   = 6;
+	CONST XOR_G  = 7;
+	CONST NAND_G = 8;
+	CONST NOR_G  = 9;
+	CONST XNOR_G = 10;
+
+	TYPE GateType = integer;
+
+        TYPE Logic_Value = (ZERO,ONE,D,NOT_D,DONT_CARE);
+
+        TYPE Possible_Fault = (Stuck_At_0,Stuck_At_1);
+
+        TYPE FaultSet = SET OF Possible_Fault;
+
+END;
+

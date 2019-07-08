@@ -1,0 +1,47 @@
+MODULE IMPLEMENTATION CromoVector;
+
+FROM BoolVector IMPORT DynBoolVector;
+
+#
+# returns an uninitialized individual with a chromozome of SizeIndividual
+#
+FUNCTION DynIndividual (SizeIndividual: integer): individual;
+
+an_individual: individual;
+
+BEGIN
+	an_individual.cromozom := DynBoolVector (SizeIndividual);
+	RETURN an_individual;
+END;
+
+#
+# returns an uninitialized population of size 2*SizePopulation
+# with chromozomes of size SizeIndividual
+# the first SizePopulation individuals are the current population
+# the rest is provided for the new individuals
+#
+FUNCTION DynPopulation (SizeIndividual, SizePopulation: integer): population;
+
+a_population: population[0..2*SizePopulation-1];
+an_individual: individual;
+
+BEGIN
+	an_individual.cromozom := DynBoolVector (SizeIndividual);
+	FOR i IN 0..2*SizePopulation-1 DO
+		a_population[i] := an_individual;
+	OD;
+	RETURN a_population;
+END;
+
+END;
+
+
+
+
+
+
+
+
+
+
+

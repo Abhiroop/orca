@@ -1,0 +1,13 @@
+MODULE SPECIFICATION Graph;
+
+FROM Types IMPORT  Vali, BoolArray, ConMatrix, RelationType, RelationIndex;
+ 
+FUNCTION GenerateRelations(nr_values: integer; diff_rel: RelationIndex;
+    rel_pairs: integer; relation: SHARED RelationType; seed: integer);
+
+FUNCTION GenerateConstraints(diff_rel, nr_connections: integer;
+    nr_vars: integer; constraint: SHARED ConMatrix; seed: integer);
+
+FUNCTION GenerateProcessor(processor: OUT Vali; nr_vars, nslaves: integer);
+
+END;

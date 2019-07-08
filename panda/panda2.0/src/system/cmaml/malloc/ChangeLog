@@ -1,0 +1,121 @@
+11-Jul-86  Dick Grune (dick) at tjalk
+	Turns out to work 
+
+24-Sep-85  Dick Grune (dick) at tjalk
+	Changed extern/static dichotomy into a tetrachotomy:
+		public		routines in the local interface
+		publicdata	data in the local interface
+		private		private routines
+		privatedata	private data
+		
+
+29-Aug-85  Dick Grune (dick) at tjalk
+	The final (?) version, provisional timing, with profiling:
+	     1200.0 real       467.5 user        32.3 sys  
+		n = 20000: 1720320 bytes occupied
+
+
+24-Aug-85  Dick Grune (dick) at tjalk
+	We can hand out chunks of size < MIN_SIZE, if we want to,
+	but what do we do with them when the user gives them back?
+	We can't put them in a chain, since they are too small.
+	They should probably be coalesced to the physicaly previous
+	chunk, but what if there isn't any?
+
+ 9-Jul-85  Dick Grune (dick) at tjalk
+	This is with a mallink consisting of two size_types and two
+	pointers (with a bit tucked in somewhere):
+	
+	n = 200 -t     8.0 real         3.3 user         0.7 sys  
+	n = 200        6.0 real         3.6 user         0.6 sys  
+	n = 2000 -t   66.0 real        36.2 user         1.0 sys  
+	n = 2000      76.0 real        37.9 user         1.7 sys  
+	n = 20000 -t 776.0 real       414.3 user         8.0 sys  
+	n = 20000   1894.0 real       439.0 user        38.4 sys  
+	
+	and memory requirements:
+	n = 200:     22528 bytes occupied
+	n = 2000:   174080 bytes occupied
+	n = 20000: 1761280 bytes occupied
+
+
+ 6-Jul-85  Dick Grune (dick) at tjalk
+	I had this thought that free_lists might be pretty short in
+	practice so it would be practical to use a singly-linked list and
+	save space for one pointer. HOWEVER:
+	the maximum free_list length for n = 200 is 7
+	the maximum free_list length for n = 2000 is 55
+	Conclusion: doubly linked lists are essential.
+	
+
+ 4-Jul-85  Dick Grune (dick) at tjalk
+	Recompiled with ack (new cemcom):
+	n = 200 -t     6.0 real         4.8 user         0.6 sys  
+	n = 200        6.0 real         5.0 user         0.7 sys  
+	n = 2000 -t   95.0 real        50.9 user         2.3 sys  
+	n = 2000      68.0 real        54.2 user         3.3 sys  
+	n = 20000 -t 615.0 real       565.4 user        15.4 sys  
+	n = 20000    640.0 real       580.8 user        29.8 sys  
+	n = 200:     24576 bytes occupied
+	n = 2000:   184320 bytes occupied
+	n = 20000: 1875968 bytes occupied
+
+
+ 2-Jul-85  Dick Grune (dick) at tjalk
+	Realloc implemented, and added to the test bed. This raises the
+	times of the test bed as well.
+	n = 200 -t     8.0 real         3.7 user         0.8 sys  
+	n = 200        7.0 real         4.0 user         0.8 sys  
+	n = 2000 -t   63.0 real        38.0 user         2.1 sys  
+	n = 2000      67.0 real        41.7 user         2.1 sys  
+	n = 20000 -t 890.0 real       437.8 user        20.0 sys  
+	n = 20000   1048.0 real       479.1 user        47.7 sys  
+	n = 200:     24576 bytes occupied
+	n = 2000:   184320 bytes occupied
+	n = 20000: 1875968 bytes occupied
+
+	on a heavily loaded system:
+	n = 200 -t     8.0 real         3.5 user         0.7 sys  
+	n = 200       10.0 real         3.9 user         0.7 sys  
+	n = 2000 -t  114.0 real        38.3 user         2.0 sys  
+	n = 2000     111.0 real        41.7 user         2.9 sys  
+	n = 20000 -t1644.0 real       466.7 user        41.8 sys  
+	n = 20000   1785.0 real       474.1 user        58.5 sys  
+	n = 200:     24576 bytes occupied
+	n = 2000:   184320 bytes occupied
+	n = 20000: 1875968 bytes occupied
+
+	as compared to the UNIX malloc/realloc:
+	n = 200 -t     4.0 real         3.5 user         0.6 sys  
+	n = 200        5.0 real         3.5 user         0.7 sys  
+	n = 2000 -t   63.0 real        38.4 user         1.9 sys  
+	n = 2000      71.0 real        42.6 user         2.3 sys  
+	n = 20000 -t 819.0 real       436.6 user        17.3 sys  
+	n = 20000   1462.0 real       860.5 user        41.7 sys  
+	n = 200:     19456 bytes occupied
+	n = 2000:   158720 bytes occupied
+	n = 20000: 1580032 bytes occupied
+	
+	This makes all previous measurements obsolete.
+
+
+ 1-Jul-85  Dick Grune (dick) at tjalk
+	Just for fun, this is what you get if you switch on all checking:
+	n = 200       56.0 real        31.5 user         1.4 sys  
+	n = 2000    5386.0 real      2688.3 user        75.8 sys  
+	n = 20000  72587.0 real     38105.0 user      1282.3 sys  killed
+
+
+18-Jun-85  Dick Grune (dick) at tjalk
+	Thought about making the doubly-linked lists circular and decided
+	not to.
+	1.  It would make the code smaller, but the actual amount of
+	instructions performed would go up.
+	2.  It is silly for the physical chain.
+
+23-Mar-85  Dick Grune (dick) at tjalk
+	round_size rounds the size upwards to just 1 below the next
+	multiple of MIN_BLOCK_SIZE. This is to get a uniform size, while
+	at the same time avoiding integer overflow and overclassing the
+	request into the next class. I.e., e.g. 19 is rounded to 23.
+

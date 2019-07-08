@@ -1,0 +1,111 @@
+ ## ===========================================================================
+ ##
+ ##    File:    mbin_go.spf
+ ##    Type:    generic object specification
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ GENERIC( TYPE item_pt )
+ OBJECT SPECIFICATION mbin_go ;
+
+ ##
+ ##  The  instantiated  module implements a multi-bin object `mbin_go' that is
+ ##  intented for transient storage of  data  items  of  type  `item_pt'.  The
+ ##  object   resembles   the   `GenericBin'   standard   library  object  but
+ ##  additionally supports multiple readers for every data item stored.
+ ##
+ ##  The number of readers must be known in advance.  An empty object allows a
+ ##  single data item to be stored which will remain there until the specified
+ ##  number of retrievals have occured, after  which  the  object  will  empty
+ ##  again.
+ ##
+
+ ## ===========================================================================
+ ##
+ ##  Exported Operations:
+ ##
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ init        - Initialize the object to allow 
+ ##
+ ##    n : integer - `n' `get' operations per `put' operation. The object will
+ ##                  be empty. 
+ ##
+
+ OPERATION init( n : integer );
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ put             - Store
+ ##
+ ##    item : item_pt  - the data `item' if the object is empty.
+ ##                      Block otherwise. 
+ ##
+
+ OPERATION put( item : item_pt );
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ get             - Retrieve
+ ##
+ ##    item : item_pt  - the data `item' if the object  is  not  empty.
+ ##                      Block otherwise. 
+ ##
+ ##  After  a  total of n get operation have been performed on a filled object,
+ ##  the object will be emptied.
+ ##
+
+ OPERATION get( item : OUT item_pt );
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  A  drawback  of the previous implementation is that get operations do not
+ ##  differentiate on who performs it. In situations where a  value  needs  to
+ ##  be  communicated to n processes and one process inadvertedly performs two
+ ##  or more get operations in rapid succession then one or more of the  other
+ ##  processes will get inapropriate data or will simply block forever.
+ ##
+ ##  If  it  cannot  be  guaranteed  that  such  a situation does not occur an
+ ##  additional mechanism is needed. For instance this  could  be  implemented
+ ##  using  a  barrier  object and in situations were use of such an object is
+ ##  appropriate anyway, the above set of operations can be used unchanged.
+ ##
+ ##  Otherwise,  the participating processes need to establish a naming scheme
+ ##  for  transactions  among  themselves.  A transaction is one sequence of a
+ ##  single put operation and n read operations. These identifiers must be
+ ##  provided to alternative put and get operations:
+ ##
+ ##  Intermixed  use  of  both  sets  of  get- and put operations is possible,
+ ##  but discouraged.
+ ##  
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ tput            - Store
+ ##
+ ##    item : item_pt  - the data `item' if the object is empty and
+ ##    id   : integer  - include its transaction identifier. Block otherwise.
+ ##
+
+ OPERATION tput( item : item_pt
+	       ;   id : integer
+              );
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ tget            - Retrieve
+ ##
+ ##    item : item_pt  - the data `item' if the object is not empty and
+ ##    id   : integer  - its current transaction identifier matches `id'.
+ ##                      Block otherwise.
+ ##
+
+ OPERATION tget( item : OUT item_pt
+               ;   id :     integer
+  	      );
+
+ ## ===========================================================================
+
+ END
+ GENERIC;

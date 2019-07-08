@@ -1,0 +1,9 @@
+OBJECT SPECIFICATION SharedVecProc;
+	FROM fourier IMPORT nproc ;
+
+	TYPE vecproc = ARRAY[integer 1..nproc] OF real;
+	OPERATION GetElt(i: integer): real;
+	OPERATION PutElt(i: integer; x: real);
+	OPERATION get(): vecproc;
+	OPERATION store(b: vecproc);
+END;

@@ -1,0 +1,96 @@
+MODULE IMPLEMENTATION ab;
+	IMPORT SearchTree;
+	FROM SearchTree IMPORT Node, NullNode;
+	FROM Game IMPORT board, Nsons, DoMove, StaticEvaluation;
+	FROM Finish IMPORT Finish;
+	IMPORT IntObject;
+	FROM Time IMPORT SysMilli, PrintTime;
+
+	OBJECT abqueue = NEW GenericJobQueue(Node);
+
+	CONST Depth = 5;
+	CONST SplitLevel = 1;
+	CONST WorkerLevels = Depth - SplitLevel;
+
+	FUNCTION AlphaBeta(b: board; depth, alpha, beta: integer): integer;
+		tmp: integer;
+	BEGIN  # Do sequential alpha-beta search on a given board position
+		IF depth = 0 THEN
+			# WriteLine("return ", StaticEvaluation(b));
+			RETURN StaticEvaluation(b);
+		FI;
+		FOR i IN 1 .. Nsons DO
+			tmp := -AlphaBeta(DoMove(b,i), depth-1, -beta, -alpha);
+			IF tmp > alpha THEN
+				alpha := tmp;
+				IF alpha >= beta THEN RETURN alpha; FI;
+			FI;
+		OD;
+		RETURN alpha;
+	END;
+
+	PROCESS worker(t: SHARED SearchTree; q: SHARED abqueue;
+		      WorkersActive: SHARED IntObject; go: SHARED IntObject);
+		n: Node;
+		b: board;
+		alpha, beta: integer;
+		score: integer;
+	BEGIN
+		# WriteLine("start worker ", MYCPU());
+		go$AwaitValue(1);
+		WHILE q$GetJob(n) DO
+			t$ReadNode(n, b, alpha, beta);
+			IF alpha < beta THEN
+				# WriteLine("calling ab: b=", b, "alpha=", alpha, "beta=", beta, "depth=", WorkerLevels);
+				score := AlphaBeta(b,WorkerLevels,alpha,beta);
+				# WriteLine("result=", score);
+				t$PropagateResult(n, score);
+			FI;
+		OD;
+		WorkersActive$dec();
+	END;
+
+	FUNCTION GenerateTopOfTree(t: SHARED SearchTree; q: SHARED abqueue;
+				   level: integer; b: board;
+				   WhichSon: integer; parent: Node);
+		n: Node;
+	BEGIN
+		# Generate the top part of the search tree, with the given
+		# number of levels.  For each (leaf) node at this level,
+		# add a job to the jobqueue.
+		IF level < SplitLevel THEN
+			n := t$AddNode(parent, b, WhichSon, Nsons);
+			FOR i IN 1 .. Nsons DO
+			    GenerateTopOfTree(t, q, level+1, DoMove(b,i), i, n);
+			OD;
+		ELSE
+			n := t$AddNode(parent, b, WhichSon, 0);
+			q$AddJob(n);  # generate job for leaf node
+		FI;
+	END;
+
+	PROCESS OrcaMain();
+		t: SearchTree;  # The top part of the search tree
+		q: abqueue; # The jobqueue
+		WorkersActive: IntObject;  # Used for termination
+		go: IntObject;
+		start, stop: integer;
+	BEGIN
+		start := SysMilli();
+		WorkersActive$assign(NCPUS());
+		go$assign(0);
+		GenerateTopOfTree(t, q, 0, 0, 0, NullNode());
+		q$NoMoreJobs();
+		FOR i IN 0 .. NCPUS() - 1 DO
+			FORK worker(t, q, WorkersActive, go) ON (i);
+		OD;
+		go$assign(1);
+		WorkersActive$AwaitValue(0);
+		stop := SysMilli();
+		WriteLine("Result = ", t$RootValue() );
+		   # Result is final value of the root of the tree
+		PrintTime("AB", stop-start);
+		WriteLine("Job done!!!");
+		Finish();
+	END;
+END;

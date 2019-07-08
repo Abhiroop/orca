@@ -1,0 +1,10 @@
+echo 'newgraph border clip X 3.8'
+echo 'xaxis min 0 max 35 label : number of CPUs'
+echo 'yaxis min 0 max 475 label : execution time (seconds)'
+echo 'newcurve linetype solid marktype circle label : Data Parallel / 1024x1024'
+echo 'pts '
+cat jacobi.dp.1024.plot
+echo 'newcurve linetype dotted marktype circle label : Task Parallel / 1024x1024'
+echo 'pts '
+cat jacobi.tp.1024.plot
+echo 'legend defaults x 35 y 450 hjr vjt'

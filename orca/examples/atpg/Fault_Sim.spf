@@ -1,0 +1,28 @@
+MODULE SPECIFICATION Fault_Sim;
+
+	FROM Circuit IMPORT Circuit;
+
+	FROM TruthTable IMPORT Truth_Table;
+
+	FROM Fault IMPORT Fault_Rec_Set;
+
+	FROM Config IMPORT Config_Rec;
+	
+	IMPORT Report;
+
+	IMPORT sema;
+
+	FUNCTION Fault_Sim(circuit:Circuit;truthtable:Truth_Table;
+			   faultrecset:SHARED Fault_Rec_Set;
+			   report:SHARED Report;config:Config_Rec;
+			   print:SHARED sema);
+
+	# Perform fault simulation and remove all faults from the faultrecset
+	# that are detected by the current input pattern.
+	# The fault simulation technique used, TestDetect, is discussed in 
+	# the report 'State of the art in automatic test pattern generation'
+	# An important precondition is that the circuit must already have the
+	# testvector assigned.
+
+
+END; # MODULE SPECIFICATION Fault_Sim

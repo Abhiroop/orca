@@ -1,0 +1,12 @@
+OBJECT IMPLEMENTATION BoolObject;
+  x : boolean;
+ 
+  OPERATION assign(v : boolean);
+   BEGIN
+     x := v;
+   END;
+  OPERATION test() : boolean;
+   BEGIN
+     RETURN x;
+   END;
+END;

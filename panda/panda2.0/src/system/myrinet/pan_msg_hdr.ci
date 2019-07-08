@@ -1,0 +1,82 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+
+#ifndef __PAN_MSG_HDR_CI__
+#define __PAN_MSG_HDR_CI__
+
+
+#ifndef STATIC_CI
+#  define STATIC_CI	static
+#endif
+
+
+
+#include <string.h>
+#include <assert.h>
+
+#include "pan_sys_msg.h"		/* Provides a system interface */
+
+#include "pan_global.h"
+#include "pan_message.h"
+#include "pan_msg_hdr.h"
+#include "pan_nsap.h"
+
+
+
+
+				/* Changed from pan_sys_fragment_received
+				 * to function:
+				 * pan_msg_restore and
+				 * macro msg_comm_hdr.
+				 * The side-effects after receive are all done
+				 * in pan_msg_restore.
+				 *				RFHH */
+STATIC_CI pan_msg_p
+pan_msg_restore(struct FM_buffer *data, int len)
+{
+    short      nsap_id;
+    pan_nsap_p nsap;
+    pan_msg_p  msg;
+
+    msg = (pan_msg_p)data->fm_buf_admin;
+    msg_type(msg) = FM_MSG | EMBEDDED_DATA;
+    msg_data(msg) = data->fm_buf;
+    msg_size(msg) = FM_buf_align_size(len);
+
+    /* Get nsap */
+    assert(aligned(len, NSAP_HDR_SIZE));
+    len -= NSAP_HDR_SIZE;
+    nsap_id = *(short *)(msg_data(msg) + len);
+    nsap = pan_sys_nsap_id(nsap_id);
+
+    msg_nsap(msg) = nsap;
+
+    assert(aligned(len - XCAST_HDR_SIZE(nsap), COMM_HDR_ALIGN(nsap)));
+
+    					/* Skip system layer comm. header */
+    msg_offset(msg) = len - XCAST_HDR_SIZE(nsap);
+
+    return msg;
+}
+
+
+STATIC_CI int
+pan_sys_msg_nsap_store(pan_msg_p msg, pan_nsap_p nsap)
+{
+    int        nsap_offset;
+
+    msg_nsap(msg) = nsap;
+    nsap_offset = msg_offset(msg) + XCAST_HDR_SIZE(nsap);
+
+    *(short *)(msg_data(msg) + nsap_offset) = pan_sys_nsap_index(nsap);
+
+    return nsap_offset + NSAP_HDR_SIZE;
+}
+
+
+
+#endif

@@ -1,0 +1,49 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+OBJECT IMPLEMENTATION FloatObject;
+
+x: real;
+updates : integer;
+counter : integer;
+
+
+OPERATION value( ncpus : integer): real;
+BEGIN
+    GUARD updates = ncpus DO
+    	RETURN x;
+    OD;
+END;
+
+
+OPERATION init(v: real);
+BEGIN
+    IF ( updates /= NCPUS()) THEN
+	WriteLine( "init half way? updates = ", updates);
+    FI;
+    x := v;
+    updates := 0;
+    counter +:= 1;
+END;
+
+
+OPERATION add(v: real; phase : integer; me : integer);
+BEGIN
+    IF (phase /= counter) THEN
+	WriteLine( me, ": out of phase ", phase, " iso counter ", counter);
+    FI;
+
+    x +:= v;
+    updates +:= 1;
+
+    IF ( updates > NCPUS()) THEN
+	WriteLine( me, ": too many updates: ", updates);
+    FI;
+END;
+
+
+BEGIN
+    updates := NCPUS();
+    counter := 0;
+END;

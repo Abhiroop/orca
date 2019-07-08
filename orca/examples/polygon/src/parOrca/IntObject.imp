@@ -1,0 +1,55 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: IntObject.imp,v 1.1 1997/05/27 11:52:48 ceriel Exp $
+
+OBJECT IMPLEMENTATION IntObject;
+	x: integer;
+
+	OPERATION dummy();  # used for benchmarks
+	BEGIN
+	END;
+
+	OPERATION value(): integer;
+	BEGIN
+		RETURN x;
+	END;
+
+	OPERATION assign(v: integer);
+	BEGIN
+		x := v;
+	END;
+
+	OPERATION min(v: integer);
+	BEGIN
+		GUARD v < x DO
+			x := v;
+		OD;
+
+		GUARD v >= x DO
+		OD;
+	END;
+
+	OPERATION inc();
+	BEGIN
+		x +:= 1;
+	END;
+
+	OPERATION dec();
+	BEGIN
+		x -:= 1;
+	END;
+
+	OPERATION AwaitValue(v: integer);
+	BEGIN
+		GUARD x = v DO OD;
+	END;
+
+	OPERATION AwaitBigger(v: integer) : integer;
+	BEGIN
+		GUARD x > v DO RETURN x; OD;
+	END;
+BEGIN
+	x := 0;
+END;

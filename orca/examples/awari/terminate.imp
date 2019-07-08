@@ -1,0 +1,53 @@
+OBJECT IMPLEMENTATION terminate;
+	idle: integer;
+	P: integer;	# number of processes
+
+	ActiveCnt, PassiveCnt: integer;
+
+	OPERATION init(nproc: integer);
+	BEGIN
+		idle := 0;
+		P := nproc;
+		ActiveCnt := 0;
+		PassiveCnt := 0;
+	END;
+
+	OPERATION clear();
+	BEGIN
+		idle := 0;
+	END;
+
+	OPERATION value(): integer;
+	BEGIN
+		RETURN idle;
+	END;
+
+	OPERATION GoPassive();
+	BEGIN
+		ASSERT (idle < P);
+		idle +:= 1;
+		PassiveCnt +:= 1;
+	END;
+
+	OPERATION GoActive(): boolean;
+	BEGIN
+		ActiveCnt +:= 1;
+		IF idle = P THEN
+			RETURN false; 	# fail
+		ELSE
+			idle -:= 1;
+			RETURN true;
+		FI;
+	END;
+
+	OPERATION done(): boolean;
+	BEGIN
+		RETURN (idle = P);
+	END;
+
+	OPERATION PrintStatistics();
+	BEGIN
+		WriteLine("Terminate: GoActive: ", ActiveCnt,
+			" GoPassive: ", PassiveCnt);
+	END;
+END;

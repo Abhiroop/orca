@@ -1,0 +1,76 @@
+\sectionLabel{Problem Description}
+
+Polygon Overlay is commonly done in spatial information systems
+\cite{White:1978}.
+Suppose two maps have been supplied,
+$A$ and $B$.
+Each map covers the same geographical area,
+and is decomposed into a set of non-overlapping polygons
+(\refByCapt{Example of Polygonal map Overlay}).
+The aim is then to overlay the maps,
+i.e.\ to generate a new map consisting of
+the non-empty elements in the geometric intersection of $A$
+and $B$.
+This problem frequently arises in geographical information
+systems,
+in which the first map might represent soil type,
+and the second,
+vegetation.
+Their overlay then shows how combinations of soil type and
+vegetation
+are distributed.
+
+\begin{figure}[hbtp]
+  \begin{centering}
+    \hspace{0cm}
+    \epsffile{polygonExample.eps}
+    \refAndCapt{Example of Polygonal map Overlay}
+  \end{centering}
+\end{figure}
+
+Although this problem has been chosen to serve as a 'large' benchmark,
+the problem as it is now is far too complicated.
+In order to simplify the implementation of the problem,
+the following requirements are made:
+\begin{enumerate}
+  \item
+    All polygons are non-empty rectangles.
+    The polygons are chosen to be rectangles because
+    they are easy to store
+    (only the upper-left and the lower-right corner are needed)
+    and they are convex.
+    Calculating an overlay of non-convex polygons is much
+    harder.
+  \item
+    The vertices of the polygons lie on an integer grid
+    $[1{\ldots}N] {\times} [1{\ldots}M]$.
+    This is done to simplify arithmetic,
+    and generation of a polygon map.
+    Note that if the polygons were not rectangular it might
+    not be possible to put every vertex of every output
+    polygon on the same integer grid.
+  \item
+    The input maps have identical extents.
+  \item
+    Each map is completely covered by its rectangular
+    decomposition.
+    Holes in a map are not allowed as they are hard to trace;
+    overlapping polygons are not allowed either.
+  \item
+    Input and output maps are not sorted in any fashion.
+  \item
+    Both of the input maps and the output map can be held
+    in memory. 
+  \item
+    The program should take two input files and deliver an
+    output file, all of the same format.
+  \item
+    Each line in each file should contain four integers
+    representing the upper-left and the lower-right corner of
+    a single polygon.
+    The first polygon in the file should represent the outer
+    surrounding rectangle.
+    The rest of the file should hold the decomposition of the
+    first polygon.
+\end{enumerate}
+

@@ -1,0 +1,17 @@
+# building the target directory.
+
+case X$TARGET in
+X)	echo "TARGET is not set" 1>&2
+	exit 1
+	;;
+esac
+
+if  mkdir -p $TARGET
+then	:
+else	echo "Could not create directory $TARGET" 1>&2
+	exit 1
+fi
+
+if [ ! -f $TARGET/orca_obj_ops ]
+then cp $ORCA_HOME/orca_states $ORCA_HOME/orca_obj_ops $TARGET
+fi

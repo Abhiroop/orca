@@ -1,0 +1,504 @@
+#===============================================================
+#=======        Turing.imp: A Turing ring program       ========
+#===                                                        ====
+
+MODULE IMPLEMENTATION Turing;
+
+IMPORT Random;
+IMPORT LinkObj;
+IMPORT barrier;
+
+FROM Time IMPORT SysMilli, PrintTime;
+FROM LoadBal IMPORT InitLoadBal, Negotiate, StatusType;
+FROM InOut IMPORT ReadString, ReadInt, Eoln, Eof, ReadReal;
+FROM Finish IMPORT Finish;
+
+#---------------------------------------------------------------
+#-------        Implementation                          --------
+#---------------------------------------------------------------
+
+# @ ReadParams(): Read in the parameters from stdin
+
+FUNCTION ReadParams(
+        Params: OUT ParamsType  # All user provided parameters
+);
+
+        c: char;        # dummy to read eolns
+        s: string;      # tags read
+
+BEGIN
+        # Default values
+        Params.CritPop := 0;
+        Params.DisplayFreq := 0;
+        Params.NOCells := 0;
+        Params.NOIterations := 0;
+        Params.RandomSeed := 0;
+        Params.TimeStep := 0.0;
+        Params.Scale := 1.0;
+        Params.Explode := 0;
+
+        Params.PredPopInit := 0;
+        Params.PredDeathA := 0.0;
+        Params.PredDeathB := 0.0;
+        Params.PredBirth := 0.0;
+        Params.PredMigrate := 0.0;
+
+        Params.PreyPopInit := 0;
+        Params.PreyDeathA := 0.0;
+        Params.PreyDeathB := 0.0;
+        Params.PreyBirth := 0.0;
+        Params.PreyMigrate := 0.0;
+
+        # Read the user supplied values
+        WHILE NOT Eof() DO
+                ReadString(s);
+                IF s = "CritPop" THEN
+                        ReadInt(Params.CritPop);
+                ELSIF s = "DisplayFreq" THEN
+                        ReadInt(Params.DisplayFreq);
+                ELSIF s = "NOCells" THEN
+                        ReadInt(Params.NOCells);
+                ELSIF s = "NOIterations" THEN
+                        ReadInt(Params.NOIterations);
+                ELSIF s = "RandomSeed" THEN
+                        ReadInt(Params.RandomSeed);
+                ELSIF s = "TimeStep" THEN
+                        ReadReal(Params.TimeStep);
+                ELSIF s = "Scale" THEN
+                        ReadReal(Params.Scale);
+                ELSIF s = "Explode" THEN
+                        ReadInt(Params.Explode);
+                ELSIF s = "PredPop" THEN
+                        ReadInt(Params.PredPopInit);
+                ELSIF s = "PredDeathA" THEN
+                        ReadReal(Params.PredDeathA);
+                ELSIF s = "PredDeathB" THEN
+                        ReadReal(Params.PredDeathB);
+                ELSIF s = "PredBirth" THEN
+                        ReadReal(Params.PredBirth);
+                ELSIF s = "PredMigrate" THEN
+                        ReadReal(Params.PredMigrate);
+                ELSIF s = "PreyPop" THEN
+                        ReadInt(Params.PreyPopInit);
+                ELSIF s = "PreyDeathA" THEN
+                        ReadReal(Params.PreyDeathA);
+                ELSIF s = "PreyDeathB" THEN
+                        ReadReal(Params.PreyDeathB);
+                ELSIF s = "PreyBirth" THEN
+                        ReadReal(Params.PreyBirth);
+                ELSIF s = "PreyMigrate" THEN
+                        ReadReal(Params.PreyMigrate);
+                ELSE
+                        WriteLine("Unknown tag ", s);
+                FI;
+
+                # Discard rest of line
+                WHILE NOT Eoln() DO
+                        Read(c);
+                OD;
+                Read(c);
+        OD;
+END;
+
+
+# @ Predec(): return predecessor in 1 .. Maxi, wraparound
+
+FUNCTION Predec(Maxi, i: integer): integer;
+BEGIN
+        IF i = 1 THEN
+                RETURN Maxi;
+        ELSE
+                RETURN i - 1;
+        FI;
+END; # Predec
+
+
+# @ Succes(): return succesor in 1 .. Maxi, wraparound
+
+FUNCTION Succes(Maxi, i: integer): integer;
+BEGIN
+        IF i = Maxi THEN
+                RETURN 1;
+        ELSE
+                RETURN i + 1;
+        FI;
+END; # Succes
+
+
+# @ Generate(): Calculate birth and death in every cell
+
+FUNCTION Generate(
+        World: SHARED WorldType;        # World to change
+        Params: IN ParamsType;          # User provided parameters
+        Rand: SHARED Random             # Random object
+);
+
+        DeathPr, BirthPr, Rn: real;     # Probabilities
+	cell: integer;			# cell index
+        PredPop, PreyPop: integer;      # temporary variables
+
+BEGIN
+	# Count the animals we worked on
+	World.NOAnimals := 0;
+
+	# Only handle the active part of the world
+	cell := World.Lower;
+        REPEAT
+                PredPop := World.Ring[World.Current][cell].PredPop;
+		World.NOAnimals +:= PredPop;
+
+                PreyPop := World.Ring[World.Current][cell].PreyPop;
+                World.NOAnimals +:= PreyPop;
+
+                DeathPr := Params.TimeStep * ((FLOAT(PredPop) *
+                                Params.PredDeathA) + Params.PredDeathB);
+                BirthPr := Params.TimeStep * (FLOAT(PredPop) *
+                                                Params.PredBirth);
+                FOR pred IN 1 .. PredPop DO
+                        Rn := FLOAT(Rand$val()) / FLOAT(MAX(integer));
+                        IF Rn <= DeathPr THEN
+                                World.Ring[World.Current][cell].PredPop -:= 1;
+                        FI;
+                        IF Rn <= BirthPr THEN
+                                World.Ring[World.Current][cell].PredPop +:= 1;
+                        FI;
+                OD;
+
+
+                DeathPr := Params.TimeStep * ((FLOAT(PredPop) *
+                                Params.PreyDeathA) + Params.PredDeathB);
+                BirthPr := Params.TimeStep * (FLOAT(PreyPop)
+                                                * Params.PreyBirth);
+                FOR prey IN 1 .. PreyPop DO
+                        Rn := FLOAT(Rand$val()) / FLOAT(MAX(integer));
+                        IF Rn <= DeathPr THEN
+                                World.Ring[World.Current][cell].PreyPop -:= 1;
+                        FI;
+                        IF Rn <= BirthPr THEN
+                                World.Ring[World.Current][cell].PreyPop +:= 1;
+                        FI;
+                OD;
+                IF (World.Ring[World.Current][cell].PredPop > Params.Explode)
+				OR
+		  (World.Ring[World.Current][cell].PreyPop > Params.Explode)
+				THEN
+                        World.Exploded := true;
+                FI;
+		cell := Succes(World.NOCells, cell);
+        UNTIL cell = Succes(World.NOCells, World.Upper);
+END; # Generate
+
+
+# @ Migrate(): Calculate migrating animals and move them
+
+FUNCTION Migrate(
+        World: SHARED WorldType;        # World to change
+        Params: IN ParamsType;          # User provided parameters
+        Rand: SHARED Random;            # Random object
+	ToDn, ToUp: OUT CellType	# Animals migrating to other CPUS
+);
+        PredMigr, PreyMigr, Rn: real;   # Probabilities
+	cell: integer;			# Cell index
+        PredPop, PreyPop: integer;      # Temporaries
+
+BEGIN
+        # First initialise the next generation
+	cell := World.Lower;
+	REPEAT
+                World.Ring[World.Next][cell].PredPop := 0;
+                World.Ring[World.Next][cell].PreyPop := 0;
+		cell := Succes(World.NOCells, cell);
+	UNTIL cell = Succes(World.NOCells, World.Upper);
+
+	# Now initialise the overflow cells
+        ToUp := CellType:{0, 0};
+        ToDn := CellType:{0, 0};
+
+
+        PredMigr:= Params.PredMigrate * Params.TimeStep;
+        PreyMigr:= Params.PreyMigrate * Params.TimeStep;
+        cell := World.Lower;
+	REPEAT
+                # Predator migration
+                PredPop := World.Ring[World.Current][cell].PredPop;
+                FOR predator IN 1 .. PredPop DO
+                        Rn := FLOAT(Rand$val()) / FLOAT(MAX(integer));
+                        IF Rn <= PredMigr THEN
+                                IF Rn < PredMigr * 0.5 THEN
+                                        IF cell = World.Upper THEN
+                                                ToUp.PredPop +:= 1;
+                                        ELSE
+                                                World.Ring[World.Next][Succes(
+                                                World.NOCells, cell)].
+                                                        PredPop +:= 1;
+                                        FI;
+                                ELSE
+                                        IF cell = World.Lower THEN
+                                                ToDn.PredPop +:= 1;
+                                        ELSE
+                                                World.Ring[World.Next][Predec(
+                                                World.NOCells, cell)].
+                                                        PredPop +:= 1;
+                                        FI;
+                                FI;
+                        ELSE
+                                World.Ring[World.Next][cell].PredPop +:= 1;
+                        FI;
+                OD;
+                # Prey migration
+                PreyPop := World.Ring[World.Current][cell].PreyPop;
+                FOR prey IN 1 .. PreyPop DO
+                        Rn := FLOAT(Rand$val()) / FLOAT(MAX(integer));
+                        IF Rn <= PreyMigr THEN
+                                IF Rn < PreyMigr * 0.5 THEN
+                                        IF cell = World.Upper THEN
+                                                ToUp.PreyPop +:= 1;
+                                        ELSE
+                                                World.Ring[World.Next][Succes(
+                                                World.NOCells, cell)].
+                                                        PreyPop +:= 1;
+                                        FI;
+                                ELSE
+                                        IF cell = World.Upper THEN
+                                                ToDn.PreyPop +:= 1;
+                                        ELSE
+                                                World.Ring[World.Next][Predec(
+                                                World.NOCells, cell)].
+                                                        PreyPop +:= 1;
+                                        FI;
+                                FI;
+                        ELSE
+                                World.Ring[World.Next][cell].PreyPop +:= 1;
+                        FI;
+                OD;
+		cell := Succes(World.NOCells, cell);
+	UNTIL cell = Succes(World.NOCells, World.Upper);
+
+	# Swap the rings.
+	World.Current := World.Next;
+	World.Next := 1 - World.Next;
+END;
+
+
+# @ Display(): Display the animal distribution of every cell on stdout
+
+FUNCTION Display(
+        World: IN WorldType;                    # World to display
+        Params: ParamsType;                     # User parameters
+        iteration: integer
+);
+	cell: integer;
+
+BEGIN
+	cell := World.Lower;
+	REPEAT
+		WriteLine("CPU: ", MYCPU(), "   Iteration: ", iteration,
+                        "   Time: ", FLOAT(iteration) * Params.TimeStep,
+			"   Cell: ", cell,"  Pred: ",
+                        World.Ring[World.Current][cell].PredPop,
+                        "  Prey: ",
+                        World.Ring[World.Current][cell].PreyPop);
+		cell := Succes(World.NOCells, cell);
+	UNTIL cell = Succes(World.NOCells, World.Upper);
+END;
+
+
+FUNCTION UpCPU(i: integer): integer;
+BEGIN
+        IF i = NCPUS()-1 THEN
+                RETURN 0;
+        ELSE
+                RETURN i+1;
+        FI;
+END;
+
+
+FUNCTION DownCPU(i: integer): integer;
+BEGIN
+        IF i = 0 THEN
+                RETURN NCPUS()-1;
+        ELSE
+                RETURN i-1;
+        FI;
+END;
+
+
+# @ Worker(): Forked on every processor to do the work.
+
+PROCESS Worker(
+        L, H: IN integer;                       # Lower and upper bound
+        Params: IN ParamsType;                  # User parameters
+        ToDown, FromDown: SHARED LinkObj;       # Links to CPU down in the ring
+        ToUp, FromUp: SHARED LinkObj;           # Links to CPU up in the ring
+	Barrier, Done: SHARED barrier		# To sync with other workers.
+);
+	World: WorldType;			# To store the workers data
+	Rand: Random;				# to generate probabilities
+	MigrUp, MigrDn: CellType;		# Temporaries
+	PredIn, PreyIn: integer;		# Temporaries
+	UpStatus, DnStatus: StatusType;		# Status for load balancing
+
+BEGIN
+	# We all start at the same time.
+	barrier.sync(Done);
+	# Go!
+
+	# Initialise this part of the world
+        World.Current := 0;
+        World.Next := 1;
+        World.Upper := H;
+        World.Lower := L;
+	World.NOCells := Params.NOCells;
+        FOR cell IN L .. H DO
+                World.Ring[World.Current][cell].PredPop
+                                := Params.PredPopInit;
+                World.Ring[World.Current][cell].PreyPop
+                                := Params.PreyPopInit;
+        OD;
+        # Rand$init(Params.RandomSeed + SysMilli());
+        Rand$init(Params.RandomSeed);
+
+        InitLoadBal(UpStatus, DnStatus);
+
+        # Start the iterations.
+        FOR iteration IN 1 .. Params.NOIterations DO
+	    IF NOT World.Exploded THEN
+                # Get the animals moving in from the adjacent cells
+		FromDown$GetMovers(PredIn, PreyIn);
+                World.Ring[World.Current][World.Lower].PredPop +:=
+				PredIn;
+                World.Ring[World.Current][World.Lower].PreyPop +:=
+				PreyIn;
+
+		FromUp$GetMovers(PredIn, PreyIn);
+                World.Ring[World.Current][World.Upper].PredPop +:=
+				PredIn;
+                World.Ring[World.Current][World.Upper].PreyPop +:=
+				PreyIn;
+
+                # Get the cells wich are load balanced to this worker
+		IF FromDown$OverLoad() THEN
+			World.Lower := Predec(World.NOCells, World.Lower);
+			World.Ring[World.Current][World.Lower] := 
+					FromDown$OverLoadCell();
+		FI;
+		IF FromUp$OverLoad() THEN
+			World.Upper := Succes(World.NOCells, World.Upper);
+			World.Ring[World.Current][World.Upper] := 
+					FromUp$OverLoadCell();
+		FI;
+
+                IF World.Exploded THEN
+                        WriteLine("Population explosion on iteration ",
+                                        iteration);
+                FI;
+
+                # Display if necessary.
+                IF (Params.DisplayFreq > 0) AND
+                                (iteration % Params.DisplayFreq = 0) THEN
+                        Display(World, Params, iteration);
+
+                FI;
+
+                # Birth, death and migration in every cell.
+                Generate(World, Params, Rand);
+                Migrate(World, Params, Rand, MigrDn, MigrUp);
+		ToDown$MoveTo(MigrDn.PredPop, MigrDn.PreyPop);
+		ToUp$MoveTo(MigrUp.PredPop, MigrUp.PreyPop);
+		
+		# Drop cells if we are overloaded
+                Negotiate(World.NOAnimals,   # Total workload
+			# left border cell workload
+			World.Ring[World.Current][World.Lower].PredPop +
+			World.Ring[World.Current][World.Lower].PreyPop,
+			# right border cell workload
+			World.Ring[World.Current][World.Upper].PredPop +
+			World.Ring[World.Current][World.Upper].PreyPop,
+			DnStatus, UpStatus, 	# Status records
+			ToDown, FromDown,	# links left
+			ToUp, FromUp);		# links right
+		# Now drop cells, only if there will be at least one left
+                IF UpStatus.Send AND (World.Upper /= World.Lower) THEN
+			ToUp$DropCell(World.Ring[World.Current][World.Upper]);
+			World.Upper := Predec(World.NOCells, World.Upper);
+		FI;
+                IF DnStatus.Send AND (World.Upper /= World.Lower) THEN
+                        ToDown$DropCell(World.Ring[World.Current][World.Lower]);
+                        World.Lower := Succes(World.NOCells, World.Lower);
+		FI;
+
+                IF World.Exploded THEN
+                        WriteLine("Population explosion on iteration ",
+                                        iteration);
+                FI;
+
+	    FI;
+
+	    # Wait for the other workers to finish this generation
+	    barrier.sync(Barrier);
+        OD;
+	barrier.sync(Done);
+
+END;
+
+
+# @ OrcaMain(): The main process
+
+PROCESS OrcaMain();
+        Params: ParamsType;                     # User provided parameters
+	r, First, Portion: integer;		# to calculate initial load
+        LinkUp: ARRAY [integer 0 .. NCPUS()-1] OF LinkObj;
+        LinkDown: ARRAY [integer 0 .. NCPUS()-1] OF LinkObj;
+						# Links workers
+	Barrier, Done: barrier;			# to synchronise workers
+	Start, Stop: integer;			# For timing
+BEGIN
+        ReadParams(Params);
+
+	Barrier$init(NCPUS());
+	Done$init(NCPUS() + 1);
+
+        # Fork off the workers
+
+        r := Params.NOCells % NCPUS();
+        First := 1;
+        Portion := Params.NOCells / NCPUS();
+        FOR i IN 0 .. NCPUS()-1 DO
+                IF i <= r - 1 THEN
+			# First r workers get Portion + 1 cells
+                        FORK Worker(
+				First, First + Portion,
+				Params,
+				LinkDown[DownCPU(i)], LinkUp[i],
+				LinkUp[UpCPU(i)], LinkDown[i],
+				Barrier, Done
+			) ON i;
+                        First +:= Portion + 1;
+                ELSE
+			# Last NCPUS()-r workers get Portion cells.
+                        FORK Worker(
+				First, First + Portion - 1,
+				Params,
+				LinkDown[DownCPU(i)], LinkUp[i],
+				LinkUp[UpCPU(i)], LinkDown[i],
+				Barrier, Done
+			) ON i;
+                        First +:= Portion;
+                FI;
+        OD;
+	# Wait till all workers are ready to go
+	barrier.sync(Done);
+	Start := SysMilli();
+	# Now wait till all workers are done
+	barrier.sync(Done);
+	Stop := SysMilli();
+	PrintTime("Turing", Stop - Start);
+	Finish();
+END;
+
+
+END;
+
+#===                                                 ====
+#=======        Turing.imp                       ========
+#========================================================

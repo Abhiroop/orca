@@ -1,0 +1,8 @@
+This directory contains the sources of some libraries used in the
+compiler:
+
+alloc		storage allocation library
+
+flt_arith	floating point arithmetic
+
+system		low level system call interface

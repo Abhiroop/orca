@@ -1,0 +1,112 @@
+CONF_ROOT = /usr/proj/amwork/conf/amoeba/sparc.gnu-2;
+SRC_ROOT = /usr/proj/amwork/src;
+RTS_ROOT= ../../..;
+ARCH = sparc;
+FM_ROOT = /usr/proj/orca/Networks/FM/myri-fm-1.1-am;
+
+# Libraries that are compiled without __MAL_DEBUG flag.
+LIB_AJAX=$CONF_ROOT/lib/ajax/libajax.a;
+LIB_AMOEBA=$CONF_ROOT/lib/amoeba/libamoeba.a;
+LIB_FM = $FM_ROOT/lib.am/libFM.a;
+PAN_MALLOC = $FM_ROOT/lib.am/pan_malloc.o;
+
+# Libraries that are compiled with __MAL_DEBUG flag.
+LIB_AMOEBA_DEBUG = /usr/proj/amwork/conf0/amoeba/sparc.gnu-2/lib/amoeba.maldb/libamoeba.a;
+LIB_AJAX_DEBUG = /usr/proj/amwork/conf0/amoeba/sparc.gnu-2/lib/ajax.maldb/libajax.a;
+LIB_FM_DEBUG = $FM_ROOT/lib.am/maldebug/libFM.a;
+PAN_MALLOC_DEBUG = $FM_ROOT/lib.am/maldebug/pan_malloc.o;
+ 
+INCLUDES = {
+        -I$SRC_ROOT/h,
+        -I$SRC_ROOT/h/class,
+        -I$SRC_ROOT/h/ajax,
+        -I$SRC_ROOT/h/server,
+        -I$SRC_ROOT/h/posix,
+        -I$SRC_ROOT/h/posix/machdep/$ARCH,
+        -I$SRC_ROOT/h/machdep/arch/$ARCH,
+        -I$SRC_ROOT/h/machdep/dev,
+        -I$SRC_ROOT/h/module,
+	-I$FM_ROOT/include,
+	-I$RTS_ROOT/include,
+	-I$RTS_ROOT/include/communication,
+	-I$RTS_ROOT/include/synchronization,
+	-I$RTS_ROOT/include/util,
+	-I$RTS_ROOT/include/collection,
+	-I$RTS_ROOT/include/po,
+        -I.,
+	-I/net/panda/panda2.0/latest_greatest/include,
+};
+ 
+DEFINES = {
+#       '-DDEBUG',
+#	'-D__MAL_DEBUG',
+	'-g',
+#      	'-O0',
+#      	'-DPROTO_DEBUG',
+#	'-DAT_TIMER',
+	'-DNDEBUG',
+       	'-mv8',
+      	'-ansi',
+      	'-Wall',
+};
+ 
+%include $CONF_ROOT/toolset/amoeba.bin;
+%include $SRC_ROOT/Amakelib/gnu-2/cxx-c.amk;
+ 
+FM_AJ_LIBS = {
+	'-L/usr/proj/orca/Networks/FM/myri-fm-1.1-am/lib.am',
+	'-L/usr/proj/orca/Networks/myrinet/lib.am',
+	'-L../../../communication/fm',
+	'-L../../../synchronization/amoeba',
+	'-L../../../util',
+	'-L../../../collection',
+	'-L../../../po',
+	'-lpo',
+	'-lcollection',
+	'-lcommunication_fm',
+	'-lutil',
+	'-lsynchronization',
+	$LIB_FM_DEBUG,
+	$PAN_MALLOC_DEBUG,
+	'-lLanaiDevice',
+      	$LIB_AJAX_DEBUG,
+	$LIB_MATH,
+        $LIB_AMOEBA_DEBUG,
+};
+ 
+AM_AJ_LIBS = {
+	'-L../../../conf/amoeba/flip',
+	'-L../../../communication/amoeba',
+	'-L../../../synchronization/amoeba',
+	'-L../../../util',
+	'-L../../../collection',
+	'-L../../../po',
+	'-lpo',
+	'-lcollection',
+	'-lcommunication',
+	'-lutil',
+	'-lsynchronization',
+      	$LIB_AJAX,
+	$LIB_MATH,
+        $LIB_AMOEBA,
+};
+ 
+AJ_LINTLIBS = {
+        $LINT_AJAX,
+        $LINT_AMOEBA
+};
+
+U_FM_FFT_C = {
+      fft.c,
+      vector.c,
+};
+ 
+%instance gcluster(fm_fft, $U_FM_FFT_C, $FM_AJ_LIBS, $AJ_LINTLIBS);
+
+U_AM_FFT_C = {
+      fft.c,
+      vector.c,
+};
+ 
+%instance gcluster(am_fft, $U_AM_FFT_C, $AM_AJ_LIBS, $AJ_LINTLIBS);
+

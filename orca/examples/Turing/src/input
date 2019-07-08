@@ -1,0 +1,15 @@
+NOCells 50
+NOIterations 20
+TimeStep 0.1
+PredPop 10
+PredDeathA 0.8090
+PredDeathB 0.250
+PredBirth 0.220
+PredMigrate 0.2
+PreyPop 10
+PreyDeathA 0.6545
+PreyDeathB 0.130
+PreyBirth 0.125
+PreyMigrate 0.1
+Explode 100
+DisplayFreq 20

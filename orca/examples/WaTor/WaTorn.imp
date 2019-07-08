@@ -1,0 +1,511 @@
+# May 1993
+# Without Barrier on each step 
+
+
+MODULE IMPLEMENTATION WaTorn;
+  FROM Inputc IMPORT init_random, init_val, random, write_rezultate;
+  FROM Finish IMPORT Finish;
+  FROM Time IMPORT SysMilli, PrintTime;
+  FROM ConTypes IMPORT Vali, Valp, Mat,  elem_o, OPER, ListaPFish,
+                       entry_ocean, ModList, MatModList, 
+                       MAXOPER, POSITION;
+  FROM IntObject IMPORT IntObject;
+  FROM Line IMPORT Line;
+  FROM Ocean IMPORT Ocean, MatOcean;  
+
+  CONST MAXELEM = 200; 
+  CONST MAXFISH = 1000;
+  CONST MAXSHARK = 1000;
+  CONST MAXPROC = 40;
+
+
+
+FUNCTION calcul_poz(ex, s, l : integer) : integer;
+BEGIN
+  IF (ex = 0) AND (s < 0) THEN
+    RETURN l - 1;
+  ELSE
+    RETURN (ex + s) % l;
+  FI;
+END;
+
+FUNCTION constr_operation(oper : OPER; tip : elem_o;
+                          xn, yn, xo, yo  : integer; 
+			  age, eat : integer;
+                          lista : SHARED ModList;
+                          poz : SHARED integer; 
+                          local : SHARED MatOcean);
+BEGIN
+  lista[poz].operation := oper;
+  lista[poz].wherex := xn;
+  lista[poz].wherey := yn;
+  lista[poz].fromx := xo;
+  lista[poz].fromy := yo;
+  lista[poz].age := age + 1;
+  lista[poz].eat := eat + 1;
+  lista[poz].tip := tip;
+  IF (oper = MOVE) OR (oper = EAT) 
+    THEN
+      IF local[xn][yn].what = REUSABLE
+        THEN
+          local[xn][yn].what := RBUSY;
+        ELSE 
+          local[xn][yn].what := BUSY;
+      FI;
+  FI;
+  IF oper = NOU
+    THEN
+      local[xn][yn].what := RBUSY;
+  FI;
+  IF (oper = MOVE) OR (oper = EAT) OR (oper = DEL)
+    THEN
+       local[xo][yo].what := REUSABLE;
+  FI;
+  IF poz = MAXOPER - 1 THEN
+    WriteLine(MYCPU(), " too many elements ");
+    Finish();
+  FI;
+  poz +:=1;
+END;
+
+
+FUNCTION trateaza_fish(lung, lat, abf, x, y  : integer; 
+                       local  : SHARED MatOcean;  
+                       listaf : SHARED ModList; poz, nfn : SHARED integer );
+
+secventa : Vali[0 ..8];
+o : entry_ocean;
+
+pozx, pozy : integer;
+
+BEGIN
+ random (secventa);
+ o := local[x][y];
+ FOR i IN 0 .. 3 DO
+   pozx := calcul_poz(x, secventa[2 * i], lung);
+   pozy := calcul_poz(y, secventa[2 * i + 1], lat);
+   IF (local[pozx][pozy].what = EMPTY) OR (local[pozx][pozy].what = REUSABLE)
+     THEN EXIT;
+   FI;
+ OD;
+ IF (local[pozx][pozy].what = EMPTY) OR (local[pozx][pozy].what = REUSABLE)
+   THEN 
+     constr_operation(MOVE, FISH, pozx, pozy, x, y, o.age, o.eat,
+                      listaf, poz, local);
+     IF o.age >= abf
+       THEN
+         nfn +:=1;
+         constr_operation(NOU, FISH, x, y, x, y, -1, -1,  
+                          listaf, poz, local); 
+     FI;
+  ELSE
+     constr_operation(AGES, FISH, x, y, x, y, o.age, o.eat, listaf,
+                                  poz, local);
+#    WriteLine(MYCPU(), " does not have enough place ");
+#    WriteLine( "x = ", x, " y = ", y);
+  FI;
+END;
+
+FUNCTION  trateaza_shark(lung, lat, abs, astarv, 
+                          x, y : integer; 
+                          local  : SHARED MatOcean; 
+                          listas : SHARED ModList; 
+                          poz, nfe, nsn, nss : SHARED integer );
+
+secventa : Vali[0 ..8];
+o : entry_ocean;
+pozx, pozy : integer;
+
+
+BEGIN
+ random (secventa);
+ o :=  local[x][y];
+ FOR i IN 0 .. 3 DO
+   pozx  := calcul_poz(x, secventa[2 * i], lung);
+   pozy := calcul_poz(y, secventa[2 * i + 1], lat);
+   IF local[pozx][pozy].what = FISH
+     THEN EXIT;
+   FI;
+ OD;
+ IF local[pozx][pozy].what = FISH
+   THEN
+     nfe +:=1;
+     constr_operation(EAT, SHARK, pozx, pozy, x, y, o.age, -1, 
+                      listas, poz, local);
+     IF o.age >= abs
+       THEN
+         nsn +:=1;
+         constr_operation(NOU, SHARK, x, y, x, y, -1 , -1,  
+                          listas, poz, local);
+     FI;
+   ELSE IF o.eat > astarv
+         THEN
+           nss +:=1;
+           constr_operation(DEL, REUSABLE, x, y, x, y, 0, 0, 
+                          listas, poz, local);
+      ELSE
+        FOR i IN 0 .. 3 DO
+          pozx := calcul_poz(x, secventa[2 * i], lung);
+          pozy := calcul_poz(y, secventa[2 * i + 1], lat);
+          IF  (local[pozx][pozy].what = EMPTY) OR (local[pozx][pozy].what = REUSABLE)
+           THEN EXIT;	
+          FI;
+        OD;
+        IF  (local[pozx][pozy].what = EMPTY) OR (local[pozx][pozy].what = REUSABLE)
+         THEN 
+           constr_operation(MOVE, SHARK, pozx, pozy, x, y, 
+                                      o.age, o.eat,  listas, poz,
+                                      local);
+           IF o.age >= abs
+             THEN
+               nsn +:=1;
+               constr_operation(NOU, SHARK, x, y, x, y, -1, -1,
+                                listas, poz, local);
+           FI;
+         ELSE
+            constr_operation(AGES, SHARK, x, y, x, y, o.age, o.eat,
+                                          listas, poz, local);
+#           WriteLine(MYCPU(), " does not have enough space ");
+#           WriteLine("x = ", x, " y ", y);
+         FI;
+      FI;
+   FI;
+END;
+
+
+FUNCTION pos_in_x(solx : OUT Vali; unit, unit2 : integer);
+z : Vali[0..unit2 - 1];
+BEGIN
+ FOR i IN 0 .. unit - 1 DO
+   FOR j IN 0 .. unit - 1 DO
+     z[i * unit + j] := j;
+   OD;
+ OD;
+ solx := z;
+END;
+
+FUNCTION pos_in_y(soly : OUT Vali; unit, unit2 : integer);
+z : Vali[0..unit2 - 1];
+BEGIN
+ FOR i IN 0 .. unit - 1 DO
+   FOR j IN 0 .. unit - 1 DO
+     z[i * unit + j] := i;
+   OD;
+ OD;
+ soly := z;
+END;
+
+
+
+FUNCTION trat_position(position, ne, lung, lat,
+                       abf, abs, ts : integer; pozf, pozs, nfn, nfe,
+                       nsn, nss : SHARED integer; 
+                       solx, soly, listax, listay : Vali;
+                       lista_s, lista_f : SHARED ModList;
+                       local : SHARED MatOcean);
+
+x, y : integer;
+BEGIN
+ FOR  elem IN 0 .. ne - 1 DO
+   x := listax[elem] + solx[position];
+   y := listay[elem] + soly[position];
+   IF local[x][y].what = FISH
+     THEN
+       trateaza_fish(lung, lat, abf,x , y, local, lista_f, pozf, nfn );
+     ELSE IF local[x][y].what = SHARK
+           THEN  
+             trateaza_shark(lung, lat, abs,  ts ,x, y, local, 
+                              lista_s, pozs, nfe, nsn, nss );
+          FI;
+   FI;
+ OD;
+END;
+
+
+FUNCTION trat_region(ne, lung, lat, abf, abs, ts, nslaves, 
+                     start, stop, step : integer;
+                     j : POSITION;
+                     pozf, pozs, nfn, nfe, nsn, nss : SHARED integer;
+                     solx, soly, listax, listay : Vali;
+                     lista_s, lista_f : SHARED MatModList;
+                     local : SHARED MatOcean;
+                     ocean : SHARED Ocean;
+                     First, Second : SHARED IntObject);
+position : integer;
+BEGIN
+# first barrier
+  First$inc_special(nslaves);
+  First$AwaitValue(nslaves);
+  position := start;
+  REPEAT
+     trat_position(position, ne, lung, lat,
+                       abf, abs, ts, pozf, pozs, nfn, nfe,
+                       nsn, nss, solx, soly, listax, listay, 
+                       lista_s[j], lista_f[j], local );
+     position +:= step;
+  UNTIL position > stop;   
+  IF pozf /= 0 THEN 
+	ocean$Busy(lista_f[j], pozf);
+#       ocean$AfiseazaOcean(lung, lat);
+  FI;
+  IF pozs /= 0 THEN
+	ocean$Busy(lista_s[j], pozs);
+#       ocean$AfiseazaOcean(lung, lat);
+  FI;
+#second barrier
+  Second$inc_special(nslaves);
+  Second$AwaitValue(nslaves);
+  
+END;
+
+
+PROCESS slave( nr_oper, lung, lat, abf, abs, ts  : integer;
+               listax, listay : Vali; time, fish_nou, shark_nou,
+               fish_eat, shark_star, noper_f, noper_s : SHARED Line;
+               First, Second: SHARED IntObject;
+               turn, toti : SHARED IntObject; ocean : SHARED Ocean; 
+               ne,unit, unit2 : integer);
+
+
+local : MatOcean;
+pozs,  pozf: Valp;
+lista_f, lista_s : MatModList;
+nfn, nsn, nfe, nss, nr_oper_fis, nr_oper_sh : integer;
+solx, soly : Vali[0 ..8];
+start, stop : integer;
+nslaves : integer;
+inflimits, suplimits, steps : Valp; 
+j : POSITION;
+
+BEGIN
+  inflimits[UPPER] := unit;
+  inflimits[LOWER] := 2 * unit - 1;
+  inflimits[LEFT]  := 1;
+  inflimits[RIGHT] := unit2 - unit + 1;
+  inflimits[ULLR] := 0;
+  inflimits[URLL] := unit - 1;
+  
+  suplimits[UPPER] := unit2 - 2 * unit;
+  suplimits[LOWER] := unit2 - unit - 1;
+  suplimits[LEFT]  := unit - 2;
+  suplimits[RIGHT] := unit2 - 2;
+  suplimits[ULLR] := unit2 - 1;
+  suplimits[URLL] := unit2 - unit;
+
+  steps[UPPER] := unit;
+  steps[LOWER] := unit;
+  steps[LEFT]  := 1;
+  steps[RIGHT] := 1;
+  steps[ULLR] := unit2 - 1;
+  steps[URLL] := unit2 - 2 * unit + 1;
+
+  nslaves := NCPUS();
+  init_random();
+  nfn := 0; nsn := 0; nfe :=0; nss := 0; 
+  nr_oper_fis := 0; nr_oper_sh := 0;
+  pos_in_x(solx, unit, unit2); pos_in_y( soly, unit, unit2);
+  toti$dec(1);
+  toti$AwaitValue(0);
+  WriteLine("Slave ", MYCPU() + 1, " starts");
+  start := SysMilli();
+  
+  FOR i IN 1 .. nr_oper  DO
+    FOR k IN UPPER .. URLL DO
+      pozf[k] := 0; pozs[k] := 0;
+      local := ocean$GetValue();
+      trat_region(ne, lung, lat, abf, abs, ts, nslaves, 
+                  inflimits[k], suplimits[k], steps[k], k,
+                  pozf[k], pozs[k],  nfn, nfe, nsn, nss,
+                   solx, soly, listax, listay,
+                  lista_s, lista_f,
+                  local, ocean, First, Second);
+    OD;
+#middle
+   j  := MIDDLE;
+   pozf[j] := 0; pozs[j] := 0;
+   local := ocean$GetValue();
+#first barrier
+   First$inc_special(nslaves);
+   First$AwaitValue(nslaves);
+   FOR l IN 1 .. unit - 2 DO
+     FOR position IN l * unit + 1 .. l * unit + unit - 2 DO
+        trat_position(position, ne, lung, lat,
+                    abf, abs, ts, pozf[j], pozs[j], nfn, nfe,
+                    nsn, nss, solx, soly, listax, listay, 
+                    lista_s[j], lista_f[j], local);
+     OD;
+   OD;
+   FOR j1 IN UPPER .. MIDDLE DO
+        IF pozf[j1]  /= 0 THEN 
+           nr_oper_fis +:= pozf[j1];
+	   ocean$change(lista_f[j1], pozf[j1]);
+#          ocean$AfiseazaOcean(lung, lat);
+        FI;
+        IF pozs [j1] /= 0 THEN
+           nr_oper_sh +:= pozs[j1];
+	   ocean$change(lista_s[j1], pozs[j1]);
+#          ocean$AfiseazaOcean(lung, lat);
+        FI;
+
+   OD;
+   
+#second barrier
+   Second$inc_special(nslaves);
+   Second$AwaitValue(nslaves);
+  OD;
+  stop := SysMilli();
+  WriteLine(MYCPU() + 1, " finished its work");
+  time$Assign(MYCPU() + 1, stop - start);
+  fish_nou$Assign(MYCPU() + 1, nfn);
+  shark_nou$Assign(MYCPU() + 1, nsn);
+  fish_eat$Assign(MYCPU() + 1, nfe);
+  shark_star$Assign(MYCPU() + 1, nss);
+  noper_f$Assign(MYCPU() + 1, nr_oper_fis);
+  noper_s$Assign(MYCPU() + 1, nr_oper_sh);
+  turn$inc(1);
+END;
+
+
+
+PROCESS OrcaMain();
+
+fish : Vali[0 .. 2 * MAXFISH];
+shark : Vali[0 .. 2 * MAXSHARK];
+lung : integer;  		# the vertical dimension of the ocean
+lat  : integer;			# the horizontal dimension of the ocean
+nf   : integer;			# the number of fishes
+ns   : integer;			# the number of sharks
+abf  : integer;			# the age for breeding for fish
+abs  : integer;			# the age for breding for shark
+ts   : integer;			# the time of starvation
+unit : integer;		        # the dimension of the elementary element
+unit2 : integer;		# unit x unit
+
+
+time, fish_nou, shark_nou, fish_eat, shark_star, noper_f, noper_s : Line;
+First, Second, toti, turn : IntObject;
+
+# elements assignated to each processor
+
+listax : Mat[0 .. MAXPROC][0 .. MAXELEM]; 
+listay : Mat[0 .. MAXPROC][0 .. MAXELEM];
+ne : Vali [0 .. MAXPROC];	# number of elements for each processor
+nslaves, max :  integer;
+timp, fish_n, shark_n, fish_e, 
+    shark_s, noper_fis, noper_sh : Vali[0 .. MAXPROC];
+ocean : Ocean;
+a, nr_oper : integer;
+local : MatOcean;
+
+lista_init_f, lista_init_s : ListaPFish[0 .. 2 * MAXELEM];	# for ocean init.
+
+BEGIN
+  init_random();
+  nslaves := NCPUS();
+  init_val(unit, nr_oper, lung, lat, nf, ns, abf, abs, ts, fish, shark);
+  unit2 := unit * unit;
+  time$Init(NCPUS());
+  fish_nou$Init(NCPUS());
+  shark_nou$Init(NCPUS());
+  fish_eat$Init(NCPUS());
+  shark_star$Init(NCPUS());
+  noper_f$Init(NCPUS());
+  noper_s$Init(NCPUS());
+  First$assign(0);
+  Second$assign(nslaves);
+
+  FOR  i IN 0 .. nf - 1 DO
+    lista_init_f[i].wherex := fish[2 * i];
+    lista_init_f[i].wherey := fish[2 * i + 1];
+  OD;
+  FOR i IN 0 .. ns - 1 DO
+    lista_init_s[i].wherex := shark[2 * i];
+    lista_init_s[i].wherey := shark[2 * i + 1];
+  OD;
+  ocean$init(lat, lung, nf, ns, lista_init_f, lista_init_s);
+  WriteLine("dimension = ", lung, " x  ", lat);
+  WriteLine(" number of fish = ", nf);
+  WriteLine(" number of sharks = ", ns);
+  WriteLine(" age for breeding = ", abf, " ",  abs);
+  WriteLine(" time for starvation = ", ts);
+  FOR i IN 1 .. nslaves DO
+    ne[i]:= 0; 
+  OD;
+  FOR elemx IN 0 .. lung /unit - 1 DO
+   FOR elemy IN 0 .. lat/unit - 1 DO
+     a := (elemx  + elemy) % nslaves + 1;
+     listax[a][ne[a]] := elemx * unit;
+     listay[a][ne[a]] := elemy * unit; 
+     ne[a] +:=1;
+   OD;
+  OD; 
+  ocean$AfiseazaOcean(lung, lat);
+  toti$assign(nslaves);
+  turn$assign(0);
+  FOR i IN 1 .. nslaves DO    
+    WriteLine(i, " has ", ne[i], " elements");
+    FORK slave(nr_oper, lung, lat, abf, abs, ts,  
+               listax[i], listay[i], time, fish_nou, shark_nou,
+               fish_eat, shark_star, noper_f, noper_s, First, Second,
+               turn, toti, ocean, ne[i], unit, unit2) ON (i - 1);
+  OD;
+  WriteLine("Master waits for toti ");
+  toti$AwaitValue(0);
+  WriteLine("All started");
+  turn$AwaitValue(nslaves);   
+  local := ocean$GetValue();
+  nf := 0; ns := 0;
+  FOR i IN 0 .. lung - 1 DO
+    FOR j IN 0 .. lat - 1 DO
+      IF local[i][j].what = FISH
+        THEN
+          nf +:=1;
+      FI;
+      IF local[i][j].what = SHARK
+        THEN ns +:=1;
+      FI;
+    OD;
+  OD;
+ ocean$AfiseazaOcean(lung, lat);
+ WriteLine(" At the end there are ", nf, " fishes and ", ns, " sharks");
+  FOR  i IN 1 .. NCPUS() DO
+    timp[i] := time$Value(i);
+    IF max < time$Value(i) THEN max := time$Value(i); FI;
+    WriteLine(i, "=> new f = ", fish_nou$Value(i),
+                 " new s   = ", shark_nou$Value(i),
+                 " f       = ", fish_eat$Value(i),
+                 " s       = ", shark_star$Value(i),
+                 " of      = ", noper_f$Value(i),
+                 " os      = ", noper_s$Value(i)); 
+  OD;
+ WriteLine("time = ", max);
+ FOR i IN 1 .. NCPUS() DO
+   timp[i] := time$Value(i);
+   fish_n[i] := fish_nou$Value(i);
+   shark_n[i] := shark_nou$Value(i);
+   fish_e[i] := fish_eat$Value(i);
+   shark_s[i] := shark_star$Value(i);
+   noper_fis[i] := noper_f$Value(i);
+   noper_sh [i] := noper_s$Value(i);
+ OD;
+
+ write_rezultate(NCPUS(), nf, ns, max, timp, fish_n, shark_n, fish_e,
+                 shark_s, noper_fis, noper_sh);
+ PrintTime("WaTor", max);
+ WriteLine("Job done!!!");
+ Finish();
+ END;
+
+END;
+
+
+
+
+
+
+
+
+
+
+
+

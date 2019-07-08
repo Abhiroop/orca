@@ -1,0 +1,19 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: trace.spf,v 1.3 1995/07/31 09:04:09 ceriel Exp $
+
+MODULE SPECIFICATION trace;
+
+  # Non-generic part of interface to the trace package.
+
+  # New threads are declared by the RTS in the FORK call
+  # FUNCTION new_thread(buf_size: integer;
+		      # name: string);
+
+  FUNCTION set_level(level: integer): integer;
+
+  FUNCTION flush();
+
+END;

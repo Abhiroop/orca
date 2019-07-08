@@ -1,0 +1,18 @@
+OBJECT IMPLEMENTATION TicketObject;
+
+  value: integer;
+
+OPERATION init(v: integer);
+BEGIN
+  value := v;
+END;
+
+OPERATION NextTicket(): integer;
+BEGIN
+  IF value >= 0
+     THEN value -:= 1;
+  FI;
+  RETURN value;
+END;
+
+END;

@@ -1,0 +1,80 @@
+\documentstyle[a4wide,11pt,times,sty/subfigure,epsf]{article}
+%\documentstyle[a4wide,12pt,times,sty/subfigure,epsf]{article}
+
+\title{
+    {\bf Parallelizing the Polygon}
+    Overlay \hspace{-7.5ex}\raise.15ex\hbox{Overlay}
+    {\bf Problem Using Orca}
+}
+\author{
+    H.F. Langendoen \\
+    Faculteit der Wiskunde en Informatica\\
+    Vrije Universiteit Amsterdam
+}
+\date{August 1995}
+
+\begin{document}
+
+\bibliographystyle{sty/henkm}
+\newcommand{\newindex}[1]{\index{#1}#1}               % Text and index ref.
+\newcommand{\refAndCapt}[1]{\caption{#1}\label{#1}}   % Ref and caption.
+\newcommand{\refByCapt}[1]{Figure~\ref{#1}}           % `figure' + reference.
+\newcommand{\sectionLabel}[1]{\section{#1}\label{#1}} % Section and label.
+\newcommand{\subsectionLabel}[1]{\subsection{#1}\label{#1}} % Subsection + lbl.
+\newcommand{\refSection}[1]{Section~\ref{#1}}         % 'Section' + reference.
+
+\maketitle
+
+\parindent 0pt
+\noindent
+\parskip 1ex
+
+\begin{abstract}
+  \parindent 0pt
+  \noindent
+  \parskip 1ex
+  \vspace{-4ex}
+
+  This report discusses the implementation of the Polygon Overlay
+  problem in Orca on an architecture consisting of 80 SPARC processors
+  connected by an Ethernet.
+  Orca is based on shared, consistent objects, which reduces the concern
+  about transmission and data consistency.
+  This should make the life of a parallel programmer simpler.
+
+  The report deals with two aspects of implementing the Polygon Overlay
+  problem,
+  firstly to study the characteristics of and solutions to the problem,
+  and secondly to study the usability of Orca in this problem domain.
+
+  The main result of this report is that the Polygon Overlay problem
+  is hard to parallelize, because of the bad ratio between communication
+  and computation.
+  Furthermore the Orca language is well suited to implement the found
+  algorithms that solve the Polygon Overlay problem.
+
+\end{abstract}
+
+\input{intro}
+
+\input{problem}
+
+\input{seqalg}
+
+%\input{parprog}
+
+\newpage
+\input{paralg}
+
+\input{optimiz}
+
+\input{parimp}
+
+\input{perform}
+
+\input{concl}
+
+\bibliography{bib/cowichan}
+
+
+\end{document}

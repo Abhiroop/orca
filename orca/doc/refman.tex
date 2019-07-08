@@ -1,0 +1,1461 @@
+%
+% (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+% For full copyright and restrictions on use see the file COPYRIGHT in the
+% top level of the Orca distribution.
+%
+ 
+\documentclass[10pt]{article}
+\usepackage{html}
+
+\setlength{\textheight}{9in}
+\setlength{\textwidth}{6.75in}
+\setlength{\oddsidemargin}{-0.19in}
+\setlength{\evensidemargin}{-0.19in}
+\setlength{\topmargin}{-0.25in}
+ 
+\newenvironment{grammar}
+{\begin{quote} \begin{tabular}{p{3.8cm} l l}}
+{\end{tabular}\end{quote}}
+
+% \newenvironment{program}
+% {\begin{quote}\tt\begin{tabbing}BEGIN\=BEGIN\=BEGIN\=BEGIN\=BEGINBBBBEGINBEGINBEGIN\=\kill
+% {\end{tabbing}\end{quote}}
+
+\begin{document}
+\title{Report on the Programming Language
+{\html {\htmladdnormallink {Orca} {http://www.cs.vu.nl/proj/orca/}}}
+{\latex {Orca}}}
+\author{Henri E. Bal \\
+Dept. of Mathematics and Computer Science \\
+Vrije Universiteit \\
+Amsterdam \\
+the Netherlands}
+
+\date{May 1994}
+
+\maketitle
+
+\section{Introduction}
+
+Orca is a high-level programming language for the implementation of
+distributed applications.
+Its computational model is based on parallel processes that communicate
+through shared data-objects.
+Orca supports most of Modula-2's sequential constructs (statements and
+expressions).
+Its data structuring facilities are significantly different, however.
+In addition to the above features, Orca supports abstract data (object) types,
+modules, and generic program units.
+
+This report is a concise definition of Orca.
+It is {\em not} a tutorial on distributed programming in Orca.
+The language and its implementations are also covered in the book
+{\em Programming Distributed Systems}
+and several other publications (see the References section).
+The document is based on the {\em Report on
+the programming language Modula-2}, which is part of the book
+{\em Programming in Modula-2 --- Third, corrected edition} by N. Wirth
+(Springer-Verlag, Berlin, 1985).
+\begin{htmlonly}
+It is also available in
+\htmladdnormallink{postscript}{http://www.cs.vu.nl/proj/orca/refman.ps.gz}.
+\end{htmlonly}
+It has roughly the same structure as the Modula-2 report and uses a
+similar notation for the grammar rules.
+Square brackets [] denote optional entities; curly brackets \{\}
+denote zero or more occurrences of an entity.
+Terminal symbols are enclosed in single quotes.
+\begin{htmlonly}
+There is also a
+\htmladdnormallink{user manual}{http://www.cs.vu.nl/proj/orca/userman/userman.html}.
+\end{htmlonly}
+
+\section{Lexical rules}
+Identifiers are sequences of letters, digits, and the underscore symbol;
+identifiers must begin with a letter and may not end with an underscore
+or contain two consecutive underscores.
+
+\begin{grammar}
+ident & = & letter \{ letter $|$ digit $|$ '\_' (letter $|$ digit) \} .
+\end{grammar}
+
+A number is an integer or real number.
+Integers consist of one or more digits.
+If followed by the letter B, it is taken as an octal number;
+if followed by the letter H, it is taken as a hexadecimal number.
+Real numbers may contain a scale factor.
+\begin{grammar}
+number & = & integer $|$ real . \\
+integer & = & digit \{digit\} $|$ octaldigit \{octaldigit\} 'B' $|$ digit \{hexdigit\} 'H' . \\
+real & = & digit \{digit\} '.' \{digit\} [ScaleFactor] . \\
+char & = & ''' character ''' . \\
+ScaleFactor & = & 'E' [ '+' $|$ '$-$'] digit \{digit\} . \\
+octaldigit & = & '0' $|$ '1' $|$ '2' $|$ '3' $|$ '4' $|$ '5' $|$ '6' $|$ '7' . \\
+digit & = & octaldigit $|$ '8' $|$ '9' . \\
+hexdigit & = & digit $|$ 'A' $|$ 'B' $|$ 'C' $|$ 'D' $|$ 'E' $|$ 'F' .
+\end{grammar}
+
+A string consists of zero or more characters enclosed by double quotes.
+Within a string, the (escape) sequence ``\verb+\+c'' stands for the character ``c''.
+For example, the string "AB\verb+\+CD\verb+\+"E" stands for ABCD"E.
+A string should not contain double quotes, unless preceded by a ``\verb+\+''.
+A string may not contain a new-line.
+\begin{grammar}
+string & = & '"' \{character\} '"' .
+\end{grammar}
+A string is of the basic type ``string'' (see section \ref{sec:basic_types}).
+
+Orca uses the following operator and delimiter symbols:
+\begin{quote}
++~~~
+$-$~~~
+*~~~
+/~~~
+\%~~~
+$|$~~~
+\verb+^+~~~
+$<<$~~~
+$>>$~~~
+\&~~~
+\verb+~+~~~
+/=~~~
+$<$~~~
+$>$~~~
+$<$=~~~
+$>$= \\
++:=~~~
+$-$:=~~~
+*:=~~~
+/:=~~~
+\%:=~~~
+..~~~
+=$>$~~~
+,~~~
+.~~~
+;~~~
+:~~~
+(~~~
+)~~~
+[~~~
+]~~~
+\$~~~
+\{~~~
+\end{quote}
+
+The following keywords are reserved (i.e., they cannot be used
+as identifiers):
+
+\begin{quote}
+\begin{tabular}{l l l}
+AND & FUNCTION & ON \\
+ARRAY & GENERIC & OPERATION \\
+BAG & GRAPH & OR \\
+BEGIN & GUARD & OUT \\
+CASE & IF & PROCESS \\
+CONST & IMPLEMENTATION & RECORD \\
+DATA & IMPORT & REPEAT \\
+DO & IN & RETURN \\
+ELSE & MODULE & SCALAR \\
+ELSIF & NEW & SET \\
+END & NODENAME & SHARED \\
+ESAC & NODES & SPECIFICATION \\
+EXIT & NOT & THEN \\
+FI & NUMERIC & TYPE \\
+FOR & OBJECT & UNION \\
+FORK & OD & UNTIL \\
+FROM & OF & WHILE \\
+\end{tabular}
+\end{quote}
+
+Within keywords and identifiers, corresponding upper and lower case letters are
+not equivalent, so ``Begin'' is a normal identifier, but ``BEGIN'' is
+a reserved word.
+
+Comments begin with a ``\#'' symbol and are terminated by the end of the line.
+They may contain any character.
+\section{Scope rules}\label{sec:scope}
+
+Except for standard identifiers, all identifiers must be introduced
+by declarations.
+Identifiers are only visible within the scope of their declaration, which 
+is the entire block (function, operation, module, object type, or process
+declaration) in which they appear.
+The scope rules of Orca are simpler than those of Modula-2.
+There are no global variables (but there is global write-once data, see
+Section \ref{sec:data_modules}).
+and no nesting of functions or modules.
+The only forms of nesting allowed are (1) functions and
+processes within modules, and (2) functions and operations within objects.
+Functions and processes can only access their own local variables
+and parameters.
+Operations can access their own local variables and parameters, and the
+data stored in the object they are applied to.
+
+The following scope rules hold:
+\begin{enumerate}
+\item
+If an identifier {\em x} defined by a declaration D1 is used in another
+declaration, then D1 must textually precede D2,
+except as stated in scope rule 2.
+\item
+A type {\em T1} can be used in a declaration of
+a nodename type {\em T2} (see Section \ref{sec:graph_types})
+that textually precedes the declaration
+of {\em T1}, if both {\em T1} and {\em T2} are declared in the same block.
+This is a relaxation of the previous scope rule.
+\item
+An identifier defined in the specification part of a module is visible
+in that specification part and in the implementation part of the module and
+in those units that import the identifier.
+\item
+Field identifiers of records, unions, graphs, or graph nodes are only valid
+in field designators and do not conflict with other identifiers.
+\item
+Operation names are only valid in operation calls.
+An operation name defined in the specification part of an object type {\em T}
+is only valid in an operation call whose designator specifies an object
+of type {\em T} (see Section \ref{sec:op_calls}).
+\item
+The local variables of an object are only visible within the initialization
+code of the object type and within the operations in the implementation
+part.
+(So, unlike other identifiers declared in the implementation part,
+local variables are invisible inside functions that appear
+in the implementation part.)
+If an operation appearing in the implementation part
+of an object type {\em T}  has an input parameter or
+local variable of type {\em T},
+the local variables of this object can be
+accessed through a qualified identifier (see Section \ref{sec:objects}).
+\end{enumerate}
+\begin{grammar}
+qualident & = & ident ['.' ident] .
+\end{grammar}
+
+\section{Constants}\label{sec:constants}
+
+A constant declaration associates an identifier with the result of a
+constant expression.
+The operands of such an expression are
+character constants, string constants,
+numbers, enumeration literals,
+or constant identifiers declared earlier.
+\begin{grammar}
+ConstantDecl & = & CONST ident '=' ConstExpr ';' . \\
+ConstExpr & = & expression .
+\end{grammar}
+\section{Types}
+
+A type declaration associates an identifier with a type.
+{\em Scalar} types include the basic numeric types, the type char,
+and enumeration types.
+Records, arrays, sets, bags, and graphs are called {\em structured} types.
+Finally, {\em abstract data types} ({\em object} types) defined
+in other compilation units may be used (see Section \ref{sec:objects}).
+\begin{grammar}
+TypeDecl & = & TYPE ident '=' type ';' . \\
+type & = & ScalarType $|$ NonScalarType . \\
+ScalarType & = & qualident $|$ enumeration . \\
+NonScalarType & = &  RecordType $|$ UnionType $|$ ArrayType $|$ SetType $|$ BagType $|$ \\
+& & GraphType $|$ NodeNameType $|$  FunctionType .
+\end{grammar}
+
+A type declaration of the form
+\begin{quote}\tt
+TYPE T1 = T2;
+\end{quote}
+introduces a new identifier T1 denoting the same type as T2.
+All other type declarations introduce new types that are incompatible
+with existing types.
+For example, the declarations
+\begin{quote}\tt
+TYPE T1 = (red, white); \\
+TYPE T2 = (red, white);
+\end{quote}
+introduce two different types, whose variables cannot
+be assigned to each other.
+\subsection{Basic types}\label{sec:basic_types}
+
+The basic types of Orca are: ``integer'', ``real'', ``boolean'', ``char'',
+and ``string''.
+Integer values are between MIN(integer) and MAX(integer).
+The type ``char'' denotes the character set used.
+The type ``boolean'' is an enumeration type containing
+the values ``false'' and ``true'':
+\begin{quote}\tt
+TYPE boolean = (false, true);
+\end{quote}
+The type ``string'' denotes string values and is declared as
+\begin{quote}\tt
+TYPE string = ARRAY[integer] OF char;
+\end{quote}
+
+In string constants, the lower bound of the index is always 1, and the
+upper bound is equal to the number of characters in the string.
+\subsection{Enumeration types}\label{sec:enumeration_types}
+
+An enumeration type defines one or more identifiers that are used
+as constants.
+The values are ordered, so the relational operators can be applied to
+them (see Section \ref{sec:expressions}).
+\begin{grammar}
+enumeration & = & '(' IdentList ')' . \\
+IdentList & = & ident \{ ',' ident \} .
+\end{grammar}
+\subsection{Record types}\label{sec:record_types}
+
+A record contains a fixed number of fields, possibly of different types.
+The fields within the same record type must have different names.
+Fields can be accessed through field designators (see Section \ref{sec:operands}).
+\begin{grammar}
+RecordType & = & RECORD FieldListSeq END . \\
+FieldListSeq & = & FieldList ';' \{ FieldList ';' \} . \\
+FieldList & = & IdentList ':' subtype .
+\end{grammar}
+Example of a record type declaration:
+\begin{quote}\tt
+TYPE rr = RECORD \\
+\mbox{~~~~~~~~~~}i:~integer;  \\
+\mbox{~~~~~~~~~~}x:~real; \\
+\mbox{~~~~~~~~~~}b:~boolean; \\
+\mbox{~~~~~}END;
+\end{quote}
+\subsection{Union types}\label{sec:union_types}
+
+A union, like a record, contains several fields.
+The first field is the tag field.
+Of the remaining fields, only one field may be accessed, as determined
+by the current value of the tag. Trying to access any of the other fields
+of the union results in a run-time error.
+The tag of a union may not be assigned to.
+A tag can be changed, however, by assigning a new value to the whole union.
+The type of the tag field must either be the standard integer type,
+an enumeration type, or the character type.
+The tag field expression (if present)
+specifies the default value of the tag field.
+
+A tag field expression may use all operands and operators that
+are allowed to appear in a constant expression (see Section \ref{sec:constants}).
+If the union type appears in the local declarations part of a function,
+operation, or process, then any input or shared
+parameters of this function,
+operation, or process may also be used in the tag field expression.
+Other than this, no variables or fields may be used in a tag field
+expression.
+\begin{grammar}
+UnionType & = & UNION '(' ident ':' qualident [ '(' TagFieldExpr ')' ] ')' \\
+&&alternative \{ alternative \} END . \\
+TagFieldExpr & = & expression . \\
+alternative & = & ConstExpr '=$>$' ident ':' subtype ';' .
+\end{grammar}
+Example of a union type declaration:
+\begin{quote}\tt
+TYPE uu = UNION(t:~integer) \\
+\mbox{~~~~~~~~~~}1 =$>$ s:~SET OF integer; \\
+\mbox{~~~~~~~~~~}3 =$>$ b:~boolean; \\
+\mbox{~~~~~~~~~~}9 =$>$ r:~real; \\
+\mbox{~~~~~}END;
+\end{quote}
+\subsection{Array types}\label{sec:array_types}
+
+An array contains a number of {\em components} of the same type.
+The components are indexed by values of an {\em index} type,
+which must be either the standard type ``integer'' or ``char''
+or an enumeration type.
+The array bounds (if present) specify the default lower and upper bound
+of variables of the array type.
+
+Arrays can have more than one dimension, in which case each dimension has
+its own index type (and default lower and upper bound).
+Either all dimensions must have default bounds, or none.
+
+An array bound expression may use all operands and operators that
+are allowed to appear in a constant expression (see Section \ref{sec:constants}).
+If the array type appears in the local declarations part of a function,
+operation, or process, then any input or shared
+parameters of this function,
+operation, or process may also be used in the array bound expression.
+Other than this, no variables or fields may be used in an array
+bound expression.
+\begin{grammar}
+ArrayType & = & ARRAY IndexSpec OF type . \\
+IndexSpec & = & '[' qualident [ArrayBounds] \{ ',' qualident [ArrayBounds] \} ']' . \\
+ArrayBounds & = & BoundExpression '..' BoundExpression . \\
+BoundExpression & = & ConstExpr $|$ ident .
+\end{grammar}
+Examples of array type declarations:
+\begin{quote}\tt
+TYPE BoolArray = ARRAY[integer 1..4] OF boolean; \\
+TYPE CharArray = ARRAY[integer] OF char; \\
+TYPE RecArray = ARRAY[boolean, integer] OF \\
+\mbox{~~~~~}RECORD \\
+\mbox{~~~~~~~~~~}a:~ARRAY[integer 1..20] OF real; \\
+\mbox{~~~~~}END;
+\end{quote}
+\subsection{Set and bag types}\label{sec:set_types}
+
+A set contains zero or more values of a given {\em base} type.
+Sets are unordered and do not contain duplicates.
+Bags are similar to sets, except that bags may contain duplicates.
+Whether or not two elements are duplicates of each other, is determined
+by the equality (``='') operator of the base type.
+The base type of a set or bag can only be a type for which the
+equality operator is defined (see Section \ref{sec:relations}).
+\begin{grammar}
+SetType & = & SET OF type . \\
+BagType & = & BAG OF type .
+\end{grammar}
+Examples:
+\begin{quote}\tt
+TYPE IntSet = SET OF integer; \\
+TYPE RealBag = BAG OF real;
+\end{quote}
+\subsection{Graph types and nodename types}\label{sec:graph_types}
+
+A graph is the most general data structure in Orca.
+A graph contains zero or more {\em nodes}.
+Initially, a graph variable is empty (i.e., it contains zero nodes),
+but nodes can be added and deleted dynamically.
+
+Each node contains one or more {\em fields}, similar to the fields of
+a record.
+The graph itself may also contain one or more {\em global} fields.
+If the graph represents a tree, for example, a reference to the root
+node of the tree can be stored in a global field.
+
+The nodes of a graph are identified by {\em nodenames}.
+If {\em T} is a graph type,
+then a value of type ``NODENAME OF T'' names a node within a graph
+of type {\em T}.
+\begin{grammar}
+GraphType & = & GRAPH  [FieldListSeq] \\
+& & NODES  FieldListSeq END . \\
+NodeNameType & = & NODENAME OF ident .
+\end{grammar}
+
+The fields of a node are accessed through designators (see Section \ref{sec:operands}).
+If G is a graph of type {\em T}, n an expression of type ``NODENAME OF {\em T},''
+and F the name of a field, then G[n].F denotes field F of node n.
+
+The standard function ADDNODE(g) adds a new node to a graph and returns
+its nodename (see Section \ref{sec:standard_funcs}).
+Values of a nodename type can be stored in variables and data structures,
+be passed as parameter to a function, operator, or process,
+be compared for equality and inequality,
+be used in designators and in DELETENODE statements (see Section \ref{sec:standard_funcs}).
+Other than this, no other usage of nodenames is allowed.
+The value NIL is a nodename that does not name any node.
+For each graph, all names generated by calls to ADDNODE during
+execution of a program are different.
+Two nodes of two different graphs may have the same nodename.
+
+An example of a graph type and nodename type declaration:
+\begin{quote}\tt
+TYPE node = NODENAME OF Tree;~~\# see scope rule 2 in Section \ref{sec:scope} \\
+TYPE Tree = \\
+\mbox{~~~~~}GRAPH \\
+\mbox{~~~~~~~~~~}root:~node;~~~~~~~~~~\# global field \\
+\mbox{~~~~~}NODES~~~~~~~~~~~~~~~~~~~~~\# fields of each node: \\
+\mbox{~~~~~~~~~~}data:~integer; \\
+\mbox{~~~~~~~~~~}parent:~node; \\
+\mbox{~~~~~~~~~~}sons:~ARRAY[integer 1..10] OF node; \\
+\mbox{~~~~~}END;
+\end{quote}
+\subsection{Function types}
+
+A function type assumes a function as value.
+\begin{grammar}
+FunctionType & = & FUNCTION FormalTypeList . \\
+FormalTypeList & = & '(' [ [IN $|$ OUT $|$ SHARED] FormalType \\
+& & \{',' [IN $|$ OUT $|$ SHARED] FormalType\} ] ')' [':' qualident] .
+\end{grammar}
+\section{Variable declarations}\label{sec:variables}
+
+A variable declaration introduces one or more variables.
+If the variable is an array,
+its initial lower and upper bound(s) may be specified.
+(These bounds can be changed by assigning a whole new value to the
+array variable.)
+If the variable is a union, the initial value of its tag may be given.
+(This value can be changed by assigning a new value to the
+union variable.)
+If an array variable has components that are
+also arrays or unions, the initial bounds or tags of these components may also
+be specified.
+The rules for the tag field expressions and array bounds
+were given in Sections \ref{sec:union_types} and \ref{sec:array_types}, respectively.
+\begin{grammar}
+VariableDecl & = & IdentList ':' subtype ';' . \\
+subtype & = & qualident \{Bounds\} [ '(' TagFieldExpr ')' ] $|$ \\
+& & NonScalarType $|$ \\
+& & enumeration . \\
+Bounds & = & '[' ArrayBounds \{ ',' ArrayBounds \} ']' .
+\end{grammar}
+Examples of variables declarations:
+\begin{quote}\tt
+b:~boolean; \\
+a:~ARRAY[integer] OF char; \\
+bv:~BoolArray; \\
+rv:~RecArray[false..true, 10](100);
+\end{quote}
+The following rules hold for the initial values of variables.
+The initial value of a scalar variable is undefined (i.e., it may be any value).
+A variable of a nodename type is initialized to the value NIL,
+which does not name any node (trying to dereference it causes a run-time error).
+Sets, bags, and graphs are initially empty.
+
+An array variable whose initial bounds are specified is initialized to an
+array with one component for every index value from
+its lower bound to its upper bound.
+If the initial bounds are not specified in the variable declaration,
+the default bounds specified in the array type declaration (see
+Section \ref{sec:union_types}) are used instead.
+If neither the variable declaration nor the array type declaration
+specifies the bounds, the variable is initialized to an empty array;
+trying to access any component of an empty array causes a run-time error.
+
+For a union variable, the tag field is initialized with the value
+specified in the tag initializer (if any).
+The corresponding field
+is initialized (see below) and may from then on be accessed.
+If there is no corresponding field, a run-time error occurs.
+If no initial value is given, no fields may be accessed.
+Trying to access an invalid field of a union causes
+a run-time error.
+
+For objects, the initialization code specified in the object
+implementation part is executed (see Section \ref{sec:objects}).
+Components of arrays and fields of records, unions, graphs, and objects
+are initialized using the same rules as for variables.
+\section{Expressions}\label{sec:expressions}
+
+Expressions consist of operands and operators, possibly grouped together
+by parentheses.
+\subsection{Operands}\label{sec:operands}
+
+An operand can be
+a character constant, string constant,
+number, enumeration literal,
+a constant declared in a constant declaration,
+or a {\em designator}.
+A designator designates a variable, a parameter, an element of an array,
+or a component of a record, union, graph, node, or object.
+A designator contains an identifier and possibly one or more selectors.
+
+If A is an array and E1, E2, ..., Ei, ..., En are expressions of the ith
+index type of A, then A[E1, E2, ..., Ei, ..., En]
+denotes the component of A with index value E1, E2, ..., Ei, ..., En.
+If Ei is not between the current lower and upper bound of the ith dimension of A,
+a run-time error occurs.
+
+If R is a record, then R.F denotes field F or R.
+If U is a union, then U.F denotes field F of U.
+The tag of U determines which field
+of U may be accessed; trying to access an illegal field causes
+a run-time error.
+
+If G is a graph, then G.F denotes a global field F of G.
+If N is a nodename of G, then G[N].F denotes
+field F of the node named by N.
+A run-time error occurs if N is NIL
+or if N is not the name of any node of G
+(e.g., N has been deleted from G).
+If G is a graph, G!F denotes G[G.F].
+
+If O is an object and V the name of a local variable of O, then
+O.V denotes this variable. This construct is only allowed in the
+implementation part of O's object type.
+
+If F is a function, then F(...) implies activating this function and
+stands for the resulting value; F without a parameter list stands
+for the function itself.
+If V is a variable, then V refers to the variable's current value.
+\begin{grammar}
+designator & = & qualident \{'.' ident $|$ '[' ExpList ']' $|$ '!' ident \} .
+\end{grammar}
+\subsection{Operators}
+
+The precedences among the operators are similar to those of Modula-2.
+From high to low, these precedences are:
+(1) the NOT operator; (2) the multiplying operators;
+(3) the adding operators; and (4) relational operators.
+\begin{grammar}
+expression & = & SimpleExpr [relation SimpleExpr] . \\
+relation & = & '=' $|$ '/=' $|$ '$<$' $|$ '$>$' $|$ '$<$=' $|$ '$>$=' $|$ IN . \\
+SimpleExpr & = & ['+'$|$'$-$'] term \{AddOperator term\} . \\
+AddOperator & = & '+' $|$ '$-$' $|$ OR $|$ '$|$' $|$ '\verb+^+' $|$ '$<<$' $|$ '$>>$'  . \\
+term & = & factor \{MulOperator factor\} . \\
+MulOperator & = & '*' $|$ '/' $|$  '\%' $|$ AND $|$ '\&' . \\
+factor & = & number $|$ char $|$ string $|$ designator $|$ FunctionCall $|$ \\
+& & NonArrayAggregate $|$ ArrayAggregate $|$ \\
+& & OperationCall $|$ '(' expression')' $|$ NOT factor $|$ '\verb+~+' factor $|$ \\
+& & FROM '(' designator ')' . \\
+ExpList & = & expression \{',' expression \} . \\
+ArrayAggregate & = & qualident ':' '['  [ArrayElList] ']' . \\
+ArrayElList & = & ExpList $|$  \\
+& & '[' ArrayElList ']' \{ ',' '[' ArrayElList ']' \} . \\
+NonArrayAggregate & = & qualident ':' '\{'  [ExpList] '\}' .
+\end{grammar}
+\subsubsection{Arithmetic operators}
+
+The operators +, $-$, *, and / apply to operands of type integer and real;
+the modulo operator ``\%'' only applies to integers.
+Both operands must be of the same type; the resulting value has the
+type of the operands.
+For the modulo operator, the right operand must be positive; the value
+of ``a \% b'' is the remainder of the division ``a / b''.
+The bitwise operatators only apply to integers and return an integer result.
+The bitwise operators supported are: ``\&'' (and), ``$|$'' (or), ``\verb+^+''
+(exclusive or), ``$<<$'' (left shift), ``$>>$'' (right shift),
+and ``\verb+~+'' (complement).
+\subsubsection{Logical operators}
+
+The operators OR, AND, and NOT apply to boolean operands and return
+a boolean result.
+The right-hand-side operands of AND and OR are only evaluated if
+necessary.
+\subsubsection{Set and bag operators}
+
+Operators defined for sets and bags are:
+IN, FROM, +, $-$, *, and /.
+IN tests if a given element (the left operand) is a member of the set or bag.
+FROM removes and returns an arbitrary element of the set or bag.
+It causes a run-time error if the set or bag is empty.
+Set union, difference, intersection, and symmetric difference are defined
+as in Modula-2.
+Specific elements can be added to or deleted from a set or bag through the
+INSERT and DELETE statements discussed in Section \ref{sec:standard_funcs}.
+\subsubsection{Relations}\label{sec:relations}
+
+The relations $<$, $<$=, $>$, and $>$= can be applied to
+types char, integer, real, and to enumeration types.
+The relations = (equal) and /= (not equal) apply to all types
+except graphs, objects, opaque types, and types containing any
+of these as (sub-) components.
+The relation IN tests for set or bag membership (see above).
+\subsubsection{Aggregates}
+
+An aggregate is a value of a set, bag, array, record, or union type.
+The aggregate specifies the name of the type and values for its components.
+For sets, bags, and arrays the values must be of the same type.
+If the index type of an array is integer, the corresponding lower bound
+of an array aggregate is always 1, so assigning an
+array aggregate to an array variable causes the variable's corresponding lower bound
+to be set to 1; the upper bound then becomes the length of the aggregate.
+If the corresponding index type is an enumeration type, the
+corresponding lower bound is the first enumeration literal of the
+enumeration type. If the corresponding index type is the character type,
+the corresponding lower bound is the first character in the range
+of character values (which is implementation dependent).
+For a record, a value must be given for each field of the record, in the
+order of the record type declaration.
+For a union, exactly two values must be supplied.
+The first value must be a constant expression denoting the value of
+the tag field.
+The second value must be an expression of the type corresponding to
+the value of the tag.
+Examples of aggregates:
+\begin{quote}\tt
+rr:\{4, 9.9, false\}~~~~~~~~~~~~~~~~~~~~~\# see \ref{sec:record_types} \\
+uu:\{9, 3.14\}~~~~~~~~~~~~~~~~~~~~~~~~~~~\# see \ref{sec:union_types} \\
+BoolArray:[true, true, false, true]~~~~\# see \ref{sec:array_types} \\
+IntSet:\{3,4,5\}~~~~~~~~~~~~~~~~~~~~~~~~~\# see \ref{sec:set_types} \\
+IntSet:\{ \}~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\# empty set \\
+RealBag:\{0.2, 0.4, 0.4, 0.89, 34.8\}~~~~\# see \ref{sec:set_types}
+\end{quote}
+\section{Statements}
+
+Orca has the following kinds of statements:
+\begin{grammar}
+statement & = & [assignment $|$ OperationCallStatement $|$ FunctionCallStatement $|$ \\
+& & ForkStatement $|$ EXIT  $|$ RETURN [expression]  $|$ \\
+& & IfStatement $|$ CaseStatement $|$ WhileStatement $|$ \\
+& & RepeatStatement $|$ DoStatement $|$ ForStatement  ] .
+\end{grammar}
+\subsection{Assignments}\label{sec:assignment}
+
+Assignment is defined for every type, whether scalar or structured.
+Assigning a value E to a variable V implies that the old value of V
+is lost and a copy of E is assigned to V.
+The only restriction is that E and V must have the same type.
+For array variables, assignment may cause the bounds of the array to
+be changed, for example:
+\begin{quote}\tt
+TYPE table = ARRAY[integer] OF integer; \\
+A:~table[1..10]; \\
+B:~table[20..100]; \\
+...\\
+A := B;
+\end{quote}
+Likewise, assignment to a union variable may cause its
+tag field to be changed.
+
+Orca supports simple assignment (:=) as well as assignment operators.
+The construct A {\bf op}:= B is equivalent to A := A {\bf op} B,
+except that A is evaluated only once;
+the construct is only defined if the given operator is defined on A and B
+and returns a value of the same type as A.
+\begin{grammar}
+assignment & = & designator AssignOperator expression . \\
+AssignOperator & = & ':=' $|$ '+:=' $|$ '$-$:=' $|$ '*:=' $|$ '/:=' $|$ '\%:=' .
+\end{grammar}
+\subsection{Operation calls}\label{sec:op_calls}
+
+An operation call invokes an operation on an object.
+The designator denotes the object to which the operation is applied.
+The identifier specifies the name of the operation.
+The specification part of the object's type declaration must contain an
+operation with the given name.
+The invocation must contain one actual parameter for every formal parameter
+specified in the declaration of the operation.
+The parameter mechanism is discussed in Section \ref{sec:formals}.
+\begin{grammar}
+OperationCallStatement & = & OperationCall . \\
+OperationCall & = & ObjectDesignator '\$' ident ActualParams . \\
+ActualParams & = & '(' [ExpList] ')'. \\
+ObjectDesignator & = & designator .
+\end{grammar}
+\subsection{Function calls}
+
+A function call activates a function.
+It must contain one actual parameter for every formal parameter specified
+in the declaration of the function being called.
+\begin{grammar}
+FunctionCallStatement & = & FunctionCall . \\
+FunctionCall & = & FunctionDesignator ActualParams . \\
+FunctionDesignator & = & designator .
+\end{grammar}
+\subsection{Forks}
+
+A fork statement creates a new, asynchronous, process.
+The calling (forking) process continues immediately.
+The on-expression specifies the processor on which to run the new process.
+If the ON-part is omitted, the new process is run on the same
+processor as the invoking process.
+The number of processors available can be obtained through the
+standard function NCPUS (see Section \ref{sec:standard_funcs}).
+A fork statement is only allowed within the implementation
+part of a process (see Section \ref{sec:processes}).
+(So, it is not allowed within a function or operation.)
+
+The fork statement must contain one actual parameter for every
+formal parameter specified in the declaration of the process.
+Objects may be passed as shared parameter (see Section \ref{sec:processes}),
+thus establishing a communication channel between the forking process and the
+forked process.
+As forks are only allowed within processes, only objects declared
+local to a process (or declared in the parameter section of a process)
+can be shared.
+\begin{grammar}
+ForkStatement & = & FORK ProcessIdentifier ActualParams [ON expression] . \\
+ProcessIdentifier & = & qualident .
+\end{grammar}
+\subsection{Statement sequences}
+
+The statement sequences described below are equivalent to their
+Modula-2 counterparts, except for a slightly different syntax.
+\begin{grammar}
+StatementSeq & = & \{statement ';'\} .
+\end{grammar}
+\subsection{If statements}
+
+An if statement contains one or more boolean expressions.
+These expressions are evaluated in sequence, until one of them succeeds.
+The statement sequence associated with this expression is executed.
+If all expressions fail, the statement sequence in the ELSE part is executed,
+if present.
+\begin{grammar}
+IfStatement & = & IF expression THEN StatementSeq \\
+& & \{ELSIF expression THEN StatementSeq \} \\
+& & [ELSE StatementSeq] FI .
+\end{grammar}
+\subsection{Case statements}
+
+A case statement specifies a number of alternative statement sequences,
+each proceeded by a list of one or more labels.
+Each label is a constant expression of the same type as the expression
+after the keyword CASE.
+All labels in the case statement must have different values.
+The expression is evaluated and the statement sequence whose list contains
+the right value is executed.
+If none of the label lists contains the value, the statement sequence in
+the ELSE part is executed, if present;
+if there is no ELSE part either, a run time error occurs.
+\begin{grammar}
+CaseStatement & = & CASE expression OF case \{ '$|$' case \} \\
+& & [ELSE StatementSeq] ESAC . \\
+case & = & CaseLabelList '=$>$' StatementSeq . \\
+CaseLabelList & = & CaseLabels \{',' CaseLabels\} . \\
+CaseLabels & = & ConstExpr ['..' ConstExpr] .
+\end{grammar}
+\subsection{While statements}
+
+A while statement specifies repeated execution of a sequence of
+statements.
+The expression is evaluated before every iteration.
+The statement terminates when this evaluation yields ``false''.
+\begin{grammar}
+WhileStatement & = & WHILE expression DO StatementSeq OD .
+\end{grammar}
+\subsection{Repeat statements}
+
+A repeat statement specifies repeated execution of a sequence of statements.
+The expression is evaluated after every iteration.
+The statement terminates when this evaluation yields ``true''.
+\begin{grammar}
+RepeatStatement & = & REPEAT StatementSeq UNTIL expression .
+\end{grammar}
+\subsection{For statements}
+
+A FOR statement iterates either over (1) a range or (2) a set or bag.
+In the second case, the set or bag may be changed in the loop,
+but this does not affect the number of iterations; the collection of
+values used to iterate over is determined before the loop starts.
+The loop variable is declared automatically, by mentioning it in the 
+iterator part of the FOR statement. Its scope is the range of the FOR
+statement.
+The loop variable may not be assigned to in the body of the loop or be passed
+as a shared or output parameter to a function, operation, or process.
+\begin{grammar}
+ForStatement & = & FOR iterator DO StatementSeq OD . \\
+iterator & = & ident IN (range $|$ expression) . \\
+range & = & expression '..' expression .
+\end{grammar}
+\subsection{Do statements}
+
+A do-statement specifies repeated execution of a sequence of statements.
+The statement is terminated by an exit or return statement inside the
+sequence of statements.
+\begin{grammar}
+DoStatement & = & DO StatementSeq OD .
+\end{grammar}
+\subsection{Return and exit statements}
+
+A return statement may only appear in a function implementation
+and terminates that function.
+If the declaration of the function specifies a result value (see
+Section \ref{sec:functions}),
+the return statement must specify an expression, whose type must
+be the same as the function result type.
+
+An exit statement can only appear in a loop (of any kind, i.e.
+for-loop, while-loop, repeat-loop, or do-loop). It terminates the enclosing loop
+and resumes execution after the loop statement.
+\section{Function declarations}\label{sec:functions}
+
+A function in Orca is similar to a Modula-2 procedure.
+Functions may (but need not) return a result, as indicated in the
+function declaration. If a function returns a result, its body must
+be exited through a RETURN statement that defines the return value.
+
+A function declaration consists of a specification and an implementation part.
+A function specification may only appear in a module or object
+specification (see Sections \ref{sec:modules} and \ref{sec:objects}).
+Constants, variables, and types declared within a function are not
+visible outside the function.
+Functions cannot be nested.
+\begin{grammar}
+FunctionSpec & = & FUNCTION ident FormalParams [':' qualident]';' . \\
+FunctionImpl & = & FunctionSpec  block . \\
+block & = & \{declaration\} BEGIN StatementSeq END';' . \\
+declaration & = & ConstantDecl $|$ TypeDecl $|$ VariableDecl .
+\end{grammar}
+\subsection{Formal parameters}\label{sec:formals}
+
+There are three kinds of formal parameters for functions, operations and
+processes: input, output, and shared parameters.
+By default, parameters are input.
+An operation may only have input and output parameters (see Section \ref{sec:objects}).
+A process may only have input parameters and shared parameters of an
+object type (see Section \ref{sec:processes}).
+
+A formal {\em input} parameter stands for a local variable that is initialized
+with the value of the actual parameter, which must be an expression
+of the same type as the formal.
+The expression is evaluated before the function, operation, or process
+is activated.
+If the actual parameter is an array, the formal parameter has the same
+lower and upper bound(s) as the actual parameter.
+The formal parameter can be modified, but doing so does not affect
+the actual parameter.
+
+A formal {\em output} parameter is a local variable;
+it is initialized using the same rules as for variable declarations
+(see Section \ref{sec:variables}).
+(For output parameters of an array or union type, the array bounds 
+or tag may be initialized.)
+The actual parameter must be a variable or component of the same type.
+On return of the function or operation,
+the value of the formal is assigned to the actual parameter.
+The semantics of this assignment are the same as for normal assignment
+statements (see Section \ref{sec:assignment}).
+Therefore, output parameters are not allowed for object types or types
+containing objects types as (sub-) components.
+Output parameters essentially allow a function or operation to return multiple
+results.
+
+If a formal parameter is {\em shared}, the formal parameter
+denotes the actual parameter, which must be a variable of the same type.
+A compile-time or run-time error occurs if
+one shared or output actual parameter denotes either:
+\begin{enumerate}
+\item
+the same variable as another actual parameter (of any mode), or
+\item
+a component of another actual parameter (of any mode), or
+\item
+a variable of which another actual parameter (of any mode) is a component.
+\end{enumerate}
+
+(This rule eliminates the possibility of {\em aliasing}.)
+\begin{grammar}
+FormalParams & = & '(' [FPSection \{';' FPSection\} ] ')' . \\
+FPSection & = &  IdentList ':' FormalSpec . \\
+FormalSpec & = & [IN $|$ SHARED] FormalType $|$ OUT subtype . \\
+FormalType & = & qualident .
+\end{grammar}
+
+Note that a function can read or modify its environment
+(i.e., non-local variables) only in the following three ways:
+\begin{enumerate}
+\item
+Variables passed as shared parameters can be read and written.
+\item
+Variables passed as input parameter are read when the function is called,
+but cannot be written.
+\item
+Variables passed as output parameters can be written (but not read).
+\end{enumerate}
+
+Other variables cannot be accessed.
+\subsection{Standard functions}\label{sec:standard_funcs}
+
+Orca supports the following Modula-2 standard functions:
+ABS, CAP, CHR, FLOAT, MAX, MIN, ODD, ORD, TRUNC, and VAL.
+\begin{description}
+\item[ABS(expr)]
+Returns the absolute value of the argument.
+\item[CAP(ch)]
+Returns the corresponding upper case letter if ch
+is a lower case letter; else it returns ch.
+\item[CHR(x)]
+Returns the character with ordinal number x.
+\item[FLOAT(expr)]
+Returns the value of the expression as a real; the expression itself
+must have the integer type.
+\item[MAX(T)]
+Returns the maximum value of type T.
+T must be a scalar type.
+\item[MIN(T)]
+Returns the minimum value of type T.
+T must be a scalar type.
+\item[ODD(expr)]
+Returns 1 if the expression is odd and 0 if it is even.
+\item[ORD(expr)]
+Returns the ordinal value of the expression, which must be of
+type char or integer or of some enumeration type.
+\item[TRUNC(expr)]
+Returns the value of the expression truncated to an integer.
+\item[VAL(T, expr)]
+Returns the value of type T whose ordinal number is given by the expression.
+\end{description}
+
+In addition, Orca provides the following functions:
+\begin{description}
+\item[NCPUS()]
+Returns the number of processors available to this program.
+This value remains the same during the entire execution
+of the program.
+\item[MYCPU()]
+Returns the number of the processor the calling process executes on.
+Processors are numbered sequentially, the first (initial) processor
+having number 0.
+\item[ADDNODE(g)]
+Adds a new node to graph g and returns the nodename of it;
+if g is of type {\em T}, the value returned is of type NODENAME OF {\em T}.
+A node can be deleted from a graph through the DELETENODE statement.
+\item[DELETENODE(g, p)]
+Deletes the node named by p
+from g. A run-time error occurs if g does not have a node
+with the given name.
+Also, any future references to the deleted node will cause a
+run-time error.
+\item[LB(expr, d), LB(expr)]
+Returns the current lower bound of the array expr.
+d must be a constant integer indicating the dimension
+of which the lower bound is requested. It may be omitted, in which case it
+defaults to 1.
+\item[UB(expr, d), UB(expr)]
+Returns the current upper bound of the array expr.
+d must be a constant integer indicating the dimension
+of which the upper bound is requested. It may be omitted, in which case it
+defaults to 1.
+\item[SIZE(expr)]
+Returns the number of elements of the set, bag or array expr.
+\item[DELETE(e, desig)]
+Deletes an element e from a set or bag desig;
+it has no effect if the element
+is not a member of the set or bag.
+\item[INSERT(e, desig)]
+Adds a new element e to a set or bag desig.
+\item[ASSERT(expr)]
+Checks if the boolean expression expr yields true;
+if not, it causes a run-time error.
+\end{description}
+
+Also, Orca supports the pseudo-functions Read, Write and WriteLine.
+These functions can be called with any number of arguments.
+Each argument must have one of the following types: integer, real, char,
+or string.
+The function Read reads its arguments from the standard input;
+The function Write prints its arguments on the standard output, in
+readable (ASCII) form;
+WriteLine is similar to Write, but in addition prints a new-line symbol
+after all parameters have been printed.
+
+The functions MYCPU, Read, Write, and WriteLine should not be called from
+within operations (neither directly nor indirectly through other functions),
+or the behavior will be undefined.
+\section{Modules}\label{sec:modules}
+
+A module is a compile-time construct for grouping declarations of
+constants, types, functions, and processes.
+Each module consists of two parts: a specification and
+an implementation part.
+All entities declared in a module specification are made available
+to users of the module.
+The specification may not contain function or process implementations (only
+specifications).
+If a function or process specification appears in a module specification, the
+corresponding implementation must appear in the module implementation.
+\begin{grammar}
+ModuleSpec & = & MODULE SPECIFICATION ident ';' \\
+& & \{import $|$ GenericInstantiation $|$ ConstantDecl $|$ \\
+& &  TypeDecl $|$ OpaqueTypeDecl $|$ \\
+& & FunctionSpec $|$ ProcessSpec \} END . \\
+import & = & [FROM ident] IMPORT IdentList ';' . \\
+OpaqueTypeDecl & = & TYPE ident ';' . \\
+ModuleImpl & = & MODULE IMPLEMENTATION ident ';' \\
+& & \{import $|$ GenericInstantiation $|$ \\
+& & ConstantDecl $|$ TypeDecl\} \\
+& & \{FunctionImpl $|$ ProcessImpl\} END .
+\end{grammar}
+
+Both module specifications and implementations may contain import lists
+and generic instantiations.
+If an import list specifies the name of another module (through
+a FROM clause), the imported identifiers can be used directly (i.e., without
+qualifying them). These identifiers must have been declared in the
+specification part of the module mentioned in the FROM clause.
+If an enumeration type is imported, the values appearing in
+its type declaration (see Section \ref{sec:enumeration_types}) are imported as well.
+These values can also be imported separately, without importing
+the enumeration type name.
+
+If the FROM clause is not present, all imported identifiers
+are assumed to be modules or objects that have been compiled earlier.
+The module or object name becomes directly visible; identifiers defined
+in the specification part of a module are made available, but have to
+be qualified.
+In any case, identifiers declared in a module specification are directly
+visible in the corresponding module implementation.
+
+A generic instantiation creates a new module or object type from a
+generic definition (see Section \ref{sec:generics}). The instantiation is given a name,
+which is imported automatically.
+
+A module specification may contain opaque-type declarations.
+Such a declaration only specifies the name of the type.
+The corresponding full type declaration must be given in the
+module implementation;
+this type must be a nodename type.
+No properties of the full type are visible outside the implementation module.
+\section{Object type declarations}\label{sec:objects}
+
+Objects in Orca are instances of abstract data types (object types).
+An object type definition consists of a {\em specification} part and
+an {\em implementation} part.
+The specification part specifies the operations that can be applied to instances
+(objects) of the object type.
+All operations appearing in the same object specification part must have
+different names.
+The specification part can also specify functions; such functions cannot
+directly access the object's data, but they can invoke operations
+on the object.
+
+Objects are created by declaring variables of an object type
+or structures containing components of an object type.
+Each object has its own private data, which can only be accessed through
+the operations.
+
+The implementation part specifies the data stored in each instance
+and contains the implementation code of the operations and functions
+and the code for initializing objects.
+The initialization code is executed whenever an object of this type
+is created.
+Both the specification and the implementation part may contain import lists
+and generic instantiations.
+\begin{grammar}
+ObjectTypeSpec & = & OBJECT SPECIFICATION ident ';' \\
+& & \{import $|$ GenericInstantiation $|$ \\
+& & ConstantDecl $|$ TypeDecl $|$ OpaqueTypeDecl $|$ \\
+& & FunctionSpec\} \{OperationSpec\} END . \\
+ObjectTypeImpl & = & OBJECT IMPLEMENTATION ident ';' \\
+& & \{import $|$ GenericInstantiation$|$ \\
+& & ConstantDecl $|$ TypeDecl $|$ VariableDecl\} \\
+& & \{OperationImpl $|$ FunctionImpl\} \\
+& & [BEGIN StatementSeq] END .
+\end{grammar}
+
+An operation specification is similar to
+a function specification.
+Operations may have input parameters and
+may return one or more values through output parameters
+or a return value.
+An operation cannot have shared parameters.
+\begin{grammar}
+OperationSpec & = & OPERATION ident FormalParams [':' qualident] ';' .
+\end{grammar}
+Example of an object specification:
+\begin{quote}\tt
+OBJECT SPECIFICATION IntObject; \\
+\mbox{~~~~~}OPERATION value():~integer;~~~~~~~~\# return value \\
+\mbox{~~~~~}OPERATION assign(v:~integer);~~~~~~\# assign new value \\
+\mbox{~~~~~}OPERATION inc();~~~~~~~~~~~~~~~~~~~\# indivisibly increment value \\
+\mbox{~~~~~}OPERATION AwaitValue(v:~integer);~~\# wait for certain value \\
+END;
+\end{quote}
+
+An operation implementation is similar to a function implementation.
+Besides its own local variables and input parameters,
+an operation can access the data of the object it is applied to.
+An operation defined for object type {\em T} can also access the internal data
+of any input parameter or local variable of type {\em T}, using a qualified
+identifier.
+In addition, an operation can refer to the complete object using the
+standard identifier SELF, to perform another operation on it.
+\begin{grammar}
+OperationImpl & = & OperationSpec \{declaration\} OperationBody . \\
+OperationBody & = & BEGIN (StatementSeq $|$ guard \{guard\}) END ';' . \\
+guard & = & GUARD expression DO StatementSeq OD ';' .
+\end{grammar}
+
+Operations on objects may consist of one or more guards.
+The expression in the guard is any boolean expression (possibly having
+side-effects on the object's data).
+An operation invocation blocks until one or more of the guards
+are true; next, one true guard is chosen nondeterministically and its
+statement sequence is executed.
+An operation without guards does not block, but simply executes its
+statement sequence.
+
+All operation invocations are executed {\em indivisibly}.
+Conceptually, all operations on the same object are serialized.
+If an operation blocks (either in a guard or in an operation call to
+a sub-object), it has no effects and is tried
+again later, until it completes without blocking.
+Example of an object implementation:
+\begin{quote}\tt
+OBJECT IMPLEMENTATION IntObject; \\
+\mbox{~~~~~}x:~integer;~~~~~~~~~~~~~~~~~~~~~~\# internal data \\
+\mbox{~~~~~}OPERATION value():~integer; \\
+\mbox{~~~~~}BEGIN \\
+\mbox{~~~~~~~~~~}RETURN x;~~~~~~~~~~~~~~~~~~~\# return current value \\
+\mbox{~~~~~}END; \\
+\mbox{~~~~~}OPERATION assign(v:~integer); \\
+\mbox{~~~~~}BEGIN \\
+\mbox{~~~~~~~~~~}x := v;~~~~~~~~~~~~~~~~~~~~~\# assign new value \\
+\mbox{~~~~~}END; \\
+\mbox{~~~~~}OPERATION inc(); \\
+\mbox{~~~~~}BEGIN \\
+\mbox{~~~~~~~~~~}x +:= 1;~~~~~~~~~~~~~~~~~~~~\# increment \\
+\mbox{~~~~~}END; \\
+\mbox{~~~~~}OPERATION AwaitValue(v:~integer); \\
+\mbox{~~~~~}BEGIN \\
+\mbox{~~~~~~~~~~}GUARD x = v DO OD;~~~~~~~~~~\# block until value equals v \\
+\mbox{~~~~~}END; \\
+\mbox{~~~~~}x := 0;~~~~~~~~~~~~~~~~~~~~~~~~~~\# initialize objects to zero \\
+END;
+\end{quote}
+\section{Data module declarations}\label{sec:data_modules}
+
+Data modules are an encapsulation of write-once data.
+There are no global variables in Orca, but there is global data, initialized
+during program initialization.
+Each data module consists of two parts: a specification and
+an implementation part.
+All entities declared in a data module specification are made available
+to users of the module, through the usual scope rules, as described in Section
+\ref{sec:scope}.
+\begin{grammar}
+DataSpec & = & DATA MODULE SPECIFICATION ident ';' \\
+& & \{import\} \\
+& & \{(ConstantDecl$|$TypeDecl$|$GenericInstantiation$|$VariableDecl)\}. \\
+DataImpl & = & DATA MODULE IMPLEMENTATION ident ';' \\
+& & \{import\} \\
+& & \{(ConstantDecl$|$TypeDecl$|$GenericInstantiation)\} \\
+& & \{FunctionImpl\} \\
+& & BEGIN StatementSeq END ';'.
+\end{grammar}
+A data specification module thus may not contain function - or process specifications.
+The variables mentioned in the data specification module must be initialized by the code
+in the data implementation module, which is the only code that is allowed to write
+the variables.
+It is not allowed to assign a function declared in a data module implementation
+to a function variable.
+
+During program initialization, the statement sequence in the data implementation
+is executed.
+This statement sequence should take care of the initialization of the variables
+declared in the data module specification.
+The functions MYCPU, Write, and WriteLine should not be called from
+within this statement sequence (neither directly nor indirectly through functions),
+or the behavior will be undefined.
+The behavior of interactive reads is also undefined, but input from a file
+is allowed.
+
+An example data module specification:
+\begin{quote}\tt
+DATA MODULE SPECIFICATION wght; \\
+\mbox{~~~~~}TYPE w = ARRAY[integer] OF real; \\
+\mbox{~~~~~}weights:~w;~~~~~~~~~~~~~~~~~~~~~~~~~\# the write-once data \\
+END; \\
+\end{quote}
+\begin{quote}\tt
+DATA MODULE IMPLEMENTATION wght; \\
+\mbox{~~~~~}CONST TABSZ = 100; \\
+\mbox{~~~~~}FUNCTION Init(a:~OUT w[1..TABSZ]; \\
+\mbox{~~~~~~~~~~}FOR i IN 1..TABSZ do a[i] := FLOAT(TABSZ)/FLOAT(i); \\
+\mbox{~~~~~}END; \\
+BEGIN \\
+\mbox{~~~~~}Init(weights); \\
+END;
+\end{quote}
+An example use:
+\begin{quote}\tt
+... \\
+IMPORT wght; \\
+... \\
+\mbox{~~~~~}function\_call(wght.weights[i]); \\
+...
+\end{quote}
+or
+\begin{quote}\tt
+... \\
+FROM wght IMPORT weights; \\
+... \\
+\mbox{~~~~~}function\_call(weights[i]); \\
+... 
+\end{quote}
+\section{Process declarations}\label{sec:processes}
+
+Parallelism in Orca is based on {\em processes}.
+Like a function, a process may have parameters and sequentially
+executes its code.
+Unlike functions, however, the calling (forking) process and the created
+process execute asynchronously (in parallel).
+A process declaration consists of a specification and an implementation.
+A process specification may also be given separately, but only in a module
+specification (see Section \ref{sec:modules}).
+
+A process has two kinds of parameters: input parameters and shared
+parameters; it cannot have output parameters.
+An input parameter is similar to the input parameter of a function:
+the actual parameter is copied into a local variable of the process.
+There is no restriction on the type of the formal parameter.
+Shared parameters are also similar to shared parameters of a function.
+For processes, however, only {\em objects} can be passed by sharing.
+Other data can only be passed by value.
+\begin{grammar}
+ProcessSpec & = & PROCESS ident FormalParams ';' . \\
+ProcessImpl & = & ProcessSpec block . \\
+\end{grammar}
+\section{Generic units}\label{sec:generics}
+
+A generic unit is a module or object type definition
+parametrized with {\em types}, {\em functions}, and {\em constants}.
+Unlike concrete units, a generic unit cannot be used directly,
+but must first be instantiated.
+The instantiation must provide an actual type, function, or constant for every
+formal parameter.
+A generic unit is like a template from which several concrete units
+may be derived.
+\begin{grammar}
+GenericUnitSpec & = & GENERIC '(' GenericParameter \{ ';' GenericParameter\} ')' \\
+& & (DataSpec$|$ModuleSpec$|$ObjectTypeSpec) \\
+& & [GENERIC] . \\
+GenericUnitImpl & = & GENERIC \\
+& & (DataImpl$|$ModuleImpl$|$ObjectTypeImpl) \\
+& & [GENERIC] . \\
+GenericParameter & = & [NUMERIC $|$ SCALAR] TYPE ident $|$ FunctionParam $|$ \\
+& & CONST ident ':' ident . \\
+FunctionParam & = & FUNCTION ident FormalParams [':' qualident] . \\
+GenericInstantiation & = & (OBJECT $|$ MODULE) ident '=' \\
+& & NEW ident '(' GenericActual \{',' GenericActual\} ')' ';' . \\
+GenericActual & = & number $|$ char $|$ ident .
+\end{grammar}
+The generic declaration imposes a restriction on
+the actual type parameters.
+The actual type is required to be either (1) a numeric type
+(integer or real), (2) a scalar type (integer, real, char, or
+an enumeration type), or (3) any type.
+This restriction determines how the formal parameter may be used
+in the implementation of the generic unit.
+For general types, only assignment and parameter passing may be used.
+For scalar types, the relational operators =, /=, $<$, $<$=, $>$, and $>$= may
+also be used.
+For numeric types, the arithmetic operators +, $-$
+(both unary and binary), *, and / and the assignment
+operators +:=, $-$:=, *:=, and /:= may be used in addition to the relational
+and general operators.
+
+A generic instantiation creates a new module or object with a given name.
+This name becomes directly visible; identifiers defined
+in the specification part of an instantiated
+module are made available, but have to
+be qualified.
+
+Generic units also may take functions as arguments.
+The parameters and result values of these functions may be of a type
+declared as formal parameter to the generic unit.
+This makes it possible to supply operators needed in the implementation
+of the generic unit, by encapsulating them in functions.
+
+A generic unit U1 may use another generic unit U2 by instantiating it in
+its specification or implementation part.
+The actual parameters used in such an instantiation may be formal
+generic parameters of U1.
+In this case, the restrictions imposed on the formal type parameters 
+of U1 must be at least as restrictive as those for U2.
+For example:
+\begin{quote}\tt
+GENERIC (SCALAR TYPE T2) \\
+OBJECT SPECIFICATION U2; \\
+\mbox{~~~~~}... \\
+END GENERIC; \\
+\end{quote}
+\begin{quote}\tt
+GENERIC (NUMERIC TYPE T1) \\
+OBJECT SPECIFICATION U1; \\
+\mbox{~~~~~}OBJECT TYPE T\_list = NEW U2(T1); \\
+\mbox{~~~~~}... \\
+END GENERIC;
+\end{quote}
+\section{Compilation units}
+
+Orca programs are presented to the compiler as compilation units.
+A compilation unit can be a (possibly generic) module or object specification
+or implementation.
+After a unit has been compiled successfully,
+it may be used (imported) by other units.
+
+The way compilation units are stored in files, presented to the
+compiler, and linked into executable programs is implementation dependent.
+One of the compilation units constituting a program must define
+a process called ``OrcaMain''. When the program is executed,
+this process is started on CPU 0.
+\begin{grammar}
+CompilationUnit & = &  (DataSpec $|$ DataImpl $|$ \\
+& & ModuleSpec $|$ ModuleImpl $|$ \\
+& & ObjectTypeSpec $|$ ObjectTypeImpl $|$ \\
+& & GenericUnitSpec $|$ GenericUnitImpl) ';' .
+\end{grammar}
+\section{Performance semantics}
+
+The previous sections define the Orca language.
+This section will describe the implementation model of Orca on
+a distributed system.
+Programmers need to have some idea of this model to be able to
+write efficient programs.
+
+The most important issue is how to implement objects that are shared
+among multiple processes on different machines.
+The key idea in the implementation is to replicate such
+shared objects in the local memories of these machines.
+As a result, operations that only {\em read} the object will usually
+be executed without doing physical interprocessor communication.
+Operations that {\em write} (i.e., change) a shared object usually
+will involve IPC.
+This is not to say an implementation of Orca guarantees this
+property for all objects, but it is the general model programmers should
+keep in mind.
+Note that any operation that assigns to a local variable of the
+object is classified as a write-operation, so, for example,
+enqueue and dequeue operations on a shared queue object will probably both
+be write-operations, since they both have to change the variables
+of the queue.
+
+Although the guard expressions may have side-effects (i.e., change
+the object's data), such alternatives will be implemented very inefficiently,
+because the state of the object has to be copied before the alternative
+is tried.
+Likewise, if an object X contains another (nested) object as local variable
+and an operation P on X invokes a (possibly) blocking operation on this
+nested object, the state of object X has to be copied before execution of P is
+started.
+
+If an operation contains multiple guards, the read/write analysis will
+be applied to each of the alternatives separately, and read alternatives
+will be tried before write alternatives.
+For example, the operation 
+\begin{quote}\tt
+OPERATION update(newval:~integer); \\
+BEGIN \\
+\mbox{~~~~~}IF newval $>$ x THEN x := newval; FI \\
+\mbox{~~~~~}\# x is a local variable of the object \\
+END;
+\end{quote}
+is a write operation, while
+\begin{quote}\tt
+OPERATION update(newval:~integer); \\
+BEGIN \\
+\mbox{~~~~~}GUARD newval $>$ x DO x := newval; OD; END; \\
+\mbox{~~~~~}GUARD newval $<$= x DO OD; END; \\
+END;
+\end{quote}
+will be a read-operation (and probably not cause IPC) if newval $<$= x, and
+a write-operation otherwise.
+
+Orca compilers can optimize input parameters of functions.
+A data structure that is passed by value and that is not changed in the
+called function can be implemented as if it were passed by reference.
+Hence, if a complex data structure needs to be passed by value to
+a function, the formal parameter should not be declared as a reference
+(shared) parameter.
+In fact, if the parameter is declared as shared,
+the compiler assumes that the function will
+change the actual parameter and may then not be able to classify some operations
+as read-operations.
+\section{History of Orca}
+
+The Orca project started in 1986 as my Ph.D. research, under
+supervision of Andy Tanenbaum.
+From 1988, Frans Kaashoek also participated in the project and
+made major contributions to the language design and implementation.
+Other people who have contributed to the language design in
+various ways include Dick Grune and Nick Carriero.
+The following people have helped with early implementations of Orca:
+Wim van Leersum, Jack Jansen, Robert-Jan Elias, Cees Visser, and Ceriel Jacobs.
+People working on the current implementation of Orca (which is based
+on an abstract parallel machine called Panda) are:
+Raoul Bhoedjang,
+Tim R\"uhl,
+Koen Langendoen,
+Ceriel Jacobs,
+Rutger Hofman,
+Heinz-Peter Heinzle, and
+Marco Oey.
+Also, Lucas Kruijswijk and most people mentioned above provided
+useful comments on this report.
+
+Orca is given its name in awe of killer whales and out of displeasure with
+acronyms. I dislike obscure acronyms that nobody knows what they stand for
+and much prefer a normal name that is not an acronym.
+If forced, however, I am sure that even for Orca I could come up with
+one really clever acronym.
+
+\nocite{*}
+\bibliographystyle{abbrv}
+\bibliography{refman}
+
+\end{document}

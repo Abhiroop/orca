@@ -1,0 +1,11 @@
+This program is based om the "n-squared" Water application from the SPLASH
+benchmark suite. The program has been rewritten in Orca.
+
+To generate an input file, use the "geninput" program as follows:
+
+geninput <timestep-length> <nr_timesteps> <nr_mols> <n_order> <n_print>
+
+We used the following command to produce a suitable performance test
+input file:
+
+geninput 1.5e-16 5 1728 6 1 > input.1728

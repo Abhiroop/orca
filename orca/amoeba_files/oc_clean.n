@@ -1,0 +1,66 @@
+
+
+
+
+
+
+oc_clean(U)		 User Program		    oc_clean(U)
+
+
+_N_a_m_e
+
+oc_clean -  cleanup after an Orca compilation.
+
+_S_y_n_o_p_s_i_s
+
+
+_o_c__c_l_e_a_n
+
+
+_D_e_s_c_r_i_p_t_i_o_n
+
+This command removes the intermediate  files  that  are	 the
+result	of  an	Orca compilation.  It removes the ._o_c__d_r_i_v_e_r
+directory, the database	files, and any .c, .o,	.h,  .gc  or
+.gh file that is the result of an Orca compilation.
+
+_E_x_a_m_p_l_e
+
+
+	_o_c__c_l_e_a_n
+
+
+_S_e_e _A_l_s_o
+
+oc_panda(U)
+
+oc(U)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+			 Amoeba	5.3			   1
+
+

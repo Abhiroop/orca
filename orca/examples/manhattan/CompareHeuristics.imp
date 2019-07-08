@@ -1,0 +1,71 @@
+MODULE IMPLEMENTATION CompareHeuristics;
+
+
+FROM PresentationModule IMPORT
+	PrintMessageInt,
+	PrintMessage;
+FROM TspTypes IMPORT
+	NodeSubset;
+FROM TspOpt IMPORT
+	TspProcess;
+IMPORT SpecificationObject;
+IMPORT TourObject;
+IMPORT IntObject;
+FROM Finish IMPORT Finish;
+FROM Time IMPORT
+	GetTime;
+
+
+
+
+
+PROCESS OrcaMain ();
+	spec : SpecificationObject;
+	nodes : NodeSubset;
+	to : TourObject;
+	working : IntObject;
+	start_t,
+	stop_t : integer;
+BEGIN
+	spec$FromFile ("./problem.tsp");
+	
+	spec$Print ();
+
+	nodes := spec$NodesSet ();
+
+	start_t := GetTime ();
+	to$Initialize (nodes, spec);
+	working$assign (1);
+	PrintMessage ("Tschager commencing. Starting tour:");
+	to$Print ();
+	FORK TspProcess (to,
+			to$Nodes_Set (),
+			spec,
+			0,
+			NCPUS() - 1,
+			working,
+			30000) ON 0;
+
+	working$AwaitValue (0);
+	stop_t := GetTime ();
+	to$Print ();
+	PrintMessageInt ("Tschager: Total time consumed: ", stop_t - start_t);
+
+
+	start_t := GetTime ();
+	to$Initialize (nodes, spec);
+	PrintMessage ("2- & R-opt commencing. Starting tour:");
+	to$Print ();
+	to$Improve ();
+	stop_t := GetTime ();
+	to$Print ();
+	PrintMessageInt ("2- & R-opt: Total time consumed: ", stop_t - start_t);
+	
+	Finish ();
+END;
+
+END;
+
+
+
+

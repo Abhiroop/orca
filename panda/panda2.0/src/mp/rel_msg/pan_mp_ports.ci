@@ -1,0 +1,84 @@
+#ifndef __PAN_MP_REL_MSG_PORT_CI__
+#define __PAN_MP_REL_MSG_PORT_CI__
+
+#include <assert.h>
+
+#include "pan_sys_msg.h"
+
+#include "pan_mp_ports.h"
+
+
+
+#define MP_PORT_INCREMENT	32
+
+
+
+
+static pan_mutex_p	mp_port_lock;
+static mp_port_p	mp_ports		= NULL;
+static int		mp_port_n		= 0;
+static int		mp_port_total		= 0;
+
+
+STATIC_CI mp_port_p
+mp_port_get(void)
+{
+    int n;
+
+    pan_mutex_lock(mp_port_lock);
+
+    if (mp_port_total == mp_port_n) {
+	mp_port_total += MP_PORT_INCREMENT;
+	if (mp_port_total > MP_MAX_PORT_VALUE) {
+	    pan_panic("MP_PORT_INCREMENT > MP_MAX_PORT_VALUE");
+	}
+	mp_ports = pan_realloc(mp_ports, mp_port_total * sizeof(mp_port_t));
+    }
+
+    n = mp_port_n++;
+
+    pan_mutex_unlock(mp_port_lock);
+
+    return &mp_ports[n];
+}
+
+
+static void
+mp_port_cleanup(void)
+{
+    pan_free(mp_ports);
+}
+
+
+STATIC_CI int
+mp_port_id(mp_port_p p)
+{
+    assert((p - &mp_ports[0]) < mp_port_n);
+    return p - &mp_ports[0];
+}
+
+
+STATIC_CI mp_port_p
+mp_port(int port_id)
+{
+    assert(port_id < mp_port_n);
+    return &mp_ports[port_id];
+}
+
+
+
+STATIC_CI void
+mp_port_start(pan_mutex_p lock)
+{
+    mp_port_lock = lock;
+}
+
+
+STATIC_CI void
+mp_port_end(void)
+{
+    mp_port_cleanup();
+}
+
+
+#endif

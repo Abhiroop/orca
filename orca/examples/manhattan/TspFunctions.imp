@@ -1,0 +1,61 @@
+MODULE IMPLEMENTATION TspFunctions;
+
+FROM Math IMPORT
+		sqrt;
+
+FUNCTION AppendString (str1 : string; str2 : string) : string;
+	str : string[1..(UB(str1)+UB(str2))];
+	length1 : integer;
+	i : integer;
+BEGIN
+	i := 1;
+	IF SIZE(str2) <= 0 THEN
+		RETURN str1;
+	FI;
+	IF SIZE(str1) <= 0 THEN
+		RETURN str2;
+	FI;
+	length1 := UB(str1);
+	WHILE i <= length1 DO
+		str[i] := str1[i];
+		i := i + 1;
+	OD;
+	i := 1;
+	WHILE i <= UB(str2) DO
+		str[i + length1] := str2[i];
+		i := i + 1;
+	OD;	
+	RETURN str;
+END;
+
+
+
+FUNCTION distance_MAN_2D (x1 : integer;
+		y1 : integer;
+		x2 : integer;
+		y2 : integer) : integer;
+BEGIN
+	RETURN (ABS(x1 - x2) + ABS(y1 - y2));
+END;
+
+
+
+FUNCTION distance_EUC_2D (x1 : integer;
+		y1 : integer;
+		x2 : integer;
+		y2 : integer) : integer;
+BEGIN
+	RETURN (TRUNC(sqrt(FLOAT(ABS(x1-x2)*ABS(x1-x2) + ABS(y1-y2)*ABS(y1-y2)))));
+END;
+
+
+
+
+
+
+
+END;
+
+
+
+

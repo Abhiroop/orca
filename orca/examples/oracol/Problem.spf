@@ -1,0 +1,14 @@
+# This file contains the problem specification.
+
+MODULE SPECIFICATION Problem;
+
+FROM Const IMPORT ALL;
+
+CONST TTABLE = false;
+CONST KTABLE = true;
+CONST PROBLEM = ALL;
+CONST ITDEEP = true;
+CONST QSEARCH = true;
+CONST MATE_IN_N = 0;
+
+END;

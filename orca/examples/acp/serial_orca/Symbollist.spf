@@ -1,0 +1,68 @@
+# ========================================================================
+# == File:      Symbollist.spf 						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Symbollist dada structure				==
+# ========================================================================
+
+MODULE SPECIFICATION Symbollist;
+
+FROM Types IMPORT symbol_name_t;
+
+# ========================================================================
+# == types								==
+# ========================================================================
+
+TYPE	symlist_elt_t = NODENAME OF symbollist_t;
+TYPE	symbollist_t =
+		GRAPH
+			head, tail : symlist_elt_t;	# head and tail of the list
+			nr_elts    : integer;		# nr of elts of the list
+		NODES
+			key  :  symbol_name_t;		# the data
+			next : 	symlist_elt_t;		# pointer to next element
+		END;
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+FUNCTION create_sl(
+	sl 	: SHARED symbollist_t
+) : boolean;					# succes?
+
+
+FUNCTION delete_sl(
+	sl      : SHARED symbollist_t
+);
+
+
+FUNCTION insert_elt_sl(			
+	sl      : SHARED symbollist_t;
+	key 	: symbol_name_t			# key to be inserted
+) : boolean;					# succes?
+
+
+FUNCTION num_elts_sl(			
+	sl      : symbollist_t	
+) : integer;					# nr of elements in list
+
+
+FUNCTION give_ith_elt_sl(
+	sl      : symbollist_t;
+	index 	: integer; 			# index in the list
+	key   	: OUT symbol_name_t		# key on position i
+) : boolean;
+
+
+FUNCTION is_in_sl(
+	sl      : symbollist_t;
+	key   	: symbol_name_t; 		# is this key in the list
+	index 	: OUT integer			# position in the list
+) : boolean;					# is in list or not?
+
+FUNCTION copy_sl(
+	dest : SHARED symbollist_t;
+	src  : symbollist_t);
+END;
+

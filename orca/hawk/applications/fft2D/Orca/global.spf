@@ -1,0 +1,22 @@
+DATA MODULE SPECIFICATION global;
+
+  FROM Math IMPORT PI;
+
+  CONST	ITERS	= 10;
+  CONST LOGN	= 10;
+
+# derived constants:
+
+  CONST	N	= 1 << LOGN;
+  CONST	NDV2	= N >> 1;
+
+  TYPE complex      = RECORD r,i: real; END;
+
+  TYPE complex_array    = ARRAY[integer 1..N] OF complex;
+  TYPE integer_array    = ARRAY[integer 1..N] OF integer;
+
+  w: complex_array;
+  brt: integer_array;
+  iters: integer;
+  init_done: boolean;
+END;

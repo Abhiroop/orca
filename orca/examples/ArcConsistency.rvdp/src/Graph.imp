@@ -1,0 +1,141 @@
+MODULE IMPLEMENTATION Graph;
+
+FROM Types IMPORT Vali, ConMatrix, RelationType, RelationIndex;
+FROM Random IMPORT Random;
+
+FUNCTION GenerateRelations(nr_values: integer; max_rel: RelationIndex;
+        rel_pairs: integer; relation: SHARED RelationType; seed: integer);
+
+random: Random;
+n: integer;
+m: integer;
+
+BEGIN
+    # WriteLine("GenerateRelations on processor ", MYCPU());
+    random$init(seed);
+    FOR h IN r1 .. max_rel
+    DO
+        # clear all bits in relation
+        FOR i IN 0 .. nr_values - 1
+        DO
+	    FOR j IN 0 .. nr_values - 1
+	    DO
+		relation[h][i][j] := false;
+	    OD;
+        OD;
+        # Choose (nr_values - 1, nr_values - 1) as always a solution
+        # This is an arbitrary choice
+        relation[h][nr_values - 1][nr_values - 1] := true;
+        # WriteLine("row is ", row);
+        FOR i IN 0 .. rel_pairs - 2
+        DO
+	    REPEAT
+		m := random$val() % (nr_values - 1);
+		n := random$val() % (nr_values - 1);
+            UNTIL (NOT relation[h][m][n]) AND (m /= n);
+            relation[h][m][n] := true;
+        OD;
+    OD;
+END;
+
+
+
+FUNCTION GenerateConstraints(diff_rel, nr_connections: integer;
+	nr_vars: integer; constraint: SHARED ConMatrix;
+	seed: integer);
+
+random: Random;
+n: integer;
+var: integer;
+
+BEGIN
+    WriteLine("GenerateConstraints on processor ", MYCPU());
+
+    # initialize randomizer
+    random$init(seed);
+
+    # number of connections must be even
+    IF (nr_connections % 2) /= 0
+    THEN
+	nr_connections -:= 1;
+    FI;
+
+    # Connect each variable to "nr_connections / 2" other variables.
+    # If the number of connections is low, just connect each variable
+    # to the right amount of other variables. If the number of
+    # connections is high, connect each variable to all others and
+    # then take away the right amount of connections.
+
+    nr_connections /:= 2;
+
+    IF nr_connections < nr_vars / 2
+    THEN    # number of connections is low
+	# clear all connections between the variables
+	FOR i IN 0 .. nr_vars - 1
+	DO
+	    FOR j IN 0 .. nr_vars - 1
+	    DO
+		constraint[i][j] := NOCONSTRAINT;
+	    OD;
+	OD;
+	FOR i IN 0 .. nr_vars - 1
+	DO
+	    FOR j IN 0 .. nr_connections - 1
+	    DO
+		REPEAT
+		    var := random$val() % nr_vars;
+		UNTIL constraint[i][var] = NOCONSTRAINT;
+		n := (random$val() % diff_rel) + 1;
+		constraint[i][var] := VAL(RelationIndex, n);
+		constraint[var][i] := VAL(RelationIndex, n);
+	    OD;
+	OD;
+    ELSE    # number of connections is high
+	# connect all variables to all other variables
+	FOR i IN 0 .. nr_vars - 2
+	DO
+	    FOR j IN i + 1 .. nr_vars - 1
+	    DO
+		n := (random$val() % diff_rel) + 1;
+		constraint[i][j] := VAL(RelationIndex, n);
+		constraint[j][i] := VAL(RelationIndex, n);
+	    OD;
+	OD;
+	# take away right amount of connections
+	FOR i IN 0 .. nr_vars - 1
+	DO
+	    FOR j IN 0 .. nr_vars - 1 - 2 * nr_connections
+	    DO
+		REPEAT
+		    var := random$val() % nr_vars;
+		UNTIL constraint[i][var] /= NOCONSTRAINT;
+		constraint[i][var] := NOCONSTRAINT;
+		constraint[var][i] := NOCONSTRAINT;
+	    OD;
+	OD;
+    FI;
+END;
+
+
+
+FUNCTION GenerateProcessor(processor: OUT Vali; nr_vars, nslaves: integer);
+
+tmp_processor: Vali[0 .. nr_vars - 1];
+s: integer;
+
+BEGIN
+    # WriteLine("GenerateProcessor on processor ", MYCPU());
+    s := 0;
+    FOR i IN 0 .. nr_vars - 1
+    DO
+	tmp_processor[i] := s;
+	s +:= 1;
+	IF s = nslaves
+	THEN
+	    s := 0;
+	FI;
+    OD;
+    processor := tmp_processor;
+END;
+
+END;

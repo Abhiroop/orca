@@ -1,0 +1,9 @@
+MODULE SPECIFICATION Consts;
+
+	CONST MaxHops = 4;   # search depth of master
+	CONST Inf = 1000000; # infinity
+	CONST MaxQueueSize = 1000;
+	
+	CONST MAXSZ = 32;
+
+END;

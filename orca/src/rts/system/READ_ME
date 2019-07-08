@@ -1,0 +1,15 @@
+This directory contains sub-directories for each runtime-system.
+Currently, there are 4:
+
+unixproc	Runs an Orca program within one Unix process, number of
+		processors simulated is passed as an argument. Uses the
+		pthreads package which is included.
+
+sinproc		Very limited runtime system: does not support forks. Again,
+		for a Unix system. Does not require a threads package.
+
+bcast-rpc	This is the Amoeba runtime system.
+
+panda		This is the runtime system built on top of the Panda layer.
+
+panda2.0	The same runtime on top of Panda-2.0

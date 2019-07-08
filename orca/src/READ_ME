@@ -1,0 +1,10 @@
+This directory has 4 sub-directories:
+
+comp	contains the compiler sources.
+
+driver	contains the compiler driver sources.
+
+libs	contains the sources of some libraries that are used for
+	the compiler and the driver.
+
+rts	contains the sources of the various runtime systems.

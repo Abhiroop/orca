@@ -1,0 +1,26 @@
+This is a complete source of Orca.
+It runs on top of portability library Panda.
+Panda is also included in this tar.
+
+DISCLAIMER --- there is no longer any Transputer (server) around here,
+	so we just assembled the source, but could not test the distribution.
+	If you are really going to compile/run it, you must solve some
+	minor installation problems:
+	 - You must compile Orca and Panda using scripts ancpp-T800 and
+	   mfilter, see for instance the compilation stuff in
+	   panda2.0/lib/parix-T800/{Makefile,setup.mk}.
+	To do so, you must
+	 - figure out where the script ancpp.T800 is, and where it is
+	   installed in the Orca tree
+	 - figure out where mfilter is, and where it is installed in the Orca
+	   tree.
+
+There is a script setup in the directory ./orca/setup.
+Run this script, answer its questions, follow its instructions, and hopefully
+an installation is created.
+
+To make Orca programs, use the Orca compiler script oc_panda, and pass
+it as extra arguments:
+   -parix-T800 -2
+(-2 indicates the generation of Panda to use).
+oc_panda is to be found in ~install/orca/bin after the build is complete.

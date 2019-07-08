@@ -1,0 +1,22 @@
+MODULE SPECIFICATION genfunct;
+
+FROM Random IMPORT Random;
+FROM BoolVector IMPORT BoolVector, BoolMatrix;
+FROM CromoVector IMPORT individual, population;
+FROM GenTypes IMPORT configuration;
+
+FUNCTION bitmask (nb_nodes: integer; r: Random): BoolVector;
+FUNCTION equalize_01(cromo: SHARED BoolVector; nb_nodes: integer;
+		 r: Random);
+FUNCTION print_generation(Pop: population; config: configuration; nb_nodes: integer);
+FUNCTION calc_fsum(Pop: population; config: configuration): integer;
+FUNCTION select(Pop: population; config: configuration;
+		fit_sum: integer; r: Random): integer;
+FUNCTION crossover(config: configuration; nb_nodes: integer; 
+		p1, p2, s1, s2: SHARED BoolVector; r: Random);
+FUNCTION mutation(cromo: SHARED BoolVector; config: configuration;
+		nb_nodes: integer; r: Random);
+FUNCTION fitness (Pop: SHARED population; config: configuration);
+FUNCTION quicksort(Pop: SHARED population; l_lim, r_lim: integer);
+
+END;

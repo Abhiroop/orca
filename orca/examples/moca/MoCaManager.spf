@@ -1,0 +1,15 @@
+MODULE SPECIFICATION MoCaManager;
+
+#--------------------------------------------------------------------#
+#     Parallel Monte Carlo simulation of recombination processes     #
+#              in clusters with more than one ion pair               #
+#                                                                    #
+#         Variable timestep   -   External electric included         #
+#--------------------------------------------------------------------#
+
+##
+## Main process of the 'MonteCarlo'-program.
+##
+PROCESS OrcaMain();
+
+END;

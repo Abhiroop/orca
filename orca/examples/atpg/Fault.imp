@@ -1,0 +1,203 @@
+MODULE IMPLEMENTATION Fault;
+
+	FROM AtpgTypes IMPORT Possible_Fault,FaultSet;
+
+	FROM iscas IMPORT MAX_NO_OF_GATES;
+
+	FROM Circuit IMPORT Circuit,Get_Gate_Faults;
+
+	FROM Config IMPORT Config_Rec,Be_Verbose;
+
+	IMPORT Report;
+
+	IMPORT sema;
+
+
+	FUNCTION Mod(x:integer;y:integer):integer;
+
+	# Mod returns the value x MOD y
+
+	BEGIN
+		WHILE x>=y DO
+			x:=x-y;
+		OD;
+		RETURN x;
+	END; # FUNCTION Mod
+
+
+	FUNCTION Init_Faultset(circuit:Circuit;faultrecset:OUT Fault_Rec_Set);
+
+	# Creates a set which contains all faults that must be tested
+
+	faults: FaultSet;
+	faultrec: Fault_Rec;
+	
+	BEGIN
+		faultrecset:=Fault_Rec_Set:{};
+		FOR i IN 1..MAX_NO_OF_GATES DO
+			IF Get_Gate_Faults(circuit,i,faults) THEN
+				IF Stuck_At_0 IN faults THEN
+					faultrec.address:=i;
+					faultrec.fault:=Stuck_At_0;
+					faultrecset+:=Fault_Rec_Set:{faultrec};
+				FI;
+				IF Stuck_At_1 IN faults THEN
+					faultrec.address:=i;
+					faultrec.fault:=Stuck_At_1;
+					faultrecset+:=Fault_Rec_Set:{faultrec};
+				FI;
+			FI;
+		OD;
+	END; # FUNCTION Init_Faultset
+
+	FUNCTION Get_Next_Fault(faultrecset:SHARED Fault_Rec_Set;
+				address:OUT integer;
+				fault:OUT Possible_Fault):boolean;
+
+        # Returns a random element from the faultrecset. This element
+        # is deleted from the set. If the set is empty this function
+        # returns false else true is returned.
+
+	temprec: Fault_Rec;
+
+	BEGIN
+		IF SIZE(faultrecset)>0 THEN
+			temprec:=FROM(faultrecset);
+			address:=temprec.address;
+			fault:=temprec.fault;
+			RETURN true;
+		ELSE
+			RETURN false;
+		FI;
+	END; # FUNCTION Get_Next_Fault
+
+	FUNCTION Drop_Fault(faultrecset:SHARED Fault_Rec_Set;address:integer;
+                            fault:Possible_Fault;report:SHARED Report;
+			    config:Config_Rec;print:SHARED sema);
+
+        # In case the specified fault is present in the faultrecset, it
+        # is deleted from it. 
+
+	faultrec: Fault_Rec;
+
+	BEGIN
+		IF SIZE(faultrecset)=0 THEN
+			RETURN;
+		FI;
+		faultrec.address:=address;
+		faultrec.fault:=fault;
+		IF faultrec IN faultrecset THEN
+			IF Be_Verbose(config) THEN
+				print$Pass();
+				Write("CPU : ",MYCPU());
+				Write(" additionally detected: ");
+				Write(address," ");
+				CASE fault OF
+					Stuck_At_0 => WriteLine("Stuck_At_0");
+				     |	Stuck_At_1 => WriteLine("Stuck_At_1");
+				ESAC;
+				print$Free();
+			FI;
+			faultrecset-:=Fault_Rec_Set:{faultrec};
+			report$Inc_Detected();
+		FI;		
+	END; # FUNCTION Drop_Fault
+
+
+	FUNCTION Partition_Fault_Set(faultrecset:Fault_Rec_Set;
+				     size:integer;
+				     partition:OUT Partition);
+
+	# The faultrecset is partitioned into size partitions.
+	# The partitions are disjunct.
+	# It is assured that two faults concerning the same gate 
+	# will not be put in the same partition.
+
+	j: integer;
+	temprec,temprec2: Fault_Rec;
+
+	BEGIN
+		IF size=0 THEN
+			RETURN;
+		FI;
+# DEBUG
+#	LOG("Before initialization");
+# END DEBUG
+		FOR i IN 1..size DO
+			partition[i]:=Fault_Rec_Set:{};
+		OD;
+# DEBUG
+#	LOG("After initialization");
+# END DEBUG
+		j:=0;
+		WHILE SIZE(faultrecset)>0 DO
+			temprec:=FROM(faultrecset);
+			CASE temprec.fault OF
+				Stuck_At_0 => temprec2.address:=temprec.address;
+					      temprec2.fault:=Stuck_At_1;
+					      IF temprec2 IN partition[j] THEN
+							j:=Mod(j+1,size);
+					      FI;
+					      partition[j]+:=Fault_Rec_Set:
+								      {temprec};
+			     |	Stuck_At_1 => temprec2.address:=temprec.address;
+					      temprec2.fault:=Stuck_At_0;
+					      IF temprec2 IN partition[j] THEN
+							j:=Mod(j+1,size);
+					      FI;
+					      partition[j]+:=Fault_Rec_Set:
+								      {temprec};
+			ESAC;
+			j:=Mod(j+1,size);
+# DEBUG
+#	WriteLine();
+#	WriteLine("j = ",j);
+# END DEBUG
+		OD;
+	END; # FUNCTION Partition_Fault_Set
+
+
+        FUNCTION Size_Of_Set(faultrecset:Fault_Rec_Set):integer;
+
+        # Returns the number of elements in faultrecset
+
+	BEGIN
+		RETURN SIZE(faultrecset);
+	END; # FUNCTION Size_Of_Set
+
+# DEBUG
+# 	FUNCTION LOG(message: string);
+#
+#       BEGIN
+#               WriteLine();
+#               Write("MODULE Fault...");
+#               Write(message);
+#       END; # FUNCTION LOG
+# END DEBUG
+
+# DEBUG
+	FUNCTION Print_Set(faultrecset:Fault_Rec_Set);
+
+	# Write the contents of the faultrecset onto stdout
+
+	i,address: integer;
+	fault: Possible_Fault;
+	temprec: Fault_Rec;
+	
+	BEGIN
+		i:=SIZE(faultrecset);
+		WriteLine("No of elements in set = ",i);
+		WHILE SIZE(faultrecset)>0 DO
+			temprec:=FROM(faultrecset);
+			address:=temprec.address;
+			fault:=temprec.fault;
+			Write(address,"  ");
+			CASE fault OF
+				Stuck_At_0 => Write(">sa0");
+			     |	Stuck_At_1 => Write(">sa1");
+			ESAC;
+			WriteLine();
+		OD;
+	END; # FUNCTION Print_Set
+
+END; # MODULE IMPLEMENTATION Fault 

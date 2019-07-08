@@ -1,0 +1,348 @@
+# The module MoveGen contains the move generator.
+
+MODULE IMPLEMENTATION MoveGen;
+
+FROM Misc IMPORT ThinkMove,UnthinkMove,Owner,MoveCode,OnBoard,Other,Check,
+		 Pinned; 
+FROM Eval IMPORT Guards;
+FROM Types IMPORT DataRecord,MoveArray,SaveType;
+FROM Const IMPORT BLACK,WHITE,PAWN,KNIGHT,BISHOP,ROOK,QUEEN,KING,HSIZE,VSIZE,
+		  MATECHCK,MATESRCH;
+
+CONST LEGAL = 0;
+CONST LAST = 1;
+CONST CHECKED = 2;
+CONST ILLEGAL = -1;
+
+	FUNCTION PawnMoves(dr : SHARED DataRecord; color : integer;
+		   x : integer; y : integer;
+			   ml : SHARED MoveArray; index : SHARED integer;
+			   lmove : integer);
+	FUNCTION TransMoves(dr : SHARED DataRecord; color : integer;
+			    x : integer; y : integer;
+			    xt : integer; yt : integer; mul : boolean;
+			    ml : SHARED MoveArray; index : SHARED integer);
+	FUNCTION CastlingMoves(dr : SHARED DataRecord; color : integer;
+			      x,y : integer; ml : SHARED MoveArray;
+			      index : SHARED integer);
+	FUNCTION CheckMove(dr : SHARED DataRecord;
+			   color : integer; xfrom : integer; yfrom : integer;
+			   xto : integer; yto : integer) : boolean;
+	FUNCTION PawnProm(y : integer; color : integer) : boolean;
+	FUNCTION PromGen(ml : SHARED MoveArray; index : SHARED integer;
+			 xfrom,yfrom,xto,yto : integer);
+	FUNCTION StartPawn(y : integer; color : integer) : boolean;
+	FUNCTION EpCond(dr : SHARED DataRecord; lmove : integer;
+			x,y,factor : integer) : boolean;
+	FUNCTION EmptyLine(dr : SHARED DataRecord; low, up : integer;
+			   y : integer) : boolean;
+	FUNCTION NoCheck(dr : SHARED DataRecord; color : integer;
+			 low, up : integer; y : integer) : boolean;
+	FUNCTION Translate(dr : SHARED DataRecord; color : integer;
+			   x : integer; y : integer;
+			   xt : integer; yt : integer; mul : boolean;
+			   ml : SHARED MoveArray; index : SHARED integer);
+	FUNCTION Legal(dr : SHARED DataRecord;
+		       color : integer; xfrom : integer; yfrom : integer;
+		       xto : integer; yto : integer) : integer;
+	FUNCTION QPass(dr : SHARED DataRecord; color : integer;
+		       move : integer) : boolean;
+
+	# The function Moves() is the main routine for the move generator.
+	# It scans the playing board for pieces of the appropriate color and
+	# calls FieldMoves() for each piece found.
+ 	FUNCTION Moves(dr : SHARED DataRecord; color : integer;
+		       movelist : SHARED MoveArray; lmove : integer); 
+	  index : integer;
+	BEGIN
+		index := 1;
+		FOR x IN 0 .. HSIZE - 1 DO
+		  FOR y IN 0 .. VSIZE - 1 DO
+		    IF Owner(dr.b[x][y]) = color THEN
+		      FieldMoves(dr,color,x,y,movelist,index,lmove);
+		    FI;
+		    # During Mate Check method, it is enough to prove that the
+		    # current color is able to move.
+		    IF (dr.method = MATECHCK) AND (index > 1) THEN RETURN; FI;
+		  OD;
+		OD;
+		movelist[index] := 0;
+	END;
+ 
+	# The function FieldMoves() generates all moves for a given field.
+	# If the piece on that field is a pawn, PawnMoves() is called.
+	# Otherwise TransMoves() is called because move generation for these
+	# pieces are more or less the same. Each piece (except the pawn) has
+	# two characteristics : (1) Direction, (2) Multiple Move.
+	# Multiple Move is a boolean that indicates whether the piece is 
+	# allowed to do more than one step.
+	FUNCTION FieldMoves(dr : SHARED DataRecord; color : integer;
+			    x : integer; y : integer; ml : SHARED MoveArray;
+			    index : SHARED integer; lmove : integer);
+	  dx,dy : integer;
+	BEGIN
+		IF (dr.b[x][y] & 7 /= KING) AND Pinned(dr,color,x,y,dx,dy) THEN
+		  dr.pinned := true;
+		 ELSE
+		  dr.pinned := false;
+		FI;
+		CASE dr.b[x][y] & 7 OF
+		  PAWN	   => PawnMoves(dr,color,x,y,ml,index,lmove); |
+		  KNIGHT   => TransMoves(dr,color,x,y,1,2,false,ml,index); |
+		  BISHOP   => TransMoves(dr,color,x,y,1,1,true,ml,index); |
+		  ROOK	   => TransMoves(dr,color,x,y,0,1,true,ml,index); |
+		  QUEEN	   => TransMoves(dr,color,x,y,0,1,true,ml,index);
+			      TransMoves(dr,color,x,y,1,1,true,ml,index); |
+		  KING	   => CastlingMoves(dr,color,x,y,ml,index);
+			      TransMoves(dr,color,x,y,0,1,false,ml,index);
+			      TransMoves(dr,color,x,y,1,1,false,ml,index);
+		ESAC;
+	END;
+ 
+	# Generate pawn moves.
+	FUNCTION PawnMoves(dr : SHARED DataRecord; color : integer;
+			   x : integer; y : integer;
+			   ml : SHARED MoveArray; index : SHARED integer;
+			   lmove : integer);
+	  factor : integer;
+	  field : integer;
+	BEGIN
+		IF color = WHITE THEN factor := 1;
+		 ELSE factor := -1;
+		FI;
+		IF (OnBoard(x,y+factor) AND (dr.b[x][y+factor] & 7 = 0) AND
+		   CheckMove(dr,color,x,y,x,y+factor)) THEN
+		  IF NOT(PawnProm(y+factor,color)) THEN
+		    ml[index] := MoveCode(0,0,0,x,y,x,y+factor); index +:= 1;
+		   ELSE
+		    PromGen(ml,index,x,y,x,y+factor);
+		  FI;
+		  IF (OnBoard(x,y+2*factor) AND StartPawn(y,color) AND
+		      (dr.b[x][y+2*factor] & 7 = 0) AND
+		      CheckMove(dr,color,x,y,x,y+2*factor)) THEN
+			# E.g. a2-a4.
+		  	ml[index] := MoveCode(0,0,0,x,y,x,y+2*factor);
+			index +:= 1;
+		  FI;
+		FI;
+		# Test whether we can do capture move.
+		IF (OnBoard(x-1,y+factor) AND
+		    (Owner(dr.b[x-1][y+factor]) = Other(color)) AND
+		    CheckMove(dr,color,x,y,x-1,y+factor)) THEN
+		  IF NOT(PawnProm(y+factor,color)) THEN
+		    ml[index] := MoveCode(0,0,0,x,y,x-1,y+factor); index +:= 1;
+		   ELSE
+		    PromGen(ml,index,x,y,x-1,y+factor);
+		  FI;
+		FI;
+		IF (OnBoard(x+1,y+factor) AND
+		    (Owner(dr.b[x+1][y+factor]) = Other(color)) AND
+		    CheckMove(dr,color,x,y,x+1,y+factor)) THEN
+		  IF NOT(PawnProm(y+factor,color)) THEN
+		    ml[index] := MoveCode(0,0,0,x,y,x+1,y+factor); index +:= 1;
+		   ELSE
+		    PromGen(ml,index,x,y,x+1,y+factor);
+		  FI;
+		FI;
+		# Try en passant moves.
+		IF OnBoard(x-1,y+factor) AND EpCond(dr,lmove,x-1,y,factor) THEN
+		  field := dr.b[x-1][y]; dr.b[x-1][y] := 0;
+		  IF CheckMove(dr,color,x,y,x-1,y+factor) THEN
+		    ml[index] := MoveCode(0,1,0,x,y,x-1,y+factor); index +:= 1;
+		  FI;
+		  dr.b[x-1][y] := field;
+		FI;
+		IF OnBoard(x+1,y+factor) AND EpCond(dr,lmove,x+1,y,factor) THEN
+		  field := dr.b[x+1][y]; dr.b[x+1][y] := 0;
+		  IF CheckMove(dr,color,x,y,x+1,y+factor) THEN
+		    ml[index] := MoveCode(0,1,0,x,y,x+1,y+factor); index +:= 1;
+		  FI;
+		  dr.b[x+1][y] := field;
+		FI;
+	END;
+ 
+	# Has the pawn moved yet ?
+	FUNCTION StartPawn(y : integer; color : integer) : boolean;
+	BEGIN
+		RETURN ((y = 1) AND (color = WHITE)) OR
+		       ((y = 6) AND (color = BLACK));
+	END;
+
+	# Check whether a pawn promotion occurs.
+	FUNCTION PawnProm(y : integer; color : integer) : boolean;
+	BEGIN
+		RETURN ((y = 7) AND (color = WHITE)) OR
+		       ((y = 0) AND (color = BLACK));
+	END;
+
+	# The function PromGen() generates all promotion moves, also minor
+	# promotion.
+	FUNCTION PromGen(ml : SHARED MoveArray; index : SHARED integer;
+			 xfrom,yfrom,xto,yto : integer);
+	BEGIN
+		FOR i IN 0 .. 3 DO
+		  ml[index] := MoveCode(0,0,4+i,xfrom,yfrom,xto,yto);
+		  index +:= 1;
+		OD;
+	END;
+
+	# Can we play en passant move ?
+	FUNCTION EpCond(dr : SHARED DataRecord; lmove : integer;
+			x,y,factor : integer) : boolean;
+	BEGIN
+		RETURN (dr.b[x][y] & 7 = PAWN) AND
+		       (x = (lmove >> 3) & 7) AND (y = lmove & 7) AND
+		       (x = (lmove >> 9) & 7) AND (y +2*factor = (lmove>>6)&7);
+	END;
+
+	# Try castling moves.
+	FUNCTION CastlingMoves(dr : SHARED DataRecord; color : integer;
+			      x,y : integer; ml : SHARED MoveArray;
+			      index : SHARED integer);
+	BEGIN
+		IF dr.checked THEN RETURN; FI;
+		IF ((x = 4) AND (y = 0) AND (color = WHITE)) OR
+		   ((x = 4) AND (y = 7) AND (color = BLACK)) THEN
+		  IF (dr.b[0][y] & 7 = ROOK) AND
+		     (Owner(dr.b[0][y]) = color) AND
+		     EmptyLine(dr,1,3,y) AND
+		     NoCheck(dr,color,1,3,y) THEN
+		  	ml[index] := MoveCode(3,0,0,4,y,2,y);
+		  	index +:= 1;
+		  FI;
+		  IF (dr.b[7][y] & 7 = ROOK) AND
+		     (Owner(dr.b[7][y]) = color) AND
+		     EmptyLine(dr,5,6,y) AND
+		     NoCheck(dr,color,5,6,y) THEN
+		  	ml[index] := MoveCode(2,0,0,4,y,6,y);
+		  	index +:= 1;
+		  FI;
+		FI;
+	END;
+
+	# Are there no pieces on a given line ?
+	FUNCTION EmptyLine(dr : SHARED DataRecord; low, up : integer;
+			   y : integer) : boolean;
+	BEGIN
+		FOR i IN low .. up DO
+		  IF dr.b[i][y] & 7 /= 0 THEN RETURN false; FI;
+		OD;
+		RETURN true;
+	END;
+
+	# Test whether a king is checked on a certain line.
+	FUNCTION NoCheck(dr : SHARED DataRecord; color : integer;
+			 low, up : integer; y : integer) : boolean;
+	  ap,dp,minval : integer;
+	BEGIN
+		FOR i IN low .. up DO
+		  ap := 0; dp := 0;
+		  Guards(dr,color,i,y,ap,dp,minval);
+		  IF ap > 0 THEN RETURN false; FI;
+		OD;
+		RETURN true;
+	END;
+
+	# The function TransMoves() generates moves for every translation of
+	# the given direction.
+	FUNCTION TransMoves(dr : SHARED DataRecord; color : integer;
+			    x : integer; y : integer;
+			    xt : integer; yt : integer; mul : boolean;
+			    ml : SHARED MoveArray; index : SHARED integer);
+	BEGIN
+		Translate(dr,color,x,y,xt,yt,mul,ml,index);
+		IF xt /= yt THEN
+		  Translate(dr,color,x,y,yt,xt,mul,ml,index);
+		FI;
+		IF xt > 0 THEN
+		  Translate(dr,color,x,y,-xt,yt,mul,ml,index);
+		  Translate(dr,color,x,y,yt,-xt,mul,ml,index);
+		FI;
+		IF (xt /= yt) AND (yt > 0) THEN
+		  Translate(dr,color,x,y,xt,-yt,mul,ml,index);
+		  Translate(dr,color,x,y,-yt,xt,mul,ml,index);
+		FI;
+		IF (xt > 0) AND (yt > 0) THEN
+		  Translate(dr,color,x,y,-xt,-yt,mul,ml,index);
+		  IF xt /= yt THEN
+		    Translate(dr,color,x,y,-yt,-xt,mul,ml,index);
+		  FI;
+		FI;
+	END;
+ 
+	# The function Translate() generates moves for a given translation.
+	# The boolean 'mul' is the Multiple Move flag.
+	FUNCTION Translate(dr : SHARED DataRecord; color : integer;
+			   x : integer; y : integer;
+			   xt : integer; yt : integer; mul : boolean;
+			   ml : SHARED MoveArray; index : SHARED integer);
+	  result : integer;
+	  txt,tyt : integer;
+	BEGIN
+		txt := x; tyt := y;
+		REPEAT
+		  txt +:= xt; tyt +:= yt;
+		  result := Legal(dr,color,x,y,txt,tyt);
+		  IF (result = LEGAL) OR (result = LAST) THEN
+		    ml[index] := MoveCode(0,0,0,x,y,txt,tyt); index +:= 1;
+		  FI;
+		UNTIL NOT(mul) OR (result = LAST) OR (result = ILLEGAL);
+	END;
+ 
+	# The function Legal() tests whether the proposed move is a legal one.
+	FUNCTION Legal(dr : SHARED DataRecord;
+		       color : integer; xfrom : integer; yfrom : integer;
+		       xto : integer; yto : integer) : integer;
+	BEGIN
+		IF NOT(OnBoard(xto,yto)) OR (Owner(dr.b[xto][yto]) = color) THEN
+		  RETURN ILLEGAL;
+		FI;
+		IF NOT(CheckMove(dr,color,xfrom,yfrom,xto,yto)) THEN
+		  IF (dr.b[xto][yto] & 7 /= 0) THEN RETURN ILLEGAL; FI;
+		  RETURN CHECKED;
+		FI;
+		IF (dr.b[xto][yto] & 7 = 0) THEN RETURN LEGAL; FI;
+		RETURN LAST;	# capture move
+	END;
+ 
+	# The function CheckMove() tests whether the player is checked after
+	# his own move.
+	FUNCTION CheckMove(dr : SHARED DataRecord;
+			   color : integer; xfrom : integer; yfrom : integer;
+			   xto : integer; yto : integer) : boolean;
+	  result : boolean;
+	  save : SaveType;
+	  move : integer;
+	BEGIN
+		move := MoveCode(0,0,0,xfrom,yfrom,xto,yto);
+		IF (dr.method = MATESRCH) THEN
+		  IF  NOT(QPass(dr,color,move)) THEN
+		   RETURN false;
+		  FI;
+		FI;
+		IF NOT(dr.checked) AND (dr.b[xfrom][yfrom] & 7 /= KING) AND
+		   NOT(dr.pinned) THEN
+		  RETURN true;
+		FI; 
+		ThinkMove(dr,color,move,save);
+		result := NOT(Check(dr,color));
+		UnthinkMove(dr,color,save);
+		RETURN result;
+	END;
+
+	# The function QPass() tests whether the proposed move checks the
+	# opponent.
+	FUNCTION QPass(dr : SHARED DataRecord; color : integer;
+		       move : integer) : boolean;
+	  result : boolean;
+	  save : SaveType;
+	BEGIN
+		result := false;
+		IF color /= dr.player THEN RETURN true; FI;
+		ThinkMove(dr,color,move,save);
+		result := Check(dr,Other(color));
+		UnthinkMove(dr,color,save);
+		RETURN result;
+	END;
+
+END;

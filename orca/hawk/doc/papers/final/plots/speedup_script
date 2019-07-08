@@ -1,0 +1,17 @@
+#! /bin/sh
+cc -o speedup speedup.c
+for d in fft ntr jacobi sor
+do
+    cd $d
+    for i in *.plot
+    do
+	if [ -f `basename $i .plot`.base ]
+	then
+	    cat `basename $i .plot`.base $i | ../speedup > `basename $i .plot`.spd
+	else
+	    cat $i | ../speedup > `basename $i .plot`.spd
+	fi
+    done
+    sh mk
+    cd ..
+done

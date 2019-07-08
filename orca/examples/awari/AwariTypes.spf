@@ -1,0 +1,122 @@
+#-----------------------------------------------#
+# Authors: H. Staalman and E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION AwariTypes;
+
+
+CONST AllStones 	= 48;
+CONST ManyStones	= 28;			# Current maximum (Maximal: AllStones)
+CONST StonesPerPit	= 4;
+CONST RelativeStones	= 24;			# needed ?
+
+CONST PitsPerSide	= 6;			# one side
+CONST PitsPerBoard	= 2 * PitsPerSide;	# both sides
+CONST AllPits		= PitsPerBoard + 1;	# complete board
+CONST CapturePit	= AllPits;		# last pit is capture pit
+
+TYPE  GTV		= integer;
+
+CONST GtvKnown		= 0;			# denotes 'solved' configuration (nr_succ has become 0)
+CONST GtvUnknown	= 7;			# denotes 'just initialized' configuration in Forward RA
+CONST GtvDetermined	= 7;			# denotes 'done' configuration in Backward RA
+    #CONST nr_succ_range    = 1..6;
+  # N.B. only 3 bits are available (i.e. 8 'modes'); so one mode has two meanings. 
+  # When starting forward RA, all configurations are initialised to mode 'GtvUnknown'. 
+  # Then the [previous] database is read. All configurations from this database are 
+  # set to mode 'GtvKnown'. These are used to determine other configurations: all 
+  # currently 'GtvUnknown' configurations are examined; successor configurations 
+  # are generated for them and only those configurations .ontstaan. created by 
+  # capture plies are processed.
+  # The gtv of such caputure configuration is requested and used to determine the 
+  # gtv of the current configuration. All remaining configurations with mode 
+  # 'GtvUnknown' are set to the number of successors they have (children). 
+  # After (one) such a pass through the whole database, RA turns to the backward 
+  # method.
+  # Now mode 7 is used to denote a determined gtv ('GtvDetermined'), i.e. a 
+  # configuration with a determined gtv: right after a configuration has a fixed 
+  # gtv - a nr_succ count of 0 due to computating the database itself - the 
+  # predecessors of this newly known configuration are computed, and the 
+  # configuration itself is set to 'GtvDetermined'.
+
+
+CONST Draw		= 0;			# denotes a configuration that is a draw
+
+
+TYPE  GoedelNr		= longint;
+TYPE  Stones		= integer;
+TYPE  PitNr		= integer;
+
+TYPE Pit =
+     RECORD
+         contents: Stones;
+#	  rest:	 Stones;
+     END;
+
+
+TYPE Configuration	= ARRAY[integer 1..AllPits] OF Pit;
+TYPE Position		= ARRAY[integer 1..PitsPerBoard] OF Pit;
+TYPE Distribution	= integer;
+
+TYPE ConfigUnit = RECORD 
+		      gtv:     GTV;
+		      nr_succ: integer;
+		  END;
+
+TYPE ElementUnit = RECORD 
+		      goedel_nr: GoedelNr;
+		      gtv:       GTV;
+		      nr_succ:   integer;
+		  END;
+
+CONST ConfigListSize = 5;	# determine value in practice (+/-10 per DBObjects (often = CPUs))
+TYPE  ConfigList = ARRAY[integer 1..ConfigListSize] OF ElementUnit;
+
+CONST EmptySlot = -1;
+TYPE GoedelAdresList = ARRAY[integer 1..ConfigListSize] OF GoedelNr;
+
+
+TYPE SuccessorList = ARRAY[integer 1..PitsPerSide] OF	   # maximal number of successors
+				     RECORD
+				         configuration:	Configuration;
+				         nr_hits: 	Stones;
+				     END;
+
+
+TYPE PositionUnit = RECORD
+		       configuration: Configuration;
+		       goedel_nr:     GoedelNr;
+		       gtv:	      GTV;
+		    END;
+
+
+TYPE BinomiumType = ARRAY[integer] OF ARRAY[integer] OF longint;
+
+
+
+TYPE Side = (North, South);
+#TYPE Player = Side;
+
+TYPE PitName		= (A, B, C, D, E, F,  a, b, c, d, e, f);
+#TYPE NorthPitName	 = (a, b, c, d, e, f);
+#TYPE SouthPitName	 = (A, B, C, D, E, F);
+#TYPE BoardPitName	 = (A, B, C, D, E, F,  a, b, c, d, e, f, CAP);
+
+
+FUNCTION Ord(pit: IN PitName):integer;
+  # returns the ordinal number of the pit (starting from 1)
+
+FUNCTION Pred(pit: IN PitName):PitName;
+  # returns preceding pit (capture pit ignored)
+
+FUNCTION Succ(pit: IN PitName):PitName;
+  # returns proceding pit (capture pit ignored)
+
+FUNCTION EnumName(pit: IN PitName):string;
+  # returns the 'name' of the pit 
+
+
+
+END; # AwariTypes

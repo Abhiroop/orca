@@ -1,0 +1,14 @@
+OBJECT SPECIFICATION Stack;
+
+FROM Types IMPORT ResultRecord;
+
+	OPERATION InitStack();
+	OPERATION InitVar();
+	OPERATION PrintStack();
+	OPERATION FullStack(signature : integer);
+	OPERATION PushResult(resultrecord : ResultRecord);
+	OPERATION PopResult(signature : integer;
+			    resrec : OUT ResultRecord) : boolean;
+	OPERATION PrintInfo();
+
+END;

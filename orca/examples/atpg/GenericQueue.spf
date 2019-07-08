@@ -1,0 +1,24 @@
+GENERIC (SCALAR TYPE T)
+# Original did not have "SCALAR", but the implementation does comparison,
+# so ...
+
+OBJECT SPECIFICATION GenericQueue;
+
+	# The queue only contains unique items, if an item is already on the
+	# queue it will not be queued again.
+
+	OPERATION IsEmpty():boolean;	# Check if queue empty
+	OPERATION EnQueue(item:T);
+	OPERATION DeQueue(item:OUT T):boolean;
+
+        OPERATION Is_Element(item:T):boolean;
+        # If the named item is on the queue the operation returns true.
+        # If the named item is not on the queue the operation returns false.
+
+        OPERATION Delete(item:T);
+
+# DEBUG
+	OPERATION PrintQueue();
+# END DEBUG
+
+END GENERIC;

@@ -1,0 +1,15 @@
+MODULE SPECIFICATION main;
+
+FROM semaphore       IMPORT semaphore;
+FROM task_stack      IMPORT task_descr;
+FROM task_graph_obj  IMPORT task_graph_obj;
+FROM action_list_obj IMPORT action_list_obj;
+
+PROCESS worker(task        : task_descr;
+	       task_graph  : SHARED task_graph_obj;
+	       action_list : SHARED action_list_obj;
+	       print_sema  : SHARED semaphore);
+
+PROCESS OrcaMain ();
+
+END;

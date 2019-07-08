@@ -1,0 +1,18 @@
+OBJECT SPECIFICATION Matrix[integer];
+
+TYPE Complex_T = RECORD
+		real: real;
+		imag: real;
+END;
+
+TYPE ComplexArray_T = ARRAY[integer] OF Complex_T;
+
+FUNCTION k_log_2(n: integer) : integer;
+
+OPERATION Initialize(data: IN ComplexArray_T);
+OPERATION Get(data: OUT ComplexArray_T);
+OPERATION Get2(): ComplexArray_T;
+OPERATION Get3(): ComplexArray_T;
+OPERATION Compute_phase(kl1: IN integer);
+
+END;

@@ -1,0 +1,10 @@
+echo 'newgraph border clip X 3.8'
+echo 'xaxis min 0 max 35 label : number of CPUs'
+echo 'yaxis min 0 max 130 label : execution time (seconds)'
+echo 'newcurve linetype solid marktype circle label : Data Parallel / 768x768'
+echo 'pts '
+cat sor.dp.768.plot
+echo 'newcurve linetype dotted marktype circle label : Task Parallel / 768x768'
+echo 'pts '
+cat sor.tp.768.plot
+echo 'legend defaults x 35 y 125 hjr vjt'

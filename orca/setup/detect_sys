@@ -1,0 +1,33 @@
+#!/bin/sh
+
+# find out what system we are running on. Choice is between Solaris-2,
+# Sunos4, BSDI, and Linux.
+
+MAKE=make
+
+case `uname` in
+Linux)  MACH=linux
+        ;;
+BSD/OS)	MACH=bsdi
+	MAKE=gmake
+	;;
+*)
+	MAKE=gmake
+        case `uname -r` in
+        4*)	MACH=sun4
+        	;;
+        5*)	MACH=sol2
+	        ;;
+        *)	# Huh? try using echo command ...
+	        if /bin/echo 'a\c' | grep 'c' >/dev/null ; then
+		        : We have BSD-like echo command.
+        		MACH=sun4
+	        else
+        		: We have SystemV-like echo command.
+	        	MACH=sol2
+        	fi
+        esac
+        ;;
+esac
+
+export MACH MAKE

@@ -1,0 +1,29 @@
+#include "trace/trace.h"
+
+/* Interface from Orca generic trace_gen module to the trace routines. */
+
+char *trc__nmconv(t_string *);
+
+t_integer
+_concat(_concat(f_,trace_gen),__new_event)(t_integer v_level, t_string *v_name, t_string *v_fmt) {
+	char *name = trc__nmconv(v_name);
+	char *fmt = trc__nmconv(v_fmt);
+	t_integer r;
+
+	if (td_trace_gen__T.td_flags & DYNAMIC) {
+		m_liberr("TRACE", "tracing with dynamic type not allowed");
+	}
+	r = trc_new_event(v_level, td_trace_gen__T.td_size, name, fmt);
+	free(name);
+	free(fmt);
+	return r;
+}
+
+void
+_concat(_concat(f_,trace_gen),__event)(t_integer v_e, t_trace_gen__T cht_trace_gen__T(,*)v_user_info) {
+	trc_event(v_e, (void *) (cht_trace_gen__T(&,)v_user_info));
+}
+
+void
+(_concat(_concat(ini_,trace_gen),__trace_gen))(void) {
+}

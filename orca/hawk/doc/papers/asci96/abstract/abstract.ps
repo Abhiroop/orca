@@ -1,0 +1,750 @@
+%!PS-Adobe-2.0
+%%Creator: dvips 5.55 Copyright 1986, 1994 Radical Eye Software
+%%Title: abstract.dvi
+%%CreationDate: Mon Jan 15 15:27:31 1996
+%%Pages: 3
+%%PageOrder: Ascend
+%%BoundingBox: 0 0 596 842
+%%DocumentFonts: Times-Roman Times-Bold Times-Italic
+%%EndComments
+%DVIPSCommandLine: dvips -Poce-e -o abstract.ps abstract.dvi
+%DVIPSParameters: dpi=600, compressed, comments removed
+%DVIPSSource:  TeX output 1996.01.15:1526
+%%BeginProcSet: /usr/local/lib/tex/dvips/psfig.pro
+% Psfig/TeX Release 1.2
+% dvips version
+%
+% All software, documentation, and related files in this distribution of
+% psfig/tex are Copyright 1987, 1988 Trevor J. Darrell
+%
+% Permission is granted for use and non-profit distribution of psfig/tex 
+% providing that this notice be clearly maintained, but the right to
+% distribute any portion of psfig/tex for profit or as part of any commercial
+% product is specifically reserved for the author.
+%
+%
+% $Header: /usr/proj/orca/Repositories/gnucvs/hawk/doc/papers/asci96/abstract/abstract.ps,v 1.1 1996/03/27 13:49:54 saniya Exp $
+% $Source: /usr/proj/orca/Repositories/gnucvs/hawk/doc/papers/asci96/abstract/abstract.ps,v $
+%
+/TeXscale { 65536 div } def
+
+/DocumentInitState [ matrix currentmatrix currentlinewidth currentlinecap
+currentlinejoin currentdash currentgray currentmiterlimit ] cvx def
+
+/startTexFig {
+% usage :  x y bb-llx bb-lly bb-urx bb-ury startFig
+	/SavedState save def
+	userdict maxlength dict begin
+	currentpoint transform
+
+	DocumentInitState setmiterlimit setgray setdash setlinejoin setlinecap
+		setlinewidth setmatrix
+
+	itransform moveto
+
+	/ury exch TeXscale def
+	/urx exch TeXscale def
+	/lly exch TeXscale def
+	/llx exch TeXscale def
+	/y exch TeXscale def
+	/x exch TeXscale def
+	
+	currentpoint /cy exch def /cx exch def
+
+	/sx x urx llx sub div def 	% scaling for x
+	/sy y ury lly sub div def	% scaling for y
+
+	sx sy scale			% scale by (sx,sy)
+
+	cx sx div llx sub
+	cy sy div ury sub translate
+	
+	/DefFigCTM matrix currentmatrix def
+
+	/initmatrix {
+		DefFigCTM setmatrix
+	} def
+	/defaultmatrix {
+		DefFigCTM exch copy
+	} def
+
+	/initgraphics {
+		DocumentInitState setmiterlimit setgray setdash 
+			setlinejoin setlinecap setlinewidth setmatrix
+		DefFigCTM setmatrix
+	} def
+
+	/showpage {
+		initgraphics
+	} def
+% /erasepage and /copypage added for MatLab support (tli)
+ 	/erasepage {
+ 		initgraphics
+ 	} def
+ 	/copypage {} def
+
+} def
+% Args are llx lly urx ury (in figure coordinates)
+/clipFig {
+	currentpoint 6 2 roll
+	newpath 4 copy
+	4 2 roll moveto
+	6 -1 roll exch lineto
+	exch lineto
+	exch lineto
+	closepath clip
+	newpath
+	moveto
+} def
+% doclip, if called, will always be just after a `startfig'
+/doclip { llx lly urx ury clipFig } def
+/endTexFig {
+	end SavedState restore
+} def
+%%EndProcSet
+%%BeginProcSet: texc.pro
+/TeXDict 250 dict def TeXDict begin /N{def}def /B{bind def}N /S{exch}N
+/X{S N}B /TR{translate}N /isls false N /vsize 11 72 mul N /hsize 8.5 72
+mul N /landplus90{false}def /@rigin{isls{[0 landplus90{1 -1}{-1 1}
+ifelse 0 0 0]concat}if 72 Resolution div 72 VResolution div neg scale
+isls{landplus90{VResolution 72 div vsize mul 0 exch}{Resolution -72 div
+hsize mul 0}ifelse TR}if Resolution VResolution vsize -72 div 1 add mul
+TR matrix currentmatrix dup dup 4 get round 4 exch put dup dup 5 get
+round 5 exch put setmatrix}N /@landscape{/isls true N}B /@manualfeed{
+statusdict /manualfeed true put}B /@copies{/#copies X}B /FMat[1 0 0 -1 0
+0]N /FBB[0 0 0 0]N /nn 0 N /IE 0 N /ctr 0 N /df-tail{/nn 8 dict N nn
+begin /FontType 3 N /FontMatrix fntrx N /FontBBox FBB N string /base X
+array /BitMaps X /BuildChar{CharBuilder}N /Encoding IE N end dup{/foo
+setfont}2 array copy cvx N load 0 nn put /ctr 0 N[}B /df{/sf 1 N /fntrx
+FMat N df-tail}B /dfs{div /sf X /fntrx[sf 0 0 sf neg 0 0]N df-tail}B /E{
+pop nn dup definefont setfont}B /ch-width{ch-data dup length 5 sub get}
+B /ch-height{ch-data dup length 4 sub get}B /ch-xoff{128 ch-data dup
+length 3 sub get sub}B /ch-yoff{ch-data dup length 2 sub get 127 sub}B
+/ch-dx{ch-data dup length 1 sub get}B /ch-image{ch-data dup type
+/stringtype ne{ctr get /ctr ctr 1 add N}if}B /id 0 N /rw 0 N /rc 0 N /gp
+0 N /cp 0 N /G 0 N /sf 0 N /CharBuilder{save 3 1 roll S dup /base get 2
+index get S /BitMaps get S get /ch-data X pop /ctr 0 N ch-dx 0 ch-xoff
+ch-yoff ch-height sub ch-xoff ch-width add ch-yoff setcachedevice
+ch-width ch-height true[1 0 0 -1 -.1 ch-xoff sub ch-yoff .1 add]/id
+ch-image N /rw ch-width 7 add 8 idiv string N /rc 0 N /gp 0 N /cp 0 N{
+rc 0 ne{rc 1 sub /rc X rw}{G}ifelse}imagemask restore}B /G{{id gp get
+/gp gp 1 add N dup 18 mod S 18 idiv pl S get exec}loop}B /adv{cp add /cp
+X}B /chg{rw cp id gp 4 index getinterval putinterval dup gp add /gp X
+adv}B /nd{/cp 0 N rw exit}B /lsh{rw cp 2 copy get dup 0 eq{pop 1}{dup
+255 eq{pop 254}{dup dup add 255 and S 1 and or}ifelse}ifelse put 1 adv}
+B /rsh{rw cp 2 copy get dup 0 eq{pop 128}{dup 255 eq{pop 127}{dup 2 idiv
+S 128 and or}ifelse}ifelse put 1 adv}B /clr{rw cp 2 index string
+putinterval adv}B /set{rw cp fillstr 0 4 index getinterval putinterval
+adv}B /fillstr 18 string 0 1 17{2 copy 255 put pop}for N /pl[{adv 1 chg}
+{adv 1 chg nd}{1 add chg}{1 add chg nd}{adv lsh}{adv lsh nd}{adv rsh}{
+adv rsh nd}{1 add adv}{/rc X nd}{1 add set}{1 add clr}{adv 2 chg}{adv 2
+chg nd}{pop nd}]dup{bind pop}forall N /D{/cc X dup type /stringtype ne{]
+}if nn /base get cc ctr put nn /BitMaps get S ctr S sf 1 ne{dup dup
+length 1 sub dup 2 index S get sf div put}if put /ctr ctr 1 add N}B /I{
+cc 1 add D}B /bop{userdict /bop-hook known{bop-hook}if /SI save N @rigin
+0 0 moveto /V matrix currentmatrix dup 1 get dup mul exch 0 get dup mul
+add .99 lt{/QV}{/RV}ifelse load def pop pop}N /eop{SI restore showpage
+userdict /eop-hook known{eop-hook}if}N /@start{userdict /start-hook
+known{start-hook}if pop /VResolution X /Resolution X 1000 div /DVImag X
+/IE 256 array N 0 1 255{IE S 1 string dup 0 3 index put cvn put}for
+65781.76 div /vsize X 65781.76 div /hsize X}N /p{show}N /RMat[1 0 0 -1 0
+0]N /BDot 260 string N /rulex 0 N /ruley 0 N /v{/ruley X /rulex X V}B /V
+{}B /RV statusdict begin /product where{pop product dup length 7 ge{0 7
+getinterval dup(Display)eq exch 0 4 getinterval(NeXT)eq or}{pop false}
+ifelse}{false}ifelse end{{gsave TR -.1 -.1 TR 1 1 scale rulex ruley
+false RMat{BDot}imagemask grestore}}{{gsave TR -.1 -.1 TR rulex ruley
+scale 1 1 false RMat{BDot}imagemask grestore}}ifelse B /QV{gsave
+transform round exch round exch itransform moveto rulex 0 rlineto 0
+ruley neg rlineto rulex neg 0 rlineto fill grestore}B /a{moveto}B /delta
+0 N /tail{dup /delta X 0 rmoveto}B /M{S p delta add tail}B /b{S p tail}
+B /c{-4 M}B /d{-3 M}B /e{-2 M}B /f{-1 M}B /g{0 M}B /h{1 M}B /i{2 M}B /j{
+3 M}B /k{4 M}B /w{0 rmoveto}B /l{p -4 w}B /m{p -3 w}B /n{p -2 w}B /o{p
+-1 w}B /q{p 1 w}B /r{p 2 w}B /s{p 3 w}B /t{p 4 w}B /x{0 S rmoveto}B /y{
+3 2 roll p a}B /bos{/SS save N}B /eos{SS restore}B end
+%%EndProcSet
+%%BeginProcSet: texps.pro
+TeXDict begin /rf{findfont dup length 1 add dict begin{1 index /FID ne 2
+index /UniqueID ne and{def}{pop pop}ifelse}forall[1 index 0 6 -1 roll
+exec 0 exch 5 -1 roll VResolution Resolution div mul neg 0 0]/Metrics
+exch def dict begin Encoding{exch dup type /integertype ne{pop pop 1 sub
+dup 0 le{pop}{[}ifelse}{FontMatrix 0 get div Metrics 0 get div def}
+ifelse}forall Metrics /Metrics currentdict end def[2 index currentdict
+end definefont 3 -1 roll makefont /setfont load]cvx def}def
+/ObliqueSlant{dup sin S cos div neg}B /SlantFont{4 index mul add}def
+/ExtendFont{3 -1 roll mul exch}def /ReEncodeFont{/Encoding exch def}def
+end
+%%EndProcSet
+%%BeginProcSet: special.pro
+TeXDict begin /SDict 200 dict N SDict begin /@SpecialDefaults{/hs 612 N
+/vs 792 N /ho 0 N /vo 0 N /hsc 1 N /vsc 1 N /ang 0 N /CLIP 0 N /rwiSeen
+false N /rhiSeen false N /letter{}N /note{}N /a4{}N /legal{}N}B
+/@scaleunit 100 N /@hscale{@scaleunit div /hsc X}B /@vscale{@scaleunit
+div /vsc X}B /@hsize{/hs X /CLIP 1 N}B /@vsize{/vs X /CLIP 1 N}B /@clip{
+/CLIP 2 N}B /@hoffset{/ho X}B /@voffset{/vo X}B /@angle{/ang X}B /@rwi{
+10 div /rwi X /rwiSeen true N}B /@rhi{10 div /rhi X /rhiSeen true N}B
+/@llx{/llx X}B /@lly{/lly X}B /@urx{/urx X}B /@ury{/ury X}B /magscale
+true def end /@MacSetUp{userdict /md known{userdict /md get type
+/dicttype eq{userdict begin md length 10 add md maxlength ge{/md md dup
+length 20 add dict copy def}if end md begin /letter{}N /note{}N /legal{}
+N /od{txpose 1 0 mtx defaultmatrix dtransform S atan/pa X newpath
+clippath mark{transform{itransform moveto}}{transform{itransform lineto}
+}{6 -2 roll transform 6 -2 roll transform 6 -2 roll transform{
+itransform 6 2 roll itransform 6 2 roll itransform 6 2 roll curveto}}{{
+closepath}}pathforall newpath counttomark array astore /gc xdf pop ct 39
+0 put 10 fz 0 fs 2 F/|______Courier fnt invertflag{PaintBlack}if}N
+/txpose{pxs pys scale ppr aload pop por{noflips{pop S neg S TR pop 1 -1
+scale}if xflip yflip and{pop S neg S TR 180 rotate 1 -1 scale ppr 3 get
+ppr 1 get neg sub neg ppr 2 get ppr 0 get neg sub neg TR}if xflip yflip
+not and{pop S neg S TR pop 180 rotate ppr 3 get ppr 1 get neg sub neg 0
+TR}if yflip xflip not and{ppr 1 get neg ppr 0 get neg TR}if}{noflips{TR
+pop pop 270 rotate 1 -1 scale}if xflip yflip and{TR pop pop 90 rotate 1
+-1 scale ppr 3 get ppr 1 get neg sub neg ppr 2 get ppr 0 get neg sub neg
+TR}if xflip yflip not and{TR pop pop 90 rotate ppr 3 get ppr 1 get neg
+sub neg 0 TR}if yflip xflip not and{TR pop pop 270 rotate ppr 2 get ppr
+0 get neg sub neg 0 S TR}if}ifelse scaleby96{ppr aload pop 4 -1 roll add
+2 div 3 1 roll add 2 div 2 copy TR .96 dup scale neg S neg S TR}if}N /cp
+{pop pop showpage pm restore}N end}if}if}N /normalscale{Resolution 72
+div VResolution 72 div neg scale magscale{DVImag dup scale}if 0 setgray}
+N /psfts{S 65781.76 div N}N /startTexFig{/psf$SavedState save N userdict
+maxlength dict begin /magscale false def normalscale currentpoint TR
+/psf$ury psfts /psf$urx psfts /psf$lly psfts /psf$llx psfts /psf$y psfts
+/psf$x psfts currentpoint /psf$cy X /psf$cx X /psf$sx psf$x psf$urx
+psf$llx sub div N /psf$sy psf$y psf$ury psf$lly sub div N psf$sx psf$sy
+scale psf$cx psf$sx div psf$llx sub psf$cy psf$sy div psf$ury sub TR
+/showpage{}N /erasepage{}N /copypage{}N /p 3 def @MacSetUp}N /doclip{
+psf$llx psf$lly psf$urx psf$ury currentpoint 6 2 roll newpath 4 copy 4 2
+roll moveto 6 -1 roll S lineto S lineto S lineto closepath clip newpath
+moveto}N /endTexFig{end psf$SavedState restore}N /@beginspecial{SDict
+begin /SpecialSave save N gsave normalscale currentpoint TR
+@SpecialDefaults count /ocount X /dcount countdictstack N}N /@setspecial
+{CLIP 1 eq{newpath 0 0 moveto hs 0 rlineto 0 vs rlineto hs neg 0 rlineto
+closepath clip}if ho vo TR hsc vsc scale ang rotate rwiSeen{rwi urx llx
+sub div rhiSeen{rhi ury lly sub div}{dup}ifelse scale llx neg lly neg TR
+}{rhiSeen{rhi ury lly sub div dup scale llx neg lly neg TR}if}ifelse
+CLIP 2 eq{newpath llx lly moveto urx lly lineto urx ury lineto llx ury
+lineto closepath clip}if /showpage{}N /erasepage{}N /copypage{}N newpath
+}N /@endspecial{count ocount sub{pop}repeat countdictstack dcount sub{
+end}repeat grestore SpecialSave restore end}N /@defspecial{SDict begin}
+N /@fedspecial{end}B /li{lineto}B /rl{rlineto}B /rc{rcurveto}B /np{
+/SaveX currentpoint /SaveY X N 1 setlinecap newpath}N /st{stroke SaveX
+SaveY moveto}N /fil{fill SaveX SaveY moveto}N /ellipse{/endangle X
+/startangle X /yrad X /xrad X /savematrix matrix currentmatrix N TR xrad
+yrad scale 0 0 1 startangle endangle arc savematrix setmatrix}N end
+%%EndProcSet
+TeXDict begin 39158280 55380996 1000 600 600
+(/home/tim/papers/asci96/abstract/abstract.dvi) @start
+/Fa 134[37 37 55 1[42 23 32 32 1[42 42 42 60 23 1[23
+23 42 42 23 37 42 37 42 42 8[51 2[60 46 42 2[51 1[55
+69 3[28 60 60 1[51 60 55 9[42 6[42 4[28 21 44[{}39 83.333336
+/Times-Italic rf /Fb 134[42 1[60 3[32 37 2[42 3[46 5[37
+46 41[28 58[{}9 83.333336 /Times-Bold rf /Fc 55[28 13[37
+8[42 1[46 46 3[37 47[37 42 42 60 42 42 23 32 28 42 42
+42 42 65 23 42 23 23 42 42 28 37 42 37 42 37 3[28 1[28
+2[60 78 60 60 51 46 55 1[46 60 60 74 51 60 32 28 60 60
+46 51 60 55 55 60 5[23 23 42 42 1[42 42 42 42 42 42 42
+1[21 28 21 2[28 28 40[{}73 83.333336 /Times-Roman rf
+/Fd 138[66 40 47 53 1[66 60 66 100 33 66 1[33 66 60 40
+53 66 53 66 60 9[120 3[66 86 1[73 2[113 3[47 2[73 4[86
+11[60 60 60 60 60 3[40 45[{}33 119.999947 /Times-Bold
+rf /Fe 55[33 78[50 2[50 50 28 39 33 3[50 78 28 1[28 28
+50 2[44 50 44 1[44 10[72 72 61 55 66 9[72 5[66 72 92
+17[25 1[25 44[{}28 100.000000 /Times-Roman rf /Ff 134[72
+72 2[72 40 56 48 1[72 72 72 112 40 72 1[40 1[72 48 64
+72 1[72 64 12[88 80 96 1[80 2[128 3[48 4[104 22[48 45[{}27
+144.000000 /Times-Roman rf end
+%%EndProlog
+%%BeginSetup
+%%Feature: *Resolution 600dpi
+TeXDict begin
+%%PaperSize: A4
+
+%%EndSetup
+%%Page: 1 1
+1 0 bop -45 656 a Ff(Implementation)32 b(of)k(a)f(Portable)f(Runtime)g
+(System)h(Supporting)e(Mixed)1050 839 y(T)-10 b(ask-)35
+b(and)g(Data-Parallelism)695 1079 y Fe(Saniya)25 b(Ben)h(Hassen)475
+1196 y(V)-6 b(rije)25 b(Universiteit,)e(Amsterdam)752
+1312 y(saniya@cs.vu.nl)2390 1079 y(T)m(im)g(R)2651 1078
+y(\310)2643 1079 y(uhl)1976 1196 y(V)-6 b(rije)25 b(Universiteit,)e
+(Amsterdam)2313 1312 y(tim@cs.vu.nl)-120 1637 y Fd(Abstract)-120
+1835 y Fc(This)16 b(paper)e(describes)h(the)h(portable)e
+(implementation)f(of)i(a)h(pro-)-120 1935 y(gramming)24
+b(model)i(based)g(on)g(shared)f(objects)h(that)h(integrates)-120
+2035 y(task-)k(and)g(data-parallelism.)58 b(As)32 b(a)f(starting)g
+(point,)i(the)e(im-)-120 2134 y(plementation)d(uses)j(two)g(runtime)e
+(systems)i(that)f(are)g(already)-120 2234 y(available:)39
+b(the)26 b(Orca)h(R)-5 b(TS,)27 b(for)e(task-parallel)h(programming,)
+-120 2333 y(and)17 b(Hawk,)g(for)g(data-parallel)f(programming.)22
+b(T)-6 b(o)17 b(achieve)g(our)-120 2433 y(goal,)34 b(we)f(implemented)d
+(the)i(Orca)g(R)-5 b(TS)33 b(and)f(Hawk)g(on)f(top)-120
+2533 y(of)e(Panda,)h(a)g(virtual)e(machine)g(that)h(was)h(designed)e
+(to)h(facili-)-120 2632 y(tate)e(porting)e(parallel)g(programming)e
+(systems)k(to)g(new)f(archi-)-120 2732 y(tectures.)54
+b(W)m(ith)30 b(the)g(resulting)e(system,)k(an)d(application)f(pro-)-120
+2832 y(gram)13 b(may)h(use)g(the)h(task-parallel)e(model)g(of)h(Orca)g
+(and)f(the)i(data-)-120 2931 y(parallel)23 b(model)f(of)g(Hawk)h(by)g
+(calling)f(the)h(appropriate)e(primi-)-120 3031 y(tives)g(in)f(either)g
+(the)g(Orca)g(R)-5 b(TS)21 b(or)f(in)g(Hawk.)-37 3255
+y Fb(keywords:)57 b Fc(Data)36 b(Parallel)g(Programming.)70
+b(Partitioned)-120 3355 y(Shared)22 b(Objects.)36 b(Portable)22
+b(Runtime)h(System.)35 b(Portable)23 b(V)-5 b(ir)n(-)-120
+3455 y(tual)31 b(Machine.)58 b(Shared)30 b(Objects.)59
+b(T)-6 b(ask)31 b(Parallel)g(Program-)-120 3554 y(ming.)-120
+3871 y Fd(1)119 b(Intr)n(oduction)-120 4070 y Fc(Supporting)14
+b(both)i(task)h(and)f(data)h(parallelism)f(in)g(one)h(program-)-120
+4169 y(ming)j(system)g(is)h(useful,)f(since)h(many)e(applications)g
+(need)h(both)-120 4269 y(types)14 b(of)g(parallelism.)24
+b(W)-7 b(e)16 b(are)e(implementing)e(a)j(programming)-120
+4368 y(model)f(based)h(on)g(shared)g(objects)g(that)g(supports)f(both)g
+(task-)i(and)-120 4468 y(data-parallelism)j([1].)29 b(In)21
+b(this)g(model,)f(there)h(are)f(two)i(types)e(of)-120
+4568 y(objects:)31 b Fa(shar)m(ed)21 b(objects)p Fc(,)h(that)g(are)g
+(either)g(stored)f(on)h(one)f(pro-)-120 4667 y(cessor)15
+b(or)f(replicated)f(on)h(multiple)g(processors)g(and)f
+Fa(partitioned)-120 4767 y(shar)m(ed)g(objects)h Fc(\(partitioned)d
+(objects)j(for)f(short\),)h(for)f(which)g(the)-120 4867
+y(state)29 b(is)g(distributed)d(over)h(multiple)h(processors.)49
+b(In)27 b(a)i(paral-)-120 4966 y(lel)15 b(application,)e(concurrent)f
+(processes)i(may)f(communicate)f(by)-120 5066 y(invoking)18
+b(objects)i(of)g(either)g(type.)-37 5172 y(T)-6 b(o)44
+b(implement)e(this)j(integrated)d(model,)48 b(we)d(start)f(with)-120
+5272 y(two)25 b(available)g(runtime)f(systems)i(\(R)-5
+b(TSs\),)26 b(one)f(that)g(supports)-120 5372 y(shared)i(objects)g(and)
+f(one)h(that)h(supports)e(partitioned)g(objects.)-120
+5471 y(Orca)e(is)i(a)f(language)e(based)h(on)g(shared)f(objects)i(for)f
+(program-)-120 5571 y(ming)14 b(task-parallel)f(applications)g([2)o(])i
+(and)f(its)h(R)-5 b(TS)15 b(provides)e(an)-120 5670 y(interface)22
+b(for)h(managing)f(processes)h(and)g(shared)g(objects.)36
+b(On)1872 1637 y(the)20 b(other)f(hand,)g(Hawk)h(is)h(a)g(language)d
+(independent)f(R)-5 b(TS)21 b(that)1872 1737 y(implements)12
+b(partitioned)g(objects)i([3)o(].)25 b(Our)14 b(goal)f(is)i(to)f
+(integrate)1872 1836 y(the)24 b(Orca)h(R)-5 b(TS)26 b(and)e(Hawk)h
+(into)f(a)h(portable)f(R)-5 b(TS)25 b(that)g(allows)1872
+1936 y(both)19 b(models)g(to)i(be)f(used)g(together)f(at)h(application)
+f(level.)1955 2043 y(T)-6 b(o)24 b(achieve)g(our)g(goal,)i(we)f(use)g
+(Panda)f([4)o(],)i(a)f(portable)f(vir)n(-)1872 2142 y(tual)c(machine)f
+(that)h(was)h(designed)d(to)j(facilitate)f(porting)e(paral-)1872
+2242 y(lel)d(programming)d(systems)k(to)g(new)f(architectures.)24
+b(Panda)15 b(pro-)1872 2342 y(vides)f(threads,)h(communication,)d(and)i
+(synchronization)d(primi-)1872 2441 y(tives)17 b(to)g(programming)d
+(systems.)26 b(Only)17 b(a)g(small)h(part)e(of)h(Panda)1872
+2541 y(needs)i(to)i(be)f(rewritten)f(to)i(be)f(used)g(on)f(a)i(new)f
+(architecture.)1955 2648 y(In)i(this)i(paper)m(,)e(we)i(describe)e(the)
+h(portable)f(implementation)1872 2747 y(of)j(the)g(mixed)g(task-)g(and)
+g(data-parallel)f(object)h(model)g(on)g(top)1872 2847
+y(of)17 b(Panda.)25 b(The)18 b(Orca)f(R)-5 b(TS)19 b(and)e(Hawk)g(were)
+h(written)g(indepen-)1872 2947 y(dently)25 b(on)i(top)f(of)h(Panda.)46
+b(Each)26 b(required)f(a)j(dif)o(ferent)c(set)k(of)1872
+3046 y(communication)c(and)i(synchronization)e(tools)j(for)f(the)h
+(imple-)1872 3146 y(mentation)20 b(of)i(its)h(object)f(model.)31
+b(W)m(ith)22 b(the)g(resulting)g(system,)1872 3246 y(an)j(application)f
+(program)f(may)i(use)g(both)g(shared)f(objects)h(and)1872
+3345 y(partitioned)15 b(objects)i(by)f(calling)h(the)g(appropriate)e
+(primitives)h(in)1872 3445 y(the)k(Orca)g(R)-5 b(TS)21
+b(or)f(in)g(Hawk.)1872 3764 y Fd(2)119 b(Pr)n(ogramming)29
+b(Model)1872 3962 y Fc(In)16 b(our)f(object-based)g(parallel)h
+(programming)d(model,)j(multiple)1872 4062 y(threads)26
+b(of)h(control)e(\(processes)i(or)g(tasks\))g(can)g(communicate)1872
+4162 y(and)d(synchronize)f(through)g(operations)g(on)i(shared)f
+(objects)h(or)1872 4261 y(partitioned)18 b(objects.)1955
+4368 y(Shared)d(objects)i(are)g(used)f(by)h(task-parallel)f
+(applications.)24 b(A)1872 4468 y(shared)19 b(object)h(encapsulates)f
+(a)h(shared)g(data)g(structure)f(and)h(the)1872 4567
+y(operations)25 b(on)h(the)g(data,)i(so)f(it)h(is)f(essentially)g(an)g
+(instance)f(of)1872 4667 y(an)20 b(Abstract)h(Data)g(T)-6
+b(ype)21 b(\(ADT\).)f(Its)h(state)h(is)g(either)f(stored)f(on)1872
+4767 y(one)k(processor)h(or)g(replicated)f(on)h(multiple)g(processors.)
+42 b(Pro-)1872 4866 y(cesses)25 b(may)e(explicitely)g(be)h(created)f
+(on)h(dif)o(ferent)e(processors)1872 4966 y(and)g(these)h(processes)g
+(may)f(communicate)f(by)i(calling)f(the)h(op-)1872 5065
+y(erations)c(de\256ned)g(on)h(shared)g(objects.)1955
+5172 y(In)15 b(contrast,)g(partitioned)f(objects)h(are)g(used)g(for)g
+(data-parallel)1872 5272 y(applications.)28 b(As)22 b(in)g(the)f
+(shared)g(object)f(model,)h(a)g(partitioned)1872 5372
+y(object)28 b(is)j(an)e(instance)g(of)g(an)h(ADT)-6 b(.)29
+b(The)g(state)h(of)f(the)h(ADT)-6 b(,)1872 5471 y(however)m(,)20
+b(is)k(restricted)e(to)g(be)h(a)g(multidimensional)d(array)h(that)1872
+5571 y(the)32 b(programmer)e(must)j(partition)f(using)g(directives.)64
+b(These)1872 5670 y(partitions)21 b(may)h(then)g(be)g(distributed)f
+(arbitrarily)g(over)h(several)1809 5919 y(1)p eop
+%%Page: 2 2
+2 1 bop 703 1082 a @beginspecial @setspecial
+%%BeginDocument: object.pstex
+/$F2psDict 200 dict def
+$F2psDict begin
+$F2psDict /mtrx matrix put
+/col-1 {} def
+/col0 {0.000 0.000 0.000 srgb} bind def
+/col1 {0.000 0.000 1.000 srgb} bind def
+/col2 {0.000 1.000 0.000 srgb} bind def
+/col3 {0.000 1.000 1.000 srgb} bind def
+/col4 {1.000 0.000 0.000 srgb} bind def
+/col5 {1.000 0.000 1.000 srgb} bind def
+/col6 {1.000 1.000 0.000 srgb} bind def
+/col7 {1.000 1.000 1.000 srgb} bind def
+/col8 {0.000 0.000 0.560 srgb} bind def
+/col9 {0.000 0.000 0.690 srgb} bind def
+/col10 {0.000 0.000 0.820 srgb} bind def
+/col11 {0.530 0.810 1.000 srgb} bind def
+/col12 {0.000 0.560 0.000 srgb} bind def
+/col13 {0.000 0.690 0.000 srgb} bind def
+/col14 {0.000 0.820 0.000 srgb} bind def
+/col15 {0.000 0.560 0.560 srgb} bind def
+/col16 {0.000 0.690 0.690 srgb} bind def
+/col17 {0.000 0.820 0.820 srgb} bind def
+/col18 {0.560 0.000 0.000 srgb} bind def
+/col19 {0.690 0.000 0.000 srgb} bind def
+/col20 {0.820 0.000 0.000 srgb} bind def
+/col21 {0.560 0.000 0.560 srgb} bind def
+/col22 {0.690 0.000 0.690 srgb} bind def
+/col23 {0.820 0.000 0.820 srgb} bind def
+/col24 {0.500 0.190 0.000 srgb} bind def
+/col25 {0.630 0.250 0.000 srgb} bind def
+/col26 {0.750 0.380 0.000 srgb} bind def
+/col27 {1.000 0.500 0.500 srgb} bind def
+/col28 {1.000 0.630 0.630 srgb} bind def
+/col29 {1.000 0.750 0.750 srgb} bind def
+/col30 {1.000 0.880 0.880 srgb} bind def
+/col31 {1.000 0.840 0.000 srgb} bind def
+
+end
+save
+-125.0 254.0 translate
+1 -1 scale
+
+/clp {closepath} bind def
+/ef {eofill} bind def
+/gr {grestore} bind def
+/gs {gsave} bind def
+/l {lineto} bind def
+/m {moveto} bind def
+/n {newpath} bind def
+/s {stroke} bind def
+/slc {setlinecap} bind def
+/slj {setlinejoin} bind def
+/slw {setlinewidth} bind def
+/srgb {setrgbcolor} bind def
+/rot {rotate} bind def
+/sc {scale} bind def
+/tr {translate} bind def
+/tnt {dup dup currentrgbcolor
+  4 -2 roll dup 1 exch sub 3 -1 roll mul add
+  4 -2 roll dup 1 exch sub 3 -1 roll mul add
+  4 -2 roll dup 1 exch sub 3 -1 roll mul add srgb}
+  bind def
+/shd {dup dup currentrgbcolor 4 -2 roll mul 4 -2 roll mul
+  4 -2 roll mul srgb} bind def
+/$F2psBegin {$F2psDict begin /$F2psEnteredState save def} def
+/$F2psEnd {$F2psEnteredState restore end} def
+
+$F2psBegin
+10 setmiterlimit
+ 0.06000 0.06000 sc
+7.500 slw
+% Polyline
+n 2100 2700 m 2100 4200 l  gs col-1 s gr 
+% Polyline
+n 2400 2700 m 2400 4200 l  gs col-1 s gr 
+% Polyline
+n 2700 2700 m 2700 4200 l  gs col-1 s gr 
+% Polyline
+n 3600 2700 m 3600 4200 l  gs col-1 s gr 
+% Polyline
+n 3900 2700 m 3900 4200 l  gs col-1 s gr 
+% Polyline
+n 2400 2700 m 2700 2700 l  2700 4200 l  2400 4200 l  clp gs col4 1.00 shd ef gr  gs col-1 s gr 
+% Polyline
+n 3000 2700 m 3000 4200 l  gs col-1 s gr 
+% Polyline
+n 2100 2700 m 2400 2700 l  2400 4200 l  2100 4200 l  clp gs col4 1.00 shd ef gr  gs col-1 s gr 
+% Polyline
+n 5626 3301 m 6226 3301 l  6226 3601 l  5626 3601 l  clp  gs col-1 s gr 
+% Polyline
+n 5626 2701 m 6226 2701 l  6226 3001 l  5626 3001 l  clp gs col4 1.00 shd ef gr  gs col0 s gr 
+% Polyline
+n 5626 3901 m 6226 3901 l  6226 4201 l  5626 4201 l  clp gs col16 1.00 shd ef gr  gs col-1 s gr 
+% Polyline
+n 2100 2700 m 3900 2700 l  3900 4200 l  2100 4200 l  clp  gs col-1 s gr 
+% Polyline
+n 3600 2700 m 3900 2700 l  3900 4200 l  3600 4200 l  clp gs col16 1.00 shd ef gr  gs col-1 s gr 
+% Polyline
+n 3300 2700 m 3600 2700 l  3600 4200 l  3300 4200 l  clp gs col16 1.00 shd ef gr  gs col-1 s gr 
+% Polyline
+	[66.7] 0 setdash
+n 2100 3000 m 3900 3000 l  3825 3000 l  gs col-1 s gr 	[] 0 setdash
+% Polyline
+	[66.7] 0 setdash
+n 2100 3300 m 3900 3300 l  3825 3300 l  gs col-1 s gr 	[] 0 setdash
+% Polyline
+	[66.7] 0 setdash
+n 2100 3600 m 3900 3600 l  3825 3600 l  gs col-1 s gr 	[] 0 setdash
+% Polyline
+	[66.7] 0 setdash
+n 2100 3900 m 3900 3900 l  3825 3900 l  gs col-1 s gr 	[] 0 setdash
+$F2psEnd
+restore
+%%EndDocument
+ @endspecial 2937 465 a Fc(processor)19 b(1)2937 767
+y(processor)g(2)2936 1068 y(processor)g(3)-120 1265 y(Figure)26
+b(1:)41 b(Example)26 b(of)h(a)g(partitioned)f(object.)46
+b(The)27 b(state)h(of)f(the)g(object)f(is)i(partitioned)e(column-wise)f
+(and)i(the)g(columns)f(are)-120 1364 y(distributed)19
+b(over)g(three)h(processors.)-120 1714 y(processors)f(\(see)i(Figure)e
+(1\).)-37 1819 y(After)e(the)g(state)g(of)g(an)g(object)f(has)h(been)f
+(partitioned)g(and)g(dis-)-120 1918 y(tributed,)24 b(the)g(object)g
+(may)g(be)g(invoked.)37 b(An)24 b(operation)e(on)i(an)-120
+2018 y(object)13 b(can)h(be)g(either)f(sequential)g(or)g(parallel.)25
+b(A)14 b(sequential)f(op-)-120 2118 y(eration)h(is)h(executed)e(on)i
+(one)f(machine)f(and)h(may)g(update)g(the)g(en-)-120
+2217 y(tire)19 b(state)g(of)f(the)g(object)g(sequentially)-5
+b(.)24 b(A)19 b(parallel)f(operation)e(is)-120 2317 y(executed)23
+b(according)f(to)j(the)f(\252owner)n(-computes)e(rule,\272)i(i.e.,)h
+(it)-120 2416 y(is)20 b(applied)e(to)h(all)g(partitions)f(owned)g(by)h
+(the)g(processors)e(in)i(par)n(-)-120 2516 y(allel.)30
+b(The)21 b(R)-5 b(TS)22 b(guarantees)d(that)j(all)f(partitions)g
+(accessed)g(and)-120 2616 y(updated)e(are)h(consistent.)-37
+2720 y(The)e(integration)f(of)i(both)f(types)g(of)h(objects)f(leads)h
+(to)g(a)g(\257exi-)-120 2820 y(ble)e(model)g(that)g(is)h(suitable)f
+(for)g(general-purpose)c(parallel)k(pro-)-120 2919 y(gramming.)44
+b(It)27 b(supports)f(a)h(general)f(process)g(model)g(with)h(ar)n(-)-120
+3019 y(bitrary)k(interactions)h(between)f(processes)h(and)g(mappings)f
+(to)-120 3119 y(physical)19 b(machines.)-120 3424 y Fd(3)119
+b(Implementation)53 b(of)f(the)h(Pr)n(ogram-)59 3574
+y(ming)30 b(Model)-120 3768 y Fc(T)-6 b(wo)29 b(runtime)f(systems)h
+(are)g(now)f(available)g(for)h(both)f(shared)-120 3868
+y(objects)f(and)f(partitioned)g(objects.)47 b(The)27
+b(Orca)g(R)-5 b(TS)28 b(provides)-120 3967 y(all)e(necessary)e
+(primitives)h(for)g(the)g(dynamic)f(creation)g(of)h(pro-)-120
+4067 y(cesses)f(and)e(for)h(the)g(creation)f(and)g(invocation)f(of)i
+(single-copy)-120 4166 y(or)16 b(replicated)f(objects.)25
+b(It)16 b(requires)f(from)g(the)h(underlying)d(oper)n(-)-120
+4266 y(ating)21 b(system)h(several)f(communication)d(and)j
+(synchronization)-120 4366 y(primitives:)39 b(Remote)26
+b(Procedure)e(Call,)29 b(Group)c(Communica-)-120 4465
+y(tion)20 b([5)o(],)g(and)g(threads.)-37 4570 y(Next)e(to)f(the)h(Orca)
+f(R)-5 b(TS,)18 b(Hawk)g(is)g(a)g(language-independent)-120
+4669 y(runtime)f(system)h(that)f(was)i(written)e(to)h(support)f
+(partitioned)f(ob-)-120 4769 y(jects)24 b([3)o(].)37
+b(Using)23 b(the)h(Hawk)f(primitives,)g(a)h(program)d(may)i(in-)-120
+4869 y(stantiate)d(an)g(object)f(by)h(specifying)e(the)i(number)e(of)h
+(its)i(dimen-)-120 4968 y(sions,)f(its)h(size,)g(and)e(the)i
+(operations)d(that)i(can)g(be)g(applied)f(to)i(it.)-120
+5068 y(Hawk)16 b(also)h(provides)d(routines)i(to)g(partition)f(an)i
+(object)e(and)h(dis-)-120 5168 y(tribute)23 b(partitions)g(over)f
+(several)i(processors.)36 b(Hawk)23 b(requires)-120 5267
+y(from)31 b(the)h(underlying)d(operating)h(system)i(a)g(dif)o(ferent)e
+(set)i(of)-120 5367 y(communication)16 b(protocols)h(than)i(the)g(Orca)
+f(R)-5 b(TS)20 b(does.)26 b(It)20 b(uses)-120 5466 y(collective)c
+(communication)f(on)h(top)h(of)g(unreliable)f(unicast)h(and)-120
+5566 y(multicast)j(protocols)f(in)h(addition)f(to)i(Group)d
+(Communication.)-37 5670 y(In)k(order)f(to)i(integrate)e(shared)h
+(objects)g(and)g(partitioned)f(ob-)1872 1714 y(jects)f(into)f(one)g
+(model,)g(we)h(have)f(implemented)f(the)h(Orca)h(R)-5
+b(TS)1872 1814 y(and)20 b(Hawk)i(on)f(top)g(of)g(Panda.)31
+b(The)21 b(portable)f(implementation)1872 1914 y(of)f(both)h(systems)g
+(is)i(brie\257y)d(described)g(in)h(the)h(next)e(section.)1872
+2487 y Fd(4)119 b(Portable)30 b(Implementation)1872 2774
+y Fc(Panda)g(provides)g(threads,)j(communication)c(primitives,)k(and)
+1872 2873 y(synchronization)18 b(primitives.)31 b(T)-6
+b(o)21 b(facilitate)h(porting)e(Panda,)h(a)1872 2973
+y(low-level)g Fa(system)h(interface)g Fc(is)h(de\256ned)e(\(see)h
+(Figure)g(2\).)31 b(This)1872 3073 y(system)38 b(interface)g(includes)g
+(threads,)k(messages,)h(and)38 b(low-)1872 3172 y(level)21
+b(communication)e(primitives.)30 b(On)22 b(top)f(of)h(this)g
+(interface,)1872 3272 y(a)27 b(number)e(of)h Fa(modules)g
+Fc(may)g(be)h(built.)46 b(T)-6 b(o)27 b(support)e(multiple)1872
+3371 y(communication)20 b(modules,)j(the)g(system)h(layer)f(provides)f
+(mes-)1872 3471 y(sage)28 b(multiplexing)e(and)h(demultiplexing.)48
+b(Only)28 b(the)g(system)1872 3571 y(layer)13 b(of)i(Panda)f(needs)g
+(to)g(be)h(rewritten)e(to)i(be)f(used)g(on)g(a)h(new)g(ar)n(-)1872
+3670 y(chitecture;)25 b(high-level)e(communication)f(modules)i(are)g
+(archi-)1872 3770 y(tecture)19 b(independent.)1955 3923
+y(W)-7 b(e)33 b(implemented)e(the)h(Orca)g(R)-5 b(TS)34
+b(and)e(Hawk)g(on)g(top)g(of)1872 4023 y(Panda)14 b(by)g(creating)g
+(three)g(independent)e(communication)g(mod-)1872 4122
+y(ules:)25 b(Group)15 b(Communication,)f(Remote)i(Procedure)e(Call,)j
+(and)1872 4222 y(Collective)27 b(Communication.)47 b(Figure)27
+b(2)g(gives)h(an)f(overview)1872 4322 y(of)21 b(the)h(resulting)g
+(system.)32 b(The)22 b(Orca)g(R)-5 b(TS)23 b(uses)f(Group)f(Com-)1872
+4421 y(munication)29 b(and)h(Remote)h(Procedure)e(Call.)60
+b(Independently)1872 4521 y(from)14 b(the)h(Orca)g(R)-5
+b(TS,)16 b(Hawk)f(is)i(implemented)c(on)i(top)g(of)g(Group)1872
+4621 y(Communication)e(and)j(Collective)g(Communication.)23
+b(Both)17 b(the)1872 4720 y(Orca)24 b(R)-5 b(TS)26 b(and)e(Hawk)h(use)g
+(the)f(threads)g(provided)f(by)h(Panda.)1872 4820 y(At)d(the)g(highest)
+g(level,)g(an)g(application)e(calls)j(primitives)f(of)g(the)1872
+4919 y(Orca)g(R)-5 b(TS)22 b(to)g(create)f(and)g(use)g(shared)g
+(objects)g(and)g(primitives)1872 5019 y(of)e(Hawk)h(to)h(create)f(and)f
+(use)i(partitioned)d(objects.)1955 5172 y(Since)e(the)g(entire)f
+(system)h(is)h(implemented)d(on)i(top)g(of)f(Panda,)1872
+5272 y(it)22 b(will)h(be)e(available)g(on)h(all)g(systems)g(that)g
+(Panda)f(is)i(ported)e(to.)1872 5372 y(Currently)-5 b(,)20
+b(Panda)h(is)i(available)e(on)h(top)f(of)h(the)g(Amoeba)e(oper)n(-)1872
+5471 y(ating)25 b(system)i(on)f(Ethernet)f(and)g(Myrinet)h([6)o(].)45
+b(Furthermore,)1872 5571 y(implementations)17 b(exist)i(for)g(Solaris)g
+(2.4,)g(Thinking)e(Machines)1872 5670 y(CM-5,)i(Parsytec)h(GCEL,)h(and)
+e(Parsytec)h(PowerXplorer)-5 b(.)1809 5919 y(2)p eop
+%%Page: 3 3
+3 2 bop 303 1755 a @beginspecial @setspecial
+%%BeginDocument: overview.pstex
+/$F2psDict 200 dict def
+$F2psDict begin
+$F2psDict /mtrx matrix put
+/col-1 {} def
+/col0 {0.000 0.000 0.000 srgb} bind def
+/col1 {0.000 0.000 1.000 srgb} bind def
+/col2 {0.000 1.000 0.000 srgb} bind def
+/col3 {0.000 1.000 1.000 srgb} bind def
+/col4 {1.000 0.000 0.000 srgb} bind def
+/col5 {1.000 0.000 1.000 srgb} bind def
+/col6 {1.000 1.000 0.000 srgb} bind def
+/col7 {1.000 1.000 1.000 srgb} bind def
+/col8 {0.000 0.000 0.560 srgb} bind def
+/col9 {0.000 0.000 0.690 srgb} bind def
+/col10 {0.000 0.000 0.820 srgb} bind def
+/col11 {0.530 0.810 1.000 srgb} bind def
+/col12 {0.000 0.560 0.000 srgb} bind def
+/col13 {0.000 0.690 0.000 srgb} bind def
+/col14 {0.000 0.820 0.000 srgb} bind def
+/col15 {0.000 0.560 0.560 srgb} bind def
+/col16 {0.000 0.690 0.690 srgb} bind def
+/col17 {0.000 0.820 0.820 srgb} bind def
+/col18 {0.560 0.000 0.000 srgb} bind def
+/col19 {0.690 0.000 0.000 srgb} bind def
+/col20 {0.820 0.000 0.000 srgb} bind def
+/col21 {0.560 0.000 0.560 srgb} bind def
+/col22 {0.690 0.000 0.690 srgb} bind def
+/col23 {0.820 0.000 0.820 srgb} bind def
+/col24 {0.500 0.190 0.000 srgb} bind def
+/col25 {0.630 0.250 0.000 srgb} bind def
+/col26 {0.750 0.380 0.000 srgb} bind def
+/col27 {1.000 0.500 0.500 srgb} bind def
+/col28 {1.000 0.630 0.630 srgb} bind def
+/col29 {1.000 0.750 0.750 srgb} bind def
+/col30 {1.000 0.880 0.880 srgb} bind def
+/col31 {1.000 0.840 0.000 srgb} bind def
+
+end
+save
+-129.0 208.0 translate
+1 -1 scale
+
+/clp {closepath} bind def
+/ef {eofill} bind def
+/gr {grestore} bind def
+/gs {gsave} bind def
+/l {lineto} bind def
+/m {moveto} bind def
+/n {newpath} bind def
+/s {stroke} bind def
+/slc {setlinecap} bind def
+/slj {setlinejoin} bind def
+/slw {setlinewidth} bind def
+/srgb {setrgbcolor} bind def
+/rot {rotate} bind def
+/sc {scale} bind def
+/tr {translate} bind def
+/tnt {dup dup currentrgbcolor
+  4 -2 roll dup 1 exch sub 3 -1 roll mul add
+  4 -2 roll dup 1 exch sub 3 -1 roll mul add
+  4 -2 roll dup 1 exch sub 3 -1 roll mul add srgb}
+  bind def
+/shd {dup dup currentrgbcolor 4 -2 roll mul 4 -2 roll mul
+  4 -2 roll mul srgb} bind def
+/$F2psBegin {$F2psDict begin /$F2psEnteredState save def} def
+/$F2psEnd {$F2psEnteredState restore end} def
+
+$F2psBegin
+10 setmiterlimit
+ 0.06000 0.06000 sc
+7.500 slw
+% Polyline
+n 8176 1200 m 8176 600 l  2176 600 l  2176 1200 l  clp  gs col-1 s gr 
+% Polyline
+n 8176 2851 m 8176 2551 l  2176 2551 l  2176 2851 l  clp  gs col-1 s gr 
+% Polyline
+n 4126 1951 m 4126 2551 l  gs col-1 s gr 
+% Polyline
+n 6076 1951 m 6076 2551 l  gs col-1 s gr 
+% Polyline
+n 5176 1351 m 5176 1951 l  gs col-1 s gr 
+% Polyline
+n 8176 2551 m 8176 1951 l  2176 1951 l  2176 2551 l  clp  gs col-1 s gr 
+% Polyline
+n 8176 1951 m 8176 1351 l  2176 1351 l  2176 1951 l  clp  gs col-1 s gr 
+% Polyline
+n 8176 3451 m 8176 2851 l  2176 2851 l  2176 3451 l  clp  gs col-1 s gr 
+% Polyline
+n 6075 1950 m 8175 1950 l  8175 2550 l  6075 2550 l  clp  gs col-1 s gr 
+% Polyline
+n 5175 1350 m 8175 1350 l  8175 1950 l  5175 1950 l  clp  gs col-1 s gr 
+$F2psEnd
+restore
+%%EndDocument
+ @endspecial 1630 502 a Fc(Application)913 880 y(Orca)20
+b(R)-5 b(TS)1219 b(Hawk)1404 1182 y(Group)19 b(Communication)-1715
+b(Remote)20 b(Procedure)e(Call)1151 b(Collective)21 b(Communication)
+1517 1408 y(Panda)f(System)g(Layer)1555 1635 y(Operating)f(System)1357
+1937 y(Figure)g(2:)27 b(System)21 b(overview)-5 b(.)-120
+2287 y Fd(5)119 b(Status)30 b(and)h(Futur)n(e)f(W)-7
+b(ork)-120 2473 y Fc(The)29 b(Group)f(Communication)f(and)i(Remote)g
+(Procedure)e(Call)-120 2573 y(modules)19 b(have)g(been)g(implemented)f
+(on)h(top)h(of)g(the)f(Panda)h(sys-)-120 2673 y(tem)29
+b(layer)g(and)g(the)h(portable)e(Orca)h(R)-5 b(TS)30
+b(has)g(been)f(used)g(for)-120 2772 y(the)22 b(implementation)f(of)h
+(many)f(task-parallel)g(applications)g(on)-120 2872 y(various)d
+(platforms.)26 b(The)19 b(collective)g(communication)d(module)-120
+2972 y(for)j(Hawk)h(is)h(currently)d(being)h(tested)h(on)f(the)h
+(Amoeba)f(system)-120 3071 y(\(through)h(Panda\))i(with)h(Ethernet.)34
+b(Once)23 b(the)g(testing)g(phase)f(is)-120 3171 y(\256nished,)28
+b(the)f(mixed)f(task-)h(and)g(data-parallel)f(programming)-120
+3270 y(system)34 b(will)h(be)f(available)f(on)g(all)i(platforms)e
+(supported)e(by)-120 3370 y(Panda.)-37 3470 y(In)14 b(the)h(full)f
+(version)f(of)i(this)g(paper)m(,)f(we)g(will)i(describe)d(in)i(more)
+-120 3570 y(detail)25 b(the)h(shared)e(and)h(partitioned)f(object)h
+(models.)42 b(W)-7 b(e)26 b(will)-120 3670 y(also)d(describe)e(the)i
+(interfaces)f(the)g(Orca)h(R)-5 b(TS)23 b(and)f(Hawk)g(pro-)-120
+3769 y(vide)d(and)g(some)g(applications)g(that)g(were)h(implemented)d
+(on)i(top)-120 3869 y(of)13 b(them.)24 b(Furthermore,)12
+b(we)i(will)g(fully)f(describe)f(the)h(properties)-120
+3968 y(of)h(Panda)f(that)h(allowed)f(the)h(easy)g(integration)f(of)g
+(the)h(two)g(R)-5 b(TSs.)-120 4068 y(Finally)g(,)23 b(we)g(will)g
+(provide)e(performance)f(measurements)h(on)i(a)-120 4168
+y(number)18 b(of)i(dif)o(ferent)e(architectures)h(at)i(application)e
+(level.)-120 4450 y Fd(Refer)n(ences)-120 4637 y Fc([1])40
+b(S.)18 b(Ben)f(Hassen)h(and)e(H.E.)h(Bal.)24 b(Integrating)15
+b(task)j(and)e(data)18 4736 y(parallelism)k(using)g(shared)f(objects.)
+29 b(Submitted.)-120 4904 y([2])40 b(H.E.)16 b(Bal,)h(M.F)-7
+b(.)16 b(Kaashoek,)f(and)g(A.S.)h(T)-6 b(anenbaum.)18
+b(Orca:)18 5004 y(a)33 b(language)e(for)h(parallel)f(programming)e(on)j
+(distributed)18 5104 y(systems.)63 b Fa(IEEE)26 b(T)-5
+b(ransactions)26 b(on)h(Softwar)m(e)f(Engineer)n(-)18
+5203 y(ing)p Fc(,)20 b(18\(3\):190\261205,)15 b(March)k(1992.)-120
+5372 y([3])40 b(S.)23 b(Ben)g(Hassen.)41 b(Prefetching)20
+b(strategies)j(for)f(partitioned)18 5471 y(shared)c(objects.)26
+b(In)19 b Fa(Pr)m(oceedings)e(of)i(the)f(29th)g(Hawaii)h(In-)18
+5571 y(ternational)e(Confer)m(ence)h(on)f(System)i(and)e(Science)p
+Fc(,)g(Maui,)18 5670 y(Hawaii,)k(January)e(1996.)1872
+2287 y([4])40 b(R.)26 b(Bhoedjang,)f(T)-6 b(.)25 b(R)7
+b(\310)-35 b(uhl,)26 b(R.)g(Hofman,)f(K.)h(Langendoen,)2010
+2387 y(H.E.)16 b(Bal,)h(and)f(M.F)-7 b(.)16 b(Kaashoek.)21
+b(Panda:)j(A)17 b(portable)e(plat-)2010 2486 y(form)23
+b(to)h(support)f(parallel)g(programming)e(languages.)47
+b(In)2010 2586 y Fa(Symposium)14 b(on)h(Experiences)g(with)h
+(Distributed)f(and)g(Mul-)2010 2686 y(tipr)m(ocessor)20
+b(Systemes,USENIX)p Fc(,)f(pages)h(213\261226,)d(1993.)1872
+2852 y([5])40 b(M.F)-7 b(.)15 b(Kaashoek.)j Fa(Gr)m(oup)13
+b(Communication)g(in)i(Distributed)2010 2951 y(Computer)31
+b(Systems)p Fc(.)87 b(PhD)31 b(thesis,)k(V)-5 b(rije)32
+b(Universiteit,)2010 3051 y(Amsterdam,)19 b(1992.)1872
+3217 y([6])40 b(Nanette)31 b(J.)g(Boden,)i(Danny)d(Cohen,)j(Robert)e
+(E.)g(Felder)n(-)2010 3317 y(man,)36 b(Alan)d(E.)g(Kulawik,)j(Charles)e
+(L.)f(Seitz,)k(Jakov)32 b(N.)2010 3416 y(Seizovic,)20
+b(and)h(W)-7 b(en-King)20 b(Su.)34 b(Myrinet:)28 b(A)22
+b(gigabit-per)n(-)2010 3516 y(second)16 b(local)i(area)f(network.)23
+b Fa(IEEE)17 b(Micr)m(o)p Fc(,)h(15\(1\):29\26136,)2010
+3616 y(February)g(1995.)1809 5919 y(3)p eop
+%%Trailer
+end
+userdict /end-hook known{end-hook}if
+%%EOF

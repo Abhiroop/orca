@@ -1,0 +1,7 @@
+DATA MODULE SPECIFICATION data;
+  TYPE RealVector = ARRAY[integer] OF real;
+  TYPE RealMatrix = ARRAY[integer, integer] OF real;
+
+  a: RealMatrix;
+  b: RealVector;
+END;

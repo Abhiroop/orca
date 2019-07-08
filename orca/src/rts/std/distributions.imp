@@ -1,0 +1,40 @@
+MODULE IMPLEMENTATION distributions;
+
+  FUNCTION block(npart, ncpus: integer) : DistributionType;
+	rval: DistributionType[0..npart-1];
+	parts_per_cpu, parts_left: integer;
+	p: integer;
+  BEGIN
+	p := 0;
+	parts_per_cpu := npart/ncpus;
+	parts_left := npart % ncpus;
+	FOR i IN 0..ncpus-1 DO
+		FOR j IN 1 .. parts_per_cpu DO
+			rval[p] := i;
+			p +:= 1;
+		OD;
+		IF parts_left /= 0 THEN
+			rval[p] := i;
+			p +:= 1;
+			parts_left -:= 1;
+		FI;
+	OD;
+	RETURN rval;
+  END;
+
+  FUNCTION cyclic(npart, ncpus: integer) : DistributionType;
+	rval: DistributionType[0..npart-1];
+	p: integer;
+  BEGIN
+	p := 0;
+	FOR i IN 0 .. npart-1 DO
+		rval[i] := p;
+		p +:= 1;
+		IF p = ncpus THEN
+			p := 0;
+		FI;
+	OD;
+	RETURN rval;
+  END;
+
+END;

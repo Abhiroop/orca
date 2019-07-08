@@ -1,0 +1,5 @@
+This directory contains the ANSI C code of ACP.
+invocation: acp [-v] 
+
+-v disables verbose information (in particular the parse trees)
+

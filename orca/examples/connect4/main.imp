@@ -1,0 +1,335 @@
+# ConnectFour
+# Opgave parallel programmeren
+# Authors : Fabian Breg    & Rob Buis
+#           fbreg@cs.vu.nl   rwlbuis@cs.vu.nl
+# File    : main.imp
+
+MODULE IMPLEMENTATION main;
+ 
+    CONST Human            = 0;
+    CONST Computer         = 1;
+ 
+
+    FROM gameboard IMPORT BoardType, InitBoard, GetPlayer, DoSet, AlphaBeta, Won, 
+			  FullBoard, SetSkill, ColumnFull, MapType;
+ 
+
+    FROM misc IMPORT PosType, NrOfPlayers, Columns, Rows, Min, Max, StartAlpha, StartBeta,
+		     MaximumAB, DeltaAB, OrderType;
+
+    FROM Finish IMPORT Finish;
+    FROM InOut IMPORT ReadString;
+    FROM conversions IMPORT StringToInt;
+    FROM Time IMPORT SysMilli;
+    IMPORT searchtree;
+
+    TYPE SkillType    = ARRAY [integer 1..NrOfPlayers] OF integer;
+    TYPE PlayersType = ARRAY [integer 1..NrOfPlayers] OF integer;
+    TYPE TokensType  = ARRAY [integer 0..NrOfPlayers] OF char;
+
+
+    FUNCTION DisplayBoard(Board : BoardType);
+
+        Tokens : TokensType; 
+
+    BEGIN
+	Tokens[0] := ' ';
+	Tokens[1] := '#';
+	Tokens[2] := 'O';
+	FOR i IN 1..Rows DO
+	    FOR j IN 1..Columns DO
+		Write("|");
+		Write(Tokens[GetPlayer(Board, j, Rows + 1 - i)]);
+	    OD;
+	    WriteLine("|");
+	OD;
+	FOR j IN 1..Columns DO
+	    Write("+-");
+	OD;
+	WriteLine("+");
+	FOR j IN 1..Columns DO
+	    Write(" ", j);
+	OD;
+	WriteLine();
+	WriteLine();
+    END;
+
+
+    PROCESS Worker(CFTree : SHARED searchtree; WorkerStartDepth : integer; 
+		   Map : MapType; Order : OrderType);
+ 
+	ABRes, Alpha, Beta, Mv, NodeT, Player : integer;
+	Pos                                   : PosType;
+	Board                                 : BoardType;
+
+    BEGIN
+	WHILE NOT CFTree$GameOver() DO
+	    IF CFTree$GetJob(Board, Pos, Player, Alpha, Beta) THEN
+		IF (WorkerStartDepth % NrOfPlayers) = Max THEN
+		    NodeT := Min;
+		ELSE
+		    NodeT := Max;
+		FI;
+	        ABRes := AlphaBeta(Board, 0, Alpha, Beta, Player, Mv, NodeT, 
+				   WorkerStartDepth, Map, Order);
+                CFTree$SetResult(Pos, ABRes, WorkerStartDepth, 1);
+	    FI;
+	OD;
+    END;
+ 
+
+    FUNCTION GenerateChildren(CFTree : SHARED searchtree; Board : BoardType; 
+			      Player : integer; Level : integer; Pos : PosType; 
+			      WorkerStartDepth : integer; Map : MapType; 
+			      Order : OrderType; Alpha : integer);
+
+	AB, s     : integer;
+	TempBoard : BoardType;
+
+    BEGIN 
+	IF Level = 1 THEN
+	    s := 2;
+	ELSE
+	    s := 1;
+	FI;
+	FOR i IN s..Columns DO
+	    IF NOT ColumnFull(Board, Order[i]) THEN
+		TempBoard := Board;
+	        Pos[Level] := Order[i];
+		IF (Level % NrOfPlayers) = Max THEN
+	            DoSet(TempBoard, Order[i], Player, Map);
+		ELSE
+		    DoSet(TempBoard, Order[i], NrOfPlayers + 1 - Player, Map);
+		FI;
+	        IF Won(TempBoard) THEN
+		    IF TempBoard.CurrentPlayer = Player THEN
+		        AB := MaximumAB - ((Level - 1) * DeltaAB);
+		    ELSE
+			AB := -(MaximumAB - ((Level - 1) * DeltaAB));
+		    FI;
+                    CFTree$SetResult(Pos, AB, WorkerStartDepth, 0);
+	        ELSIF Level = WorkerStartDepth THEN
+		    CFTree$AddJob(TempBoard, Pos, Player, Alpha, StartBeta);
+	        ELSE
+	            GenerateChildren(CFTree, TempBoard, Player, Level + 1, Pos, 
+				     WorkerStartDepth, Map, Order, Alpha);
+	        FI;
+	    FI;
+	OD;
+	Pos[Level] := 0;
+    END;
+
+    PROCESS Master(CFTree : SHARED searchtree; Board : BoardType; Player : integer; 
+		   WorkerStartDepth : integer; Map : MapType; Order : OrderType);
+        
+	Pos        : PosType;
+	TempBoard  : BoardType;
+	Result, Mv : integer;
+
+    BEGIN
+	CFTree$Init();
+	FOR i IN 1..WorkerStartDepth DO
+	    Pos[i] := 0;
+	OD;
+	Result := StartAlpha;
+	IF NOT ColumnFull(Board, Order[1]) THEN
+	    TempBoard := Board;
+	    DoSet(TempBoard, Order[1], Player, Map);
+	    TempBoard.Skill +:= WorkerStartDepth;
+            Result := AlphaBeta(TempBoard, 1, StartAlpha, StartBeta, Player, Mv, 
+			        Min, WorkerStartDepth, Map, Order);
+	FI;
+	Pos[1] := Order[1];
+	CFTree$SetResult(Pos, Result, WorkerStartDepth, 0);
+	Pos[1] := 0;
+	GenerateChildren(CFTree, Board, Player, 1, Pos, WorkerStartDepth, Map, 
+			 Order, Result);
+	CFTree$NoMoreJobs();
+    END;
+
+
+    FUNCTION GetMove(Board : BoardType): integer;
+
+	Cont  : boolean;
+	Input : string;
+	Move,
+	Eaten : integer;
+
+    BEGIN
+	Cont := false;
+	WHILE NOT Cont DO
+	    Write("Your move : ");
+	    ReadString(Input);
+            Move := StringToInt(Input, Eaten);
+	    IF Eaten /= 0 THEN
+		IF Move = 0 THEN
+		    Cont :=true;
+	        ELSIF (Move >= 1) AND (Move <= Columns) AND
+	              NOT ColumnFull(Board, Move) THEN
+		    Cont := true;
+	        FI;
+	    FI;
+	OD;
+	WriteLine();
+	RETURN Move;
+    END;
+
+
+    FUNCTION Initialize(Board            : OUT BoardType; 
+			Players          : OUT PlayersType;
+			First            : OUT integer;
+			SkillLevel       : OUT SkillType;
+			WorkerStartDepth : OUT integer;
+			Limit            : OUT integer;
+			Map              : OUT MapType;
+			Order            : OUT OrderType);
+
+        Cont       : boolean;
+	NrPlayers  : integer;
+	Skill      : integer;
+
+    BEGIN
+	Cont := false;
+	Order[1] := 4;
+        Order[2] := 3;
+	Order[3] := 5;
+	Order[4] := 2;
+	Order[5] := 6;
+	Order[6] := 1;
+	Order[7] := 7;
+	InitBoard(Board, Map);
+
+        WHILE NOT Cont DO
+	    Write("Enter number of initial moves : ");
+	    Read(Limit);
+	    IF Limit >= 0 THEN
+		Cont := true;
+	    FI;
+	OD;
+	Cont := false;
+        WHILE NOT Cont DO
+	    Write("Enter number of levels to calculate parallel (0 - 3) : ");
+	    Read(WorkerStartDepth);
+	    IF (WorkerStartDepth >= 0) AND (WorkerStartDepth <= 3) THEN
+		Cont := true;
+	    FI;
+	OD;
+	Cont := false;
+        WHILE NOT Cont DO
+	    Write("Enter number of players (0, 1 or 2) : ");
+	    Read(NrPlayers);
+	    IF (NrPlayers >= 0) AND (NrPlayers <= 2) THEN
+		Cont := true;
+	    FI;
+	OD;
+	IF NrPlayers = 0 THEN
+	    WriteLine("Computer will play for both.");
+	    Players[NrOfPlayers - 1] := Computer;
+	    Players[NrOfPlayers] := Computer;
+	ELSIF NrPlayers = 1 THEN
+	    WriteLine("Computer will be second player.");
+	    Players[NrOfPlayers - 1] := Human;
+	    Players[NrOfPlayers] := Computer;
+	ELSE
+	    Players[NrOfPlayers - 1] := Human;
+	    Players[NrOfPlayers] := Human;
+	FI;
+	    
+	FOR i IN 1..NrOfPlayers DO
+	    Cont := false;
+	    IF Players[i] = Computer THEN
+		WHILE NOT Cont DO
+	            Write("Enter skill-level for player ", i, " (1 - 20) : ");
+		    Read(Skill);
+		    IF (Skill > 0) AND (Skill <= 20) THEN
+			SkillLevel[i] := Skill;
+			Cont := true;
+		    FI;
+		OD;
+	    FI;
+	OD;
+
+	Cont := false;
+        WHILE NOT Cont DO
+	    Write("Enter beginning player (1 or 2) : ");
+	    Read(First);
+	    IF (First >= 1) AND (First <= 2) THEN
+		Cont := true;
+	    FI;
+	OD;
+    END;
+
+
+    PROCESS OrcaMain();
+ 
+	Map              : MapType;
+        Board            : BoardType;
+        Winner           : integer;
+        Move             : integer;
+	NrMoves          : integer;
+        Current          : integer;
+	Players          : PlayersType;
+	CFTree           : searchtree;
+	SkillLevel       : SkillType;
+        Start, res       : integer;
+	WorkerStartDepth : integer;
+	Limit            : integer;
+	Order            : OrderType;
+
+    BEGIN
+        Winner := 0;
+	NrMoves := 1;
+        Initialize(Board, Players, Current, SkillLevel, WorkerStartDepth, 
+		   Limit, Map, Order);
+	CFTree$CreateTree(WorkerStartDepth);
+	FOR i IN 1..NCPUS() - 1 DO
+	    FORK Worker(CFTree, WorkerStartDepth, Map, Order) ON i;
+        OD;
+
+        REPEAT
+            IF (Players[Current] = Human) OR (NrMoves < Limit) THEN
+                Move := GetMove(Board);
+            ELSE
+		Start := SysMilli();
+	        SetSkill(Board, SkillLevel[Current]);
+		IF WorkerStartDepth = 0 THEN
+	            res := AlphaBeta(Board, 0, StartAlpha, StartBeta, Current, 
+				     Move, Max, WorkerStartDepth, Map, Order);
+		ELSE
+		    CFTree$Init();
+		    FORK Master(CFTree, Board, Current, WorkerStartDepth, Map, 
+				Order) ON 0;
+		    CFTree$WaitForJobs();
+		    Move := CFTree$CalculateResult(Order);
+		FI;
+		WriteLine("My move : ", Move);
+		WriteLine("Elapsed time : ", SysMilli() - Start, " msec.");
+            FI;
+	    NrMoves +:= 1;
+	    IF Move /= 0 THEN
+                DoSet(Board, Move, Current, Map);
+	        DisplayBoard(Board);
+	        IF Won(Board) THEN
+		    Winner := Current;
+	        ELSIF FullBoard(Board) THEN
+		    Winner := NrOfPlayers + 1;
+	        FI;
+	        Current := NrOfPlayers + 1 - Current;
+	    ELSE
+		Winner := NrOfPlayers + 1 - Current;
+	    FI;
+        UNTIL Winner /= 0;
+ 
+        IF Winner = 1 THEN
+            WriteLine("Player one won");
+        ELSIF Winner = 2 THEN
+            WriteLine("Player two won");
+        ELSE
+            WriteLine("It's a tie");
+        FI;
+	CFTree$Delete();
+	CFTree$SetGameOver();
+	Finish();
+    END;
+ 
+END;

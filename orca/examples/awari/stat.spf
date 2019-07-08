@@ -1,0 +1,5 @@
+MODULE SPECIFICATION stat;
+	FUNCTION IncGoedelcnt(cpu: integer);
+	FUNCTION PrintStat(cpu: integer);
+END;
+

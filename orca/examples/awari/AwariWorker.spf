@@ -1,0 +1,38 @@
+#-----------------------------------------------#
+# Author : E.J.J. de Waal			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE SPECIFICATION AwariWorker;
+
+# Each worker keeps a part of the total database and applies the forward
+# and the backward retrograde analysis routines to its database part 
+# consequtively, after the database parts have been initialized and the 
+# proper part has been read from disk.
+# After the backward pass, the remaining configurations which are not 
+# yet determined are set to draw, and the database is written to disk.
+
+
+FROM	DataBaseTypes		IMPORT	DataBaseObject, AdresTable;
+		IMPORT	SyncObject;
+		IMPORT	DBMetaDataObject;
+		IMPORT	ElectionObject;
+		IMPORT  buffer;
+		IMPORT  barrier;
+		IMPORT  terminate;
+
+
+
+
+#PROCESS AwariWorker(awari_database: SHARED DataBaseObject;
+PROCESS AwariWorker(awari_database: DataBaseObject;
+		    meta_data:	    SHARED DBMetaDataObject;
+		    synchronizer:   SHARED SyncObject;
+		    poll_station:   SHARED ElectionObject;
+		    bufs:	    SHARED buffer.buffers;
+		    term:	    SHARED terminate;
+		    bar:	    SHARED barrier);
+  # The work has to be done...
+
+END; # AwariWorker

@@ -1,0 +1,10 @@
+OBJECT SPECIFICATION barrier;
+	# The protocol for using this barrier object is:
+	#  (1) call join(b);
+	#  (2) call r := vote(myvote, b);
+	# The result (r) is true iff all votes are true
+
+	FUNCTION join(b: SHARED barrier);
+	FUNCTION vote(v: boolean; b: SHARED barrier): boolean;
+	OPERATION init(nproc: integer);
+END;

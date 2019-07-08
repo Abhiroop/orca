@@ -1,0 +1,154 @@
+OBJECT IMPLEMENTATION CommunicationObject;
+
+FROM TspTypes IMPORT
+	ProcessorStatusType;
+
+stopProd : boolean;	# Producer stop signal
+stopEval : boolean;	# Evaluater stop signal
+
+prodStat : ProcessorStatusType;
+evalStat : ProcessorStatusType;
+
+joblevel : integer;	# Level in the tree of jobs produced.
+jobs : integer; 	# Jobs produced in total
+evaled : integer;	# Jobs evaluated in total
+pursued_jobs : integer;
+
+
+
+
+#########################################################
+## Messages - Producer
+#########################################################
+
+OPERATION StopProducer ();
+BEGIN
+	stopProd := true;
+	IF (prodStat = running) THEN
+		prodStat := stopping;
+	FI;
+END;
+
+OPERATION ProducerWait ();
+BEGIN
+	prodStat := waiting;
+END;
+
+
+OPERATION ProducerRecommence ();
+BEGIN
+	prodStat := running;
+END;
+
+
+OPERATION ProducerStarted ();
+BEGIN
+	prodStat := running;
+END;
+
+OPERATION ProducerDone ();
+BEGIN
+	prodStat := stopped;
+END;
+
+
+OPERATION JobsProduced () : integer;
+BEGIN
+	RETURN jobs;
+END;
+
+
+OPERATION JobProduced ();
+BEGIN
+	jobs +:= 1;
+END;
+
+
+OPERATION ProducerStatus () : ProcessorStatusType;
+BEGIN
+	RETURN prodStat;
+END;
+
+
+OPERATION SetJobLevel (l : integer);
+BEGIN
+	joblevel := l;
+END;
+
+	
+OPERATION JobLevel () : integer;
+BEGIN
+	RETURN joblevel;
+END;
+
+#########################################################
+## Messages - Evaluator
+#########################################################
+
+
+OPERATION StopEval ();
+BEGIN
+	stopEval := true;
+	IF (evalStat = running) THEN
+		evalStat := stopping;
+	FI;
+END;
+
+
+
+OPERATION EvalStarted ();
+BEGIN
+	evalStat := running;
+END;
+
+
+
+OPERATION EvalDone ();
+BEGIN
+	evalStat := stopped;
+END;
+
+
+
+OPERATION EvalStatus () : ProcessorStatusType;
+BEGIN
+	RETURN evalStat;
+END;
+
+
+
+OPERATION JobsEvaluated () : integer;
+BEGIN
+	RETURN evaled;
+END;
+
+
+OPERATION JobsPursued () : integer;
+BEGIN
+	RETURN pursued_jobs;
+END;
+
+
+OPERATION JobEvaluated ();
+BEGIN
+	evaled +:= 1;
+END;
+
+
+OPERATION JobPursued ();
+BEGIN
+	pursued_jobs +:= 1;
+END;
+
+
+
+BEGIN
+	evalStat := stopped;
+	prodStat := stopped;
+	stopProd := false;
+	stopEval := false;
+	jobs := 0;
+	joblevel := 0;
+	evaled := 0;
+END;
+

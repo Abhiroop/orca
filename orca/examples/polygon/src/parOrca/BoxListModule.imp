@@ -1,0 +1,276 @@
+ ###############################################################################
+ ######  BoxListModule.imp                                                ######
+ ###                                                                         ###
+
+MODULE IMPLEMENTATION BoxListModule;
+
+ ##-----------------------------------------------------------------------------
+ ## Imports:
+ ##-----------------------------------------------------------------------------
+
+FROM BoxModule IMPORT Box;
+
+ ##-----------------------------------------------------------------------------
+ ## addToBoxList()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION addToBoxList(
+    list: SHARED BoxList;
+    box:  IN Box
+);
+    node: BoxListNode; # Going to be added to "list" and will hold "box".
+BEGIN
+    node := ADDNODE(list);
+    list[node].box := box;
+    list[node].next := list.head;
+    list.head := node;
+END; # addToBoxList()
+
+ ##-----------------------------------------------------------------------------
+ ## delFirstFromBoxList()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION delFirstFromBoxList(
+    list: SHARED BoxList
+);
+    helper: BoxListNode; # helping node.
+BEGIN
+    IF NOT(list.head = NIL) THEN
+	helper := list.head;
+	list.head := list[helper].next;
+	DELETENODE(list, helper);
+    FI;
+END; # delFirstFromBoxList()
+
+ ##-----------------------------------------------------------------------------
+ ## delNextBoxFromList()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION delNextBoxFromList(
+    list: SHARED BoxList;
+    node: IN BoxListNode
+);
+    helper: BoxListNode; # helping node.
+BEGIN
+    IF NOT(list.head = NIL) THEN
+        IF node = NIL THEN
+            helper := list.head;
+            list.head := list[helper].next;
+            DELETENODE(list, helper);
+        ELSE
+            helper := list[node].next;
+            list[node].next := list[helper].next;
+            DELETENODE(list, helper);
+        FI;
+    FI;
+END; # delNextBoxFromList()
+
+ ##-----------------------------------------------------------------------------
+ ## insertBoxInList()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION insertBoxInList(
+    box:  IN Box;
+    list: SHARED BoxList;
+    node: SHARED BoxListNode
+);
+    addNode: BoxListNode; # Going to be added to "list" and will hold "box".
+BEGIN
+    addNode := ADDNODE(list);
+    list[addNode].box := box;
+    list[addNode].next := list[node].next;
+    list[node].next := addNode;
+END; # insertBoxInList()
+
+ ##-----------------------------------------------------------------------------
+ ## isEmptyBoxList()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION isEmptyBoxList(
+    list: IN BoxList
+): boolean;
+BEGIN
+    RETURN list.head = NIL;
+END; # isEmptyBoxList()
+
+ ##-----------------------------------------------------------------------------
+ ## length()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION length(
+    list: IN BoxList
+): integer;
+    len: integer;     # Length to be calculated.
+    p:   BoxListNode; # To walk true the list.
+BEGIN
+    len := 0;
+    p := list.head;
+    WHILE NOT (p = NIL) DO
+        len +:= 1;
+        p := list[p].next;
+    OD;
+
+    RETURN len;
+END; # length()
+
+ ##----------------------------------------------------------------------------
+ ## mSortBoxListCorner1X()
+ ##----------------------------------------------------------------------------
+ 
+FUNCTION mSortBoxListCorner1X(
+    list:   SHARED BoxList; # List to sort.
+    head:   SHARED BoxListNode; # Head of the list to sort.
+    length: IN integer      # Length of the list to sort.
+);
+    head1:      BoxListNode; # The first half of the list.
+    head2:      BoxListNode; # The second half of the list.
+    halfLength: integer;     # The length of the first half.
+    node:       BoxListNode; # To merge the two sublists together with.
+    tempNode:   BoxListNode; # Temporary node-storage.
+BEGIN
+    IF length <= 1 THEN
+        RETURN;
+    FI;
+ 
+    halfLength := length / 2;
+    head1 := head;
+ 
+    ## Walk to half of the list.
+    head2 := head;
+    FOR i IN 1 .. halfLength DO
+        IF NOT(i = halfLength) THEN
+            head2 := list[head2].next;
+        ELSE
+            tempNode := head2;
+            head2 := list[head2].next;
+            list[tempNode].next := NIL; # Put end mark at tail of 1st list.
+        FI;
+    OD;
+ 
+   ## Sort both half-lists.
+    mSortBoxListCorner1X(list, head1, halfLength);
+    mSortBoxListCorner1X(list, head2, length - halfLength);
+ 
+   ## merge the two sorted half-lists in to one.
+ 
+   ## Initialize the head of the list.
+    IF list[head1].box.corner1.x <= list[head2].box.corner1.x THEN
+        head := head1;
+        head1 := list[head1].next;
+    ELSE
+        head := head2;
+        head2 := list[head2].next;
+    FI;
+ 
+    node := head;
+ 
+   ## Merge as long as both lists have got an item at the node"pointer".
+    WHILE NOT(head1 = NIL) AND NOT(head2 = NIL) DO
+        IF list[head1].box.corner1.x <= list[head2].box.corner1.x THEN
+            list[node].next := head1;
+            head1 := list[head1].next;
+            node := list[node].next;
+        ELSE
+            list[node].next := head2;
+            head2 := list[head2].next;
+            node := list[node].next;
+        FI;
+    OD;
+ 
+   ## Connect the rest of the list to the end.
+    IF head2 = NIL THEN
+        list[node].next := head1;
+        head1 := list[head1].next;
+    ELSE
+        list[node].next := head2;
+        head2 := list[head2].next;
+    FI;
+ 
+END; # mSortBoxListCorner1X()
+
+ ##-----------------------------------------------------------------------------
+ ## qSortBoxListCorner1X()
+ ##-----------------------------------------------------------------------------
+ 
+FUNCTION qSortBoxListCorner1X(
+    list:   SHARED BoxList; # List to sort.
+    head:   IN BoxListNode; # Head of the list to sort.
+    length: IN integer      # Length of the list to sort.
+);
+    last: BoxListNode; # To keep track of the last element of the 1st sublist
+    n:    integer;     # The length of the 1st sublist.
+    p:    BoxListNode; # Walks trough the whole list.
+BEGIN
+    WHILE true DO    # Inline tail recursion by hand!
+        IF length <= 1 THEN
+            RETURN;
+        FI;
+ 
+        last := head;
+        p := list[last].next;
+        n := 1;
+        FOR i IN (1) .. (length-1) DO
+            IF list[p].box.corner1.x < list[head].box.corner1.x THEN
+                last := list[last].next;
+                n +:= 1;
+                swapBoxList(list, p, last);
+            FI;
+            p := list[p].next;
+        OD;
+        swapBoxList(list, last, head); # 'compair-item' is now on it's place.
+        last := list[last].next;       # And doesn't has to be sorted anymore
+ 
+        ## Instead of doing the next calls
+        ##  qSortBoxListCorner1X(list, head, n - 1);
+        ##  qSortBoxListCorner1X(list, last, length - n);
+        ## do the folowing: (which eliminates tail recursion and recursion
+        ##                   on sorted list-parts.)
+        IF n-1 <= 1 THEN
+           ## qSortBoxListCorner1X(list, last, length - n);
+           head := last;
+           length := length - n;
+        ELSIF length-n <= 1 THEN
+           ## qSortBoxListCorner1X(list, head, n - 1);
+           length := n - 1;
+        ELSE
+           qSortBoxListCorner1X(list, head, n - 1);
+           ## qSortBoxListCorner1X(list, last, length - n);
+           head := last;
+           length := length - n;
+        FI;
+    OD;
+END; # qSortBoxListCorner1X()
+
+ ##-----------------------------------------------------------------------------
+ ## returnEmptyBoxList()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION returnEmptyBoxList(
+): BoxList;
+    list: BoxList;
+BEGIN
+    RETURN list;
+END; # returnEmptyBoxList()
+
+ ##-----------------------------------------------------------------------------
+ ## swapBoxList()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION swapBoxList(
+    list:  SHARED BoxList;
+    nodeA: SHARED BoxListNode;
+    nodeB: SHARED BoxListNode
+);
+    swapBox: Box; # Helps whith swapping.
+BEGIN
+    swapBox := list[nodeA].box;
+    list[nodeA].box := list[nodeB].box;
+    list[nodeB].box := swapBox;
+END; # swapBoxList()
+
+
+END; # BoxLisMtodule
+ 
+ ###                                                                         ###
+ ######  BoxListModule.imp                                                ######
+ ###############################################################################

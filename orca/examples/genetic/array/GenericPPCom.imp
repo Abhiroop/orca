@@ -1,0 +1,66 @@
+# Allows a point-to-point communication between processes
+# The transmitted value is of type T
+# The two operations are non-blocking
+
+GENERIC 
+OBJECT IMPLEMENTATION GenericPPCom;
+	buffer: T;
+	empty: boolean;
+
+# Supersedes the old value of the buffer and change the status to not empty
+
+	OPERATION put(e: T);
+	BEGIN
+		buffer := e;
+		empty := false;
+	END;
+
+#
+# blocking put operation
+#
+	OPERATION block_put(e: T);
+	BEGIN
+		GUARD empty DO
+			buffer := e;
+			empty := false;
+		OD;
+	END;
+
+
+#
+# reads the buffer, which becomes empty
+#
+	OPERATION get(e: OUT T);
+	BEGIN
+		e := buffer;
+		empty := true;
+	END;
+
+#
+# blockinig read of the buffer; 
+#
+	OPERATION block_get(e: OUT T);
+	BEGIN
+		GUARD NOT empty DO
+			e := buffer;
+			empty := true;
+		OD;
+	END;
+
+
+#
+# tests the buffer
+#
+OPERATION test_empty(): boolean;
+BEGIN
+	RETURN empty;
+END;
+
+
+BEGIN
+	empty := true;
+
+END GENERIC;
+
+
+

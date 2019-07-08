@@ -1,0 +1,42 @@
+# The module Const contains all frequently used constants.
+
+MODULE SPECIFICATION Const;
+
+CONST WHITE = 0;
+CONST BLACK = 1;
+CONST ANY = -1;
+CONST ALL = -2;
+
+# The pieces.
+CONST PAWN = 1;
+CONST KNIGHT = 2;
+CONST BISHOP = 3;
+CONST ROOK = 4;
+CONST QUEEN = 5;
+CONST KING = 6;
+
+# The values of the pieces.
+CONST PAWNVAL = 100;
+CONST KNIGHTVAL = 300;
+CONST BISHOPVAL = 300;
+CONST ROOKVAL = 500;
+CONST QUEENVAL = 950;
+
+CONST HSIZE = 8;
+CONST VSIZE = 8;
+
+CONST TACTWIN = 100;		# Threshold value for Tactical Win
+CONST MATE = 10000;
+CONST MAXLEVEL = 15;
+
+# Four kinds of search :
+#	(1) Full Range Search : search all moves.
+#	(2) Quiescence Search : search all capture- and aggressive moves.
+#	(3) Mate Combination Search : search all checking moves.
+#	(4) Mate Check : can the checked player do a move ?
+CONST FULLSRCH = 1;		# Full Range Search
+CONST QUIESCEN = 2;		# Quiescence Search
+CONST MATESRCH = 3;		# Mate Combination Search
+CONST MATECHCK = 5;		# Mate Check
+
+END;

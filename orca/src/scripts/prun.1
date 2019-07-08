@@ -1,0 +1,74 @@
+.\"
+.\" (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+.\" For full copyright and restrictions on use see the file COPYRIGHT in the
+.\" top level of the Orca distribution.
+.\"
+.\" $Id: prun.1,v 1.4 1998/10/27 15:43:18 ceriel Exp $
+.TH PRUN 1
+.ad
+.SH NAME
+prun \- run parallel programs on multiple CPU's.
+.SH SYNOPSIS
+.B prun
+.RI [ option ]
+<binary> <nr_cpus> ...
+.SH DESCRIPTION
+This command allows a parallel program to be run on multiple hosts,
+guarded by a time-out.
+It will take care of starting up the program on the multiple hosts,
+will collect output, and present it per host.
+Unless the \-h option is given, it takes the names of the hosts from
+the environment variable PANDA_HOSTS, which should contain a space-separated
+list of hosts.
+.LP
+.I Prun
+accepts the following options:
+.IP "\-\fBc\fP <directory>"
+.br
+This option sets \fIprun\fP's idea of the current directory.
+This may be needed to make sure that the path to the directory where the
+binary is executed exists on all hosts.
+.IP "\-\fBt\fP <timeout>"
+.br
+This option sets the maximum number of timeout checks to <timeout>.
+.I Prun
+kills the program when the limit is exceeded.
+The default value for <timeout> is 60.
+.IP "\-\fBd\fP <delta>"
+.br
+This option sets <delta> (the timeout check interval). 
+The default value is 10 seconds.
+.I Prun
+checks every <delta> seconds whether the program has finished.
+.IP "\-\fBh\fP <hostfile>"
+.br
+This option specifies a file containing host names.
+.IP "\-\fB2\fP"
+.br
+This option specifies that the Panda 2 version of Panda is to be used. This is
+the default.
+.IP "\-\fB1\fP"
+.br
+This option specifies that the Panda 1 version of Panda is to be used.
+This version will be phased out and may not be available.
+.IP "\-\fBf\fP <first_host>"
+.br
+This option specifies that this call of \fIprun\fP starts the program on hosts
+numbered from <first_host> upwards. The default value is 1 on Panda1, 0 on
+Panda 2.
+.IP "\-\fBl\fP <last_host>"
+.br
+This option specifies that this call of \fIprun\fP starts the program on hosts
+numbered up to <last_host>. The default value is <nr_cpus> on Panda 1,
+<nr_cpus>-1 on Panda2. The options
+\-\fBf\fP <first_host> and \-\fBl\fP <last_host> allow parallel execution of
+different binaries, for instance on a heterogeneous system.
+.SH DIAGNOSTICS
+.IP "either set environment var PANDA_HOSTS or specify -h host_file"
+.br
+Occurs when PANDA_HOSTS is not set and -h option is not given.
+.IP "too few machines available"
+.br
+Happens when <nr_cpus> is larger than the number of hosts.
+.SH "SEE ALSO"
+rsh(1)

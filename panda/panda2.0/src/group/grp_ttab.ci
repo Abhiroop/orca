@@ -1,0 +1,188 @@
+#ifndef __PAN_GRP_TTAB_CI__
+#define __PAN_GRP_TTAB_CI__
+
+
+#include "pan_sys.h"
+
+#include "grp_ttab.h"
+
+
+
+static ttab_usr_t	ttab[MAX_TTABLE_SLOTS];
+
+static ttab_usr_p	ttab_free_list;
+static ttab_usr_p	ttab_used_front;
+static ttab_usr_p	ttab_used_tail;
+static pan_mutex_p	ttab_lock;
+static pan_cond_p	ttab_available;
+static int		ttab_waiters;
+
+
+STATIC_CI void
+ttab_freeze_list(void)
+{
+    ttab_usr_p scan;
+
+    scan = ttab_used_front;
+
+    while (scan != NULL) {
+	scan->frozen_next = scan->next;
+	scan = scan->next;
+    }
+}
+
+
+STATIC_CI ttab_usr_p
+ttab_frozen_first(void)
+{
+    return ttab_used_front;
+}
+
+
+STATIC_CI ttab_usr_p
+ttab_frozen_next(ttab_usr_p t)
+{
+    return t->frozen_next;
+}
+
+
+STATIC_CI void
+ttab_enqueue(ttab_usr_p t, int ticks)
+{
+    t->ticks = ticks;
+
+    assert(t->next == NULL);
+    assert(t->prev == NULL);
+
+    t->next = NULL;
+    t->prev = ttab_used_tail;
+    ttab_used_tail = t;
+    if (ttab_used_front == NULL) {
+	ttab_used_front = t;
+    } else {
+	t->prev->next = t;
+    }
+}
+
+
+STATIC_CI void
+ttab_dequeue(ttab_usr_p t)
+{
+    if (t->prev == NULL) {
+	assert(t == ttab_used_front);
+	ttab_used_front = ttab_used_front->next;
+	if (ttab_used_front != NULL) {
+	    ttab_used_front->prev = NULL;
+	}
+    } else {
+	t->prev->next = t->next;
+    }
+    if (t->next != NULL) {
+	t->next->prev = t->prev;
+    } else {
+	assert(t == ttab_used_tail);
+	ttab_used_tail = t->prev;
+    }
+
+    assert(ttab_used_front != NULL || ttab_used_tail == NULL);
+
+#ifndef NDEBUG
+    t->next = NULL;
+    t->prev = NULL;
+#endif
+}
+
+
+STATIC_CI ttab_usr_p
+ttab_get(void)
+{
+    ttab_usr_p t;
+
+    ++ttab_waiters;
+    while (ttab_free_list == NULL) {
+	pan_cond_wait(ttab_available);
+    }
+    --ttab_waiters;
+
+    t = ttab_free_list;
+    ttab_free_list = t->next;
+
+#ifndef NDEBUG
+    t->next = NULL;
+    t->prev = NULL;
+#endif
+
+    if (ttab_free_list != NULL && ttab_waiters > 0) {
+						/* Cope with lost signals */
+	pan_cond_signal(ttab_available);
+    }
+
+    return t;
+}
+
+
+STATIC_CI void
+ttab_free(ttab_usr_p t)
+{
+    t->next = ttab_free_list;
+    ttab_free_list = t;
+
+    if (ttab_waiters > 0) {
+	pan_cond_signal(ttab_available);
+    }
+}
+
+
+STATIC_CI short int
+ttab_ticket(ttab_usr_p t)
+{
+    return t - &ttab[0];
+}
+
+
+STATIC_CI ttab_usr_p
+ttab_entry(short int ticket)
+{
+    return &ttab[ticket];
+}
+
+
+STATIC_CI void
+ttab_start(pan_mutex_p lock)
+{
+    int i;
+
+    ttab_lock = lock;
+
+    for (i = 0; i < MAX_TTABLE_SLOTS; i++) {
+	ttab[i].msg_arrived = pan_cond_create(ttab_lock);
+    }
+
+    ttab_free_list = &ttab[0];
+    for (i = 0; i < MAX_TTABLE_SLOTS - 1; i++) {
+	ttab[i].next = &ttab[i+1];
+    }
+    ttab[MAX_TTABLE_SLOTS - 1].next = NULL;
+
+    ttab_used_front = NULL;
+    ttab_used_tail = NULL;
+
+    ttab_waiters = 0;
+    ttab_available = pan_cond_create(ttab_lock);
+}
+
+
+STATIC_CI void
+ttab_end(void)
+{
+    int i;
+
+    for (i = 0; i < MAX_TTABLE_SLOTS; i++) {
+	pan_cond_clear(ttab[i].msg_arrived);
+    }
+}
+
+
+
+
+#endif

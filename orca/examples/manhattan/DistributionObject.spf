@@ -1,0 +1,29 @@
+OBJECT SPECIFICATION DistributionObject;
+
+	FROM TspTypes IMPORT 
+		NodeDistribution,
+		DistributionChange,
+		MoveNodeType,
+		ProblemSpecification,
+		NodeSelection;
+	FROM CollectionTypes IMPORT
+		TourCollection;
+	IMPORT SpecificationObject;
+	IMPORT TourCollectionObject;
+
+
+	OPERATION Initialize (spec : SpecificationObject;
+		boys : integer;
+		mode : NodeSelection);
+
+	OPERATION AreThereMoreDistributions () : boolean;
+	OPERATION SetBaseProblem (tc : TourCollectionObject);
+	OPERATION SetStepSize (s : integer);
+#	OPERATION NextDistribution () : NodeDistribution;
+	OPERATION DeltaDistribution () : DistributionChange;
+
+	OPERATION InitialDistribution () : NodeDistribution;
+
+END;
+
+

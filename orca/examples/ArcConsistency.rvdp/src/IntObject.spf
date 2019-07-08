@@ -1,0 +1,8 @@
+OBJECT SPECIFICATION IntObject;
+  OPERATION assign (v : integer);
+  OPERATION value() : integer;
+  OPERATION inc();
+  OPERATION dec();
+  OPERATION AwaitValue(v : integer);
+END;
+

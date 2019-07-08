@@ -1,0 +1,280 @@
+#-----------------------------------------------#
+# Author : H. Staalman				#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION BoardOperations;
+
+FROM	AwariTypes	IMPORT	PitsPerSide, PitsPerBoard, PitNr, AllPits,
+				Configuration, SuccessorList, Stones, Side;	#,AllStones;
+FROM	InOut		IMPORT	Flush;
+
+#FROM	Debug		IMPORT	Print_Board;
+
+
+
+
+
+FUNCTION Map2PitNr(pit: IN integer): PitNr;
+  # Needed for easy computation of a board pit number
+  pit_nr: PitNr;
+BEGIN
+  pit_nr := pit % PitsPerBoard;
+  IF (pit_nr = 0)
+     THEN pit_nr := PitsPerBoard;
+  FI;
+  RETURN(pit_nr);
+END;
+
+
+
+FUNCTION Init_Configuration(init_config: SHARED Configuration);
+BEGIN
+  FOR i IN 1..PitsPerBoard
+  DO
+    init_config[i].contents := 0;
+  OD;
+END;
+
+
+
+FUNCTION Mirror_Configuration(original_config: IN Configuration;
+			      mirror_config: SHARED Configuration);
+  # Switching sides...
+BEGIN
+  FOR i IN 1..PitsPerSide
+  DO
+    mirror_config[i] := original_config[i + PitsPerSide];
+  OD;
+  FOR i IN PitsPerSide+1 .. PitsPerBoard
+  DO
+    mirror_config[i] := original_config[i - PitsPerSide];
+  OD;
+  mirror_config[AllPits] := original_config[AllPits];	# !!
+END;
+
+
+
+FUNCTION Sow_Stones(start_config: IN Configuration;
+		    start_pit: IN PitNr; 
+		    end_config: SHARED Configuration;
+		    end_pit: OUT PitNr);
+  # Sow a stone starting at start_pit, with en_config as the resulting configuration
+  nr_stones: Stones;
+BEGIN
+  # creates a new configuration with all the stones in the start pit sowed (up to the end pit)
+  end_config := start_config;				# Copy it first!
+
+  nr_stones := start_config[start_pit].contents;
+  nr_stones +:= (nr_stones - 1) / (PitsPerBoard - 1);	# Victor's fix !
+  IF (nr_stones > 0) THEN 
+    # add extra pits for skipping starting pit!
+    FOR i IN 1..nr_stones
+    DO
+      end_config[((((i-1)+start_pit) % (PitsPerBoard)) + 1)].contents +:=  1;
+    OD;
+    end_config[start_pit].contents := 0;		# this pit remains empty
+    end_pit := Map2PitNr(start_pit + nr_stones);
+  FI;
+END;
+
+
+
+FUNCTION Count_Nr_Stones_On_Board(current_config: IN Configuration): Stones;
+  current_nr_stones: Stones;
+BEGIN
+  current_nr_stones := 0;
+  FOR i IN 1..PitsPerBoard
+  DO
+    current_nr_stones +:= current_config[i].contents;
+  OD;
+  RETURN(current_nr_stones);
+END;
+
+
+
+FUNCTION Empty_Hit_Pits(start_config: IN Configuration; 
+			end_pit: IN PitNr;
+			end_config: SHARED Configuration;
+			hit_stones: OUT Stones);
+  # creates a new configuration without all(!!) the captured stones.
+  # stones are removed from the North part, i.e. pits a..f (= 1..6).
+
+  i: integer;
+  side_done: boolean;
+BEGIN
+  end_config := start_config;
+
+  IF (end_pit > PitsPerSide)  AND  (end_pit <= PitsPerBoard)	# hit at North
+     THEN
+       i := end_pit;
+       hit_stones := 0;
+       side_done := false;  
+
+       REPEAT
+	 IF (end_config[i].contents = 2)  OR  (end_config[i].contents = 3)
+	    THEN
+	      hit_stones +:= end_config[i].contents;
+	      end_config[i].contents := 0;
+	    ELSE side_done := true;
+	 FI;
+	 i -:= 1;
+       UNTIL side_done	OR (i = PitsPerSide);	# hit at North
+  FI;
+END;
+
+
+
+FUNCTION Is_Legal_Successor(configuration: IN Configuration;
+			    successor_configuration: IN Configuration): boolean;
+  # checks wether the given configuration could be a legal successor
+  # If there are no stones on North, and neither 
+  # then the successors are restricted to those without enough stones in the respective pits 
+  # to allow mobility for the opponent; the forced move rule.
+
+  illegal :boolean;
+BEGIN
+
+  illegal := false;
+  IF Is_Empty_Side(successor_configuration, South)
+     THEN
+       # illegal := Is_Forced_To_Sow_For_Mobility(successor_configuration);
+       FOR pit IN 1..PitsPerSide			# WHILE LOOP?
+       DO
+	 illegal := illegal OR (configuration[pit].contents >= (PitsPerSide+1-pit) );
+       OD;
+  FI;
+  RETURN(NOT(illegal));
+END;
+
+
+
+FUNCTION Is_Legal_Predecessor(configuration: IN Configuration;
+			      predecessor_configuration: IN Configuration): boolean;
+  # If there are no stones on South, and neither stones on North of the predecessor,
+  # then the predecessors are restricted to those without enough stones in the respective pits 
+  # to allow mobility for the opponent; the forced move rule.
+
+  illegal :boolean;
+BEGIN
+  illegal := false;
+  IF Is_Empty_Side(configuration, South) AND Is_Empty_Side(predecessor_configuration, North)
+     THEN
+       FOR pit IN 1..PitsPerSide
+       DO
+	 illegal := illegal OR (predecessor_configuration[pit].contents >= (PitsPerSide+1-pit) );
+       OD;
+  FI;
+  RETURN(NOT(illegal));
+END;
+
+
+
+FUNCTION Check_For_Immobile_Opponent(successor_list: IN SuccessorList; 
+				     nr_successors: IN integer): boolean;
+  # Mobility for the opponent must be given, if possible, to prevent the
+  # game ending early.
+
+  mobile: boolean;
+BEGIN
+  mobile := false;
+  IF (nr_successors = 0)
+     THEN mobile := true;
+     ELSE
+       FOR pit IN 1..nr_successors
+       DO
+	 mobile := mobile OR NOT(Is_Empty_Side(successor_list[pit].configuration, South));
+       OD;
+  FI;
+  RETURN(NOT(mobile));
+END;
+
+
+
+FUNCTION Is_Hit(configuration: IN Configuration; 
+		pit: IN PitNr): boolean;
+BEGIN
+  IF (At_Side(pit) = South)
+     THEN RETURN((configuration[pit].contents = 2) OR (configuration[pit].contents = 3));
+     ELSIF (At_Side(pit) = North)
+	   THEN WriteLine("Sirius problem in Is_Hit(): checking for empty_pit PitNr at North");
+		RETURN(false);
+     #	 ELSE WriteLine("Sirius Bug in At_Side(): illegal PitNr");
+     #	      RETURN(false);
+  FI;
+END;
+
+
+
+FUNCTION At_Side(pit: IN PitNr):Side;
+BEGIN
+  IF (pit >= 1) AND (pit <= PitsPerSide)
+     THEN RETURN(South);
+     ELSIF (pit > PitsPerSide) AND (pit <= PitsPerBoard)
+	  THEN RETURN(North);
+	ELSE WriteLine("Sirius Bug in At_Side(): illegal PitNr");
+	     RETURN(South);		# return anything 
+  FI;
+END;
+
+
+
+FUNCTION Is_Empty_Side(configuration: IN Configuration; 
+	      side: IN Side): boolean;
+  start_pit: PitNr; 
+BEGIN
+  IF side = North THEN
+    start_pit := PitsPerSide+1;
+  ELSE
+    start_pit := 1;
+  FI;
+  FOR pit IN start_pit..(start_pit+PitsPerSide-1)
+  DO
+    IF configuration[pit].contents /= 0 THEN
+	RETURN false;
+    FI;
+  OD;
+  RETURN true;
+END;
+
+
+
+FUNCTION Is_Empty(configuration: IN Configuration; 
+		  pit: IN PitNr): boolean;
+BEGIN
+  IF (pit >= 1) AND (pit <= PitsPerBoard)
+     THEN RETURN(configuration[pit].contents = 0);
+     ELSE WriteLine("Sirius Bug in At_Side(): illegal PitNr");
+	  RETURN(false);
+  FI;
+END;
+
+
+
+FUNCTION Is_Possible_Sowed_Pit(configuration: IN Configuration; 
+				pit: IN PitNr): boolean;
+BEGIN
+  IF (pit >= 1) AND (pit <= PitsPerBoard)
+     THEN RETURN(configuration[pit].contents > 0);
+     ELSE WriteLine("Sirius Bug in At_Side(): illegal PitNr");
+	  RETURN(false);
+  FI;
+END;
+
+
+
+FUNCTION Move_Stone(configuration: SHARED Configuration; 
+		    from_pit: IN PitNr;
+		    to_pit: IN PitNr);
+BEGIN
+  IF (from_pit >= 1) AND (from_pit <= PitsPerBoard) AND (to_pit >= 1) AND (to_pit <= PitsPerBoard)
+     THEN configuration[from_pit].contents -:= 1;
+	  configuration[to_pit].contents +:= 1;
+     ELSE WriteLine("Sirius Bug in At_Side(): illegal PitNr");
+  FI;
+END;
+
+
+
+END; # BoardOperations

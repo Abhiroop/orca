@@ -1,0 +1,5336 @@
+%!PS-Adobe-3.0
+%%BoundingBox: (atend)
+%%Pages: (atend)
+%%PageOrder: (atend)
+%%DocumentFonts: (atend)
+%%Creator: Frame 4.0
+%%DocumentData: Clean7Bit
+%%EndComments
+%%BeginProlog
+%
+% Frame ps_prolog 4.0, for use with Frame 4.0 products
+% This ps_prolog file is Copyright (c) 1986-1993 Frame Technology
+% Corporation.  All rights reserved.  This ps_prolog file may be
+% freely copied and distributed in conjunction with documents created
+% using FrameMaker, FrameBuilder and FrameViewer as long as this 
+% copyright notice is preserved.
+%
+% Frame products normally print colors as their true color on a color printer
+% or as shades of gray, based on luminance, on a black-and white printer. The
+% following flag, if set to True, forces all non-white colors to print as pure
+% black. This has no effect on bitmap images.
+/FMPrintAllColorsAsBlack             false def
+%
+% Frame products can either set their own line screens or use a printer's 
+% default settings. Three flags below control this separately for no 
+% separations, spot separations and process separations. If a flag
+% is true, then the default printer settings will not be changed. If it is
+% false, Frame products will use their own settings from a table based on
+% the printer's resolution.
+/FMUseDefaultNoSeparationScreen      true  def
+/FMUseDefaultSpotSeparationScreen    true  def
+/FMUseDefaultProcessSeparationScreen false def
+%
+% For any given PostScript printer resolution, Frame products have two sets of 
+% screen angles and frequencies for printing process separations, which are 
+% recomended by Adobe. The following variable chooses the higher frequencies
+% when set to true or the lower frequencies when set to false. This is only
+% effective if the appropriate FMUseDefault...SeparationScreen flag is false.
+/FMUseHighFrequencyScreens true def
+%
+% PostScript Level 2 printers contain an "Accurate Screens" feature which can
+% improve process separation rendering at the expense of compute time. This 
+% flag is ignored by PostScript Level 1 printers.
+/FMUseAcccurateScreens true def
+%
+% The following PostScript procedure defines the spot function that Frame
+% products will use for process separations. You may un-comment-out one of
+% the alternative functions below, or use your own.
+%
+% Dot function
+/FMSpotFunction {abs exch abs 2 copy add 1 gt 
+		{1 sub dup mul exch 1 sub dup mul add 1 sub }
+		{dup mul exch dup mul add 1 exch sub }ifelse } def
+%
+% Line function
+% /FMSpotFunction { pop } def
+%
+% Elipse function
+% /FMSpotFunction { dup 5 mul 8 div mul exch dup mul exch add 
+%		sqrt 1 exch sub } def
+%
+%
+/FMversion (4.0) def 
+/FMLevel1 /languagelevel where {pop languagelevel} {1} ifelse 2 lt def
+/FMPColor
+	FMLevel1 {
+		false
+		/colorimage where {pop pop true} if
+	} {
+		true
+	} ifelse
+def
+/FrameDict 400 dict def 
+systemdict /errordict known not {/errordict 10 dict def
+		errordict /rangecheck {stop} put} if
+% The readline in PS 23.0 doesn't recognize cr's as nl's on AppleTalk
+FrameDict /tmprangecheck errordict /rangecheck get put 
+errordict /rangecheck {FrameDict /bug true put} put 
+FrameDict /bug false put 
+mark 
+% Some PS machines read past the CR, so keep the following 3 lines together!
+currentfile 5 string readline
+00
+0000000000
+cleartomark 
+errordict /rangecheck FrameDict /tmprangecheck get put 
+FrameDict /bug get { 
+	/readline {
+		/gstring exch def
+		/gfile exch def
+		/gindex 0 def
+		{
+			gfile read pop 
+			dup 10 eq {exit} if 
+			dup 13 eq {exit} if 
+			gstring exch gindex exch put 
+			/gindex gindex 1 add def 
+		} loop
+		pop 
+		gstring 0 gindex getinterval true 
+		} bind def
+	} if
+/FMshowpage /showpage load def
+/FMquit /quit load def
+/FMFAILURE { 
+	dup = flush 
+	FMshowpage 
+	/Helvetica findfont 12 scalefont setfont
+	72 200 moveto
+	show FMshowpage 
+	FMquit 
+	} def 
+/FMVERSION {
+	FMversion ne {
+		(Frame product version does not match ps_prolog!) FMFAILURE
+		} if
+	} def 
+/FMBADEPSF { 
+	(PostScript Lang. Ref. Man., 2nd Ed., H.2.4 says EPS must not call X              )
+	dup dup (X) search pop exch pop exch pop length 
+	4 -1 roll 
+	putinterval 
+	FMFAILURE
+	} def
+/FMLOCAL {
+	FrameDict begin
+	0 def 
+	end 
+	} def 
+/concatprocs
+	{
+	/proc2 exch cvlit def/proc1 exch cvlit def/newproc proc1 length proc2 length add array def
+	newproc 0 proc1 putinterval newproc proc1 length proc2 putinterval newproc cvx
+}def
+FrameDict begin 
+/FMnone 0 def
+/FMcyan 1 def
+/FMmagenta 2 def
+/FMyellow 3 def
+/FMblack 4 def
+/FMcustom 5 def
+/FrameNegative false def 
+/FrameSepIs FMnone def 
+/FrameSepBlack 0 def
+/FrameSepYellow 0 def
+/FrameSepMagenta 0 def
+/FrameSepCyan 0 def
+/FrameSepRed 1 def
+/FrameSepGreen 1 def
+/FrameSepBlue 1 def
+/FrameCurGray 1 def
+/FrameCurPat null def
+/FrameCurColors [ 0 0 0 1 0 0 0 ] def 
+/FrameColorEpsilon .001 def	
+/eqepsilon {		
+	sub dup 0 lt {neg} if
+	FrameColorEpsilon le
+} bind def
+/FrameCmpColorsCMYK { 
+	2 copy 0 get exch 0 get eqepsilon {
+		2 copy 1 get exch 1 get eqepsilon {
+			2 copy 2 get exch 2 get eqepsilon {
+				3 get exch 3 get eqepsilon
+			} {pop pop false} ifelse
+		}{pop pop false} ifelse
+	} {pop pop false} ifelse
+} bind def
+/FrameCmpColorsRGB { 
+	2 copy 4 get exch 0 get eqepsilon {
+		2 copy 5 get exch 1 get eqepsilon {
+			6 get exch 2 get eqepsilon
+		}{pop pop false} ifelse
+	} {pop pop false} ifelse
+} bind def
+/RGBtoCMYK { 
+	1 exch sub 
+	3 1 roll 
+	1 exch sub 
+	3 1 roll 
+	1 exch sub 
+	3 1 roll 
+	3 copy 
+	2 copy 
+	le { pop } { exch pop } ifelse 
+	2 copy 
+	le { pop } { exch pop } ifelse 
+	dup dup dup 
+	6 1 roll 
+	4 1 roll 
+	7 1 roll 
+	sub 
+	6 1 roll 
+	sub 
+	5 1 roll 
+	sub 
+	4 1 roll 
+} bind def
+/CMYKtoRGB { 
+	dup dup 4 -1 roll add 						  
+	5 1 roll 3 -1 roll add 						  
+	4 1 roll add 								  
+	1 exch sub dup 0 lt {pop 0} if 3 1 roll 	  
+	1 exch sub dup 0 lt {pop 0} if exch 	      
+	1 exch sub dup 0 lt {pop 0} if exch	  		  
+} bind def
+/FrameSepInit {
+	1.0 RealSetgray
+} bind def
+/FrameSetSepColor { 
+	/FrameSepBlue exch def
+	/FrameSepGreen exch def
+	/FrameSepRed exch def
+	/FrameSepBlack exch def
+	/FrameSepYellow exch def
+	/FrameSepMagenta exch def
+	/FrameSepCyan exch def
+	/FrameSepIs FMcustom def
+	setCurrentScreen	
+} bind def
+/FrameSetCyan {
+	/FrameSepBlue 1.0 def
+	/FrameSepGreen 1.0 def
+	/FrameSepRed 0.0 def
+	/FrameSepBlack 0.0 def
+	/FrameSepYellow 0.0 def
+	/FrameSepMagenta 0.0 def
+	/FrameSepCyan 1.0 def
+	/FrameSepIs FMcyan def
+	setCurrentScreen	
+} bind def
+ 
+/FrameSetMagenta {
+	/FrameSepBlue 1.0 def
+	/FrameSepGreen 0.0 def
+	/FrameSepRed 1.0 def
+	/FrameSepBlack 0.0 def
+	/FrameSepYellow 0.0 def
+	/FrameSepMagenta 1.0 def
+	/FrameSepCyan 0.0 def
+	/FrameSepIs FMmagenta def
+	setCurrentScreen
+} bind def
+ 
+/FrameSetYellow {
+	/FrameSepBlue 0.0 def
+	/FrameSepGreen 1.0 def
+	/FrameSepRed 1.0 def
+	/FrameSepBlack 0.0 def
+	/FrameSepYellow 1.0 def
+	/FrameSepMagenta 0.0 def
+	/FrameSepCyan 0.0 def
+	/FrameSepIs FMyellow def
+	setCurrentScreen
+} bind def
+ 
+/FrameSetBlack {
+	/FrameSepBlue 0.0 def
+	/FrameSepGreen 0.0 def
+	/FrameSepRed 0.0 def
+	/FrameSepBlack 1.0 def
+	/FrameSepYellow 0.0 def
+	/FrameSepMagenta 0.0 def
+	/FrameSepCyan 0.0 def
+	/FrameSepIs FMblack def
+	setCurrentScreen
+} bind def
+ 
+/FrameNoSep { 
+	/FrameSepIs FMnone def
+	setCurrentScreen
+} bind def
+/FrameSetSepColors { 
+	FrameDict begin
+	[ exch 1 add 1 roll ]
+	/FrameSepColors  
+	exch def end
+	} bind def
+/FrameColorInSepListCMYK { 
+	FrameSepColors {  
+       		exch dup 3 -1 roll 
+       		FrameCmpColorsCMYK 
+       		{ pop true exit } if
+    	} forall 
+	dup true ne {pop false} if
+	} bind def
+/FrameColorInSepListRGB { 
+	FrameSepColors {  
+       		exch dup 3 -1 roll 
+       		FrameCmpColorsRGB 
+       		{ pop true exit } if
+    	} forall 
+	dup true ne {pop false} if
+	} bind def
+/RealSetgray /setgray load def
+/RealSetrgbcolor /setrgbcolor load def
+/RealSethsbcolor /sethsbcolor load def
+end 
+/setgray { 
+	FrameDict begin
+	FrameSepIs FMnone eq
+		{ RealSetgray } 
+		{ 
+		FrameSepIs FMblack eq 
+			{ RealSetgray } 
+			{ FrameSepIs FMcustom eq 
+			  FrameSepRed 0 eq and
+			  FrameSepGreen 0 eq and
+			  FrameSepBlue 0 eq and {
+			  	RealSetgray
+			  } {
+				1 RealSetgray pop 
+			  } ifelse
+			} ifelse
+		} ifelse
+	end
+} bind def
+/setrgbcolor { 
+	FrameDict begin
+	FrameSepIs FMnone eq
+	{  RealSetrgbcolor }
+	{
+		3 copy [ 4 1 roll ] 
+		FrameColorInSepListRGB
+		{
+				FrameSepBlue eq exch 
+			 	FrameSepGreen eq and exch 
+			 	FrameSepRed eq and
+			 	{ 0 } { 1 } ifelse
+		}
+		{
+			FMPColor {
+				RealSetrgbcolor
+				currentcmykcolor
+			} {
+				RGBtoCMYK
+			} ifelse
+			FrameSepIs FMblack eq
+			{1.0 exch sub 4 1 roll pop pop pop} {
+			FrameSepIs FMyellow eq
+			{pop 1.0 exch sub 3 1 roll pop pop} {
+			FrameSepIs FMmagenta eq
+			{pop pop 1.0 exch sub exch pop } {
+			FrameSepIs FMcyan eq
+			{pop pop pop 1.0 exch sub } 
+			{pop pop pop pop 1} ifelse } ifelse } ifelse } ifelse 
+		} ifelse
+		RealSetgray
+	} 
+	ifelse
+	end
+} bind def
+/sethsbcolor {
+	FrameDict begin
+	FrameSepIs FMnone eq 
+	{ RealSethsbcolor } 
+	{
+		RealSethsbcolor 
+		currentrgbcolor  
+		setrgbcolor 
+	} 
+	ifelse
+	end
+} bind def
+FrameDict begin
+/setcmykcolor where {
+	pop /RealSetcmykcolor /setcmykcolor load def
+} {
+	/RealSetcmykcolor {
+		4 1 roll
+		3 { 3 index add 0 max 1 min 1 exch sub 3 1 roll} repeat 
+		setrgbcolor pop
+	} bind def
+} ifelse
+userdict /setcmykcolor { 
+		FrameDict begin
+		FrameSepIs FMnone eq
+		{ RealSetcmykcolor } 
+		{
+			4 copy [ 5 1 roll ]
+			FrameColorInSepListCMYK
+			{
+				FrameSepBlack eq exch 
+				FrameSepYellow eq and exch 
+				FrameSepMagenta eq and exch 
+				FrameSepCyan eq and 
+				{ 0 } { 1 } ifelse
+			}
+			{
+				FrameSepIs FMblack eq
+				{1.0 exch sub 4 1 roll pop pop pop} {
+				FrameSepIs FMyellow eq
+				{pop 1.0 exch sub 3 1 roll pop pop} {
+				FrameSepIs FMmagenta eq
+				{pop pop 1.0 exch sub exch pop } {
+				FrameSepIs FMcyan eq
+				{pop pop pop 1.0 exch sub } 
+				{pop pop pop pop 1} ifelse } ifelse } ifelse } ifelse 
+			} ifelse
+			RealSetgray
+		}
+		ifelse
+		end
+	} bind put
+FMLevel1 not { 
+	
+	/patProcDict 5 dict dup begin
+		<0f1e3c78f0e1c387> { 3 setlinewidth -1 -1 moveto 9 9 lineto stroke 
+											4 -4 moveto 12 4 lineto stroke
+											-4 4 moveto 4 12 lineto stroke} bind def
+		<0f87c3e1f0783c1e> { 3 setlinewidth -1 9 moveto 9 -1 lineto stroke 
+											-4 4 moveto 4 -4 lineto stroke
+											4 12 moveto 12 4 lineto stroke} bind def
+		<8142241818244281> { 1 setlinewidth -1 9 moveto 9 -1 lineto stroke
+											-1 -1 moveto 9 9 lineto stroke } bind def
+		<03060c183060c081> { 1 setlinewidth -1 -1 moveto 9 9 lineto stroke 
+											4 -4 moveto 12 4 lineto stroke
+											-4 4 moveto 4 12 lineto stroke} bind def
+		<8040201008040201> { 1 setlinewidth -1 9 moveto 9 -1 lineto stroke 
+											-4 4 moveto 4 -4 lineto stroke
+											4 12 moveto 12 4 lineto stroke} bind def
+	end def
+	/patDict 15 dict dup begin
+		/PatternType 1 def		
+		/PaintType 2 def		
+		/TilingType 3 def		
+		/BBox [ 0 0 8 8 ] def 	
+		/XStep 8 def			
+		/YStep 8 def			
+		/PaintProc {
+			begin
+			patProcDict bstring known {
+				patProcDict bstring get exec
+			} {
+				8 8 true [1 0 0 -1 0 8] bstring imagemask
+			} ifelse
+			end
+		} bind def
+	end def
+} if
+/combineColor {
+    FrameSepIs FMnone eq
+	{
+		graymode FMLevel1 or not {
+			
+			[/Pattern [/DeviceCMYK]] setcolorspace
+			FrameCurColors 0 4 getinterval aload pop FrameCurPat setcolor
+		} {
+			FrameCurColors 3 get 1.0 ge {
+				FrameCurGray RealSetgray
+			} {
+				FMPColor graymode and {
+					0 1 3 { 
+						FrameCurColors exch get
+						1 FrameCurGray sub mul
+					} for
+					RealSetcmykcolor
+				} {
+					4 1 6 {
+						FrameCurColors exch get
+						graymode {
+							1 exch sub 1 FrameCurGray sub mul 1 exch sub
+						} {
+							1.0 lt {FrameCurGray} {1} ifelse
+						} ifelse
+					} for
+					RealSetrgbcolor
+				} ifelse
+			} ifelse
+		} ifelse
+	} { 
+		FrameCurColors 0 4 getinterval aload
+		FrameColorInSepListCMYK {
+			FrameSepBlack eq exch 
+			FrameSepYellow eq and exch 
+			FrameSepMagenta eq and exch 
+			FrameSepCyan eq and
+			FrameSepIs FMcustom eq and
+			{ FrameCurGray } { 1 } ifelse
+		} {
+			FrameSepIs FMblack eq
+			{FrameCurGray 1.0 exch sub mul 1.0 exch sub 4 1 roll pop pop pop} {
+			FrameSepIs FMyellow eq
+			{pop FrameCurGray 1.0 exch sub mul 1.0 exch sub 3 1 roll pop pop} {
+			FrameSepIs FMmagenta eq
+			{pop pop FrameCurGray 1.0 exch sub mul 1.0 exch sub exch pop } {
+			FrameSepIs FMcyan eq
+			{pop pop pop FrameCurGray 1.0 exch sub mul 1.0 exch sub } 
+			{pop pop pop pop 1} ifelse } ifelse } ifelse } ifelse 
+		} ifelse
+		graymode FMLevel1 or not {
+			
+			[/Pattern [/DeviceGray]] setcolorspace
+			FrameCurPat setcolor
+		} { 
+			graymode not FMLevel1 and {
+				
+				dup 1 lt {pop FrameCurGray} if
+			} if
+			RealSetgray
+		} ifelse
+	} ifelse
+} bind def
+/savematrix {
+	orgmatrix currentmatrix pop
+	} bind def
+/restorematrix {
+	orgmatrix setmatrix
+	} bind def
+/dmatrix matrix def
+/dpi    72 0 dmatrix defaultmatrix dtransform
+    dup mul exch   dup mul add   sqrt def
+	
+/freq dpi dup 72 div round dup 0 eq {pop 1} if 8 mul div def
+/sangle 1 0 dmatrix defaultmatrix dtransform exch atan def
+/dpiranges   [  2540    2400    1693     1270    1200     635      600      0      ] def
+/CMLowFreqs  [ 100.402  94.8683 89.2289 100.402  94.8683  66.9349  63.2456 47.4342 ] def
+/YLowFreqs   [  95.25   90.0    84.65    95.25   90.0     70.5556  66.6667 50.0    ] def
+/KLowFreqs   [  89.8026 84.8528 79.8088  89.8026 84.8528  74.8355  70.7107 53.033  ] def
+/CLowAngles  [  71.5651 71.5651 71.5651 71.5651  71.5651  71.5651  71.5651 71.5651 ] def
+/MLowAngles  [  18.4349 18.4349 18.4349 18.4349  18.4349  18.4349  18.4349 18.4349 ] def
+/YLowTDot    [  true    true    false    true    true     false    false   false   ] def
+/CMHighFreqs [ 133.87  126.491 133.843  108.503 102.523  100.402   94.8683 63.2456 ] def
+/YHighFreqs  [ 127.0   120.0   126.975  115.455 109.091   95.25    90.0    60.0    ] def
+/KHighFreqs  [ 119.737 113.137 119.713  128.289 121.218   89.8026  84.8528 63.6395 ] def
+/CHighAngles [  71.5651 71.5651 71.5651  70.0169 70.0169  71.5651  71.5651 71.5651 ] def
+/MHighAngles [  18.4349 18.4349 18.4349  19.9831 19.9831  18.4349  18.4349 18.4349 ] def
+/YHighTDot   [  false   false   true     false   false    true     true    false   ] def
+/PatFreq     [	10.5833 10.0     9.4055  10.5833 10.0	  10.5833  10.0	   9.375   ] def
+/screenIndex {
+	0 1 dpiranges length 1 sub { dup dpiranges exch get 1 sub dpi le {exit} {pop} ifelse } for
+} bind def
+/getCyanScreen {
+	FMUseHighFrequencyScreens { CHighAngles CMHighFreqs} {CLowAngles CMLowFreqs} ifelse
+		screenIndex dup 3 1 roll get 3 1 roll get /FMSpotFunction load
+} bind def
+/getMagentaScreen {
+	FMUseHighFrequencyScreens { MHighAngles CMHighFreqs } {MLowAngles CMLowFreqs} ifelse
+		screenIndex dup 3 1 roll get 3 1 roll get /FMSpotFunction load
+} bind def
+/getYellowScreen {
+	FMUseHighFrequencyScreens { YHighTDot YHighFreqs} { YLowTDot YLowFreqs } ifelse
+		screenIndex dup 3 1 roll get 3 1 roll get { 3 div
+			{2 { 1 add 2 div 3 mul dup floor sub 2 mul 1 sub exch} repeat
+			FMSpotFunction } } {/FMSpotFunction load } ifelse
+			0.0 exch
+} bind def
+/getBlackScreen  {
+	FMUseHighFrequencyScreens { KHighFreqs } { KLowFreqs } ifelse
+		screenIndex get 45.0 /FMSpotFunction load 
+} bind def
+/getSpotScreen {
+	getBlackScreen
+} bind def
+/getCompositeScreen {
+	getBlackScreen
+} bind def
+/FMSetScreen 
+	FMLevel1 { /setscreen load 
+	}{ {
+		8 dict begin
+		/HalftoneType 1 def
+		/SpotFunction exch def
+		/Angle exch def
+		/Frequency exch def
+		/AccurateScreens FMUseAcccurateScreens def
+		currentdict end sethalftone
+	} bind } ifelse
+def
+/setDefaultScreen {
+	FMPColor {
+		orgrxfer cvx orggxfer cvx orgbxfer cvx orgxfer cvx setcolortransfer
+	}
+	{
+		orgxfer cvx settransfer
+	} ifelse
+	orgfreq organgle orgproc cvx setscreen
+} bind def
+/setCurrentScreen {
+	FrameSepIs FMnone eq {
+		FMUseDefaultNoSeparationScreen {
+			setDefaultScreen
+		} {
+			getCompositeScreen FMSetScreen
+		} ifelse
+	} {
+		FrameSepIs FMcustom eq {
+			FMUseDefaultSpotSeparationScreen {
+				setDefaultScreen
+			} {
+				getSpotScreen FMSetScreen
+			} ifelse
+		} {
+			FMUseDefaultProcessSeparationScreen {
+				setDefaultScreen
+			} {
+				FrameSepIs FMcyan eq {
+					getCyanScreen FMSetScreen
+				} {
+					FrameSepIs FMmagenta eq {
+						getMagentaScreen FMSetScreen
+					} {
+						FrameSepIs FMyellow eq {
+							getYellowScreen FMSetScreen
+						} {
+							getBlackScreen FMSetScreen
+						} ifelse
+					} ifelse
+				} ifelse
+			} ifelse
+		} ifelse
+	} ifelse 
+} bind def
+end
+	/gstring FMLOCAL
+	/gfile FMLOCAL
+	/gindex FMLOCAL
+	/orgrxfer FMLOCAL
+	/orggxfer FMLOCAL
+	/orgbxfer FMLOCAL
+	/orgxfer FMLOCAL
+	/orgproc FMLOCAL
+	/orgrproc FMLOCAL
+	/orggproc FMLOCAL
+	/orgbproc FMLOCAL
+	/organgle FMLOCAL
+	/orgrangle FMLOCAL
+	/orggangle FMLOCAL
+	/orgbangle FMLOCAL
+	/orgfreq FMLOCAL
+	/orgrfreq FMLOCAL
+	/orggfreq FMLOCAL
+	/orgbfreq FMLOCAL
+	/yscale FMLOCAL
+	/xscale FMLOCAL
+	/edown FMLOCAL
+	/manualfeed FMLOCAL
+	/paperheight FMLOCAL
+	/paperwidth FMLOCAL
+/FMDOCUMENT { 
+	array /FMfonts exch def 
+	/#copies exch def
+	FrameDict begin
+	0 ne /manualfeed exch def
+	/paperheight exch def
+	/paperwidth exch def
+	0 ne /FrameNegative exch def 
+	0 ne /edown exch def 
+	/yscale exch def
+	/xscale exch def
+	FMLevel1 {
+		manualfeed {setmanualfeed} if
+		/FMdicttop countdictstack 1 add def 
+		/FMoptop count def 
+		setpapername 
+		manualfeed {true} {papersize} ifelse 
+		{manualpapersize} {false} ifelse 
+		{desperatepapersize} {false} ifelse 
+		{ (Can't select requested paper size for Frame print job!) FMFAILURE } if
+		count -1 FMoptop {pop pop} for
+		countdictstack -1 FMdicttop {pop end} for 
+		}
+		{{1 dict dup /PageSize [paperwidth paperheight]put setpagedevice}stopped
+		{ (Can't select requested paper size for Frame print job!) FMFAILURE } if
+		 {1 dict dup /ManualFeed manualfeed put setpagedevice } stopped pop }
+	ifelse 
+	
+	FMPColor {
+		currentcolorscreen
+			cvlit /orgproc exch def
+				  /organgle exch def 
+				  /orgfreq exch def
+			cvlit /orgbproc exch def
+				  /orgbangle exch def 
+				  /orgbfreq exch def
+			cvlit /orggproc exch def
+				  /orggangle exch def 
+				  /orggfreq exch def
+			cvlit /orgrproc exch def
+				  /orgrangle exch def 
+				  /orgrfreq exch def
+			currentcolortransfer 
+			FrameNegative {
+				1 1 4 { 
+					pop { 1 exch sub } concatprocs 4 1 roll
+				} for
+				4 copy
+				setcolortransfer
+			} if
+			cvlit /orgxfer exch def
+			cvlit /orgbxfer exch def
+			cvlit /orggxfer exch def
+			cvlit /orgrxfer exch def
+	} {
+		currentscreen 
+			cvlit /orgproc exch def
+				  /organgle exch def 
+				  /orgfreq exch def
+				  
+		currenttransfer 
+		FrameNegative {
+			{ 1 exch sub } concatprocs
+			dup settransfer
+		} if 
+		cvlit /orgxfer exch def
+	} ifelse
+	end 
+} def 
+/pagesave FMLOCAL
+/orgmatrix FMLOCAL
+/landscape FMLOCAL
+/pwid FMLOCAL
+/FMBEGINPAGE { 
+	FrameDict begin 
+	/pagesave save def
+	3.86 setmiterlimit
+	/landscape exch 0 ne def
+	landscape { 
+		90 rotate 0 exch dup /pwid exch def neg translate pop 
+	}{
+		pop /pwid exch def
+	} ifelse
+	edown { [-1 0 0 1 pwid 0] concat } if
+	0 0 moveto paperwidth 0 lineto paperwidth paperheight lineto 
+	0 paperheight lineto 0 0 lineto 1 setgray fill
+	xscale yscale scale
+	/orgmatrix matrix def
+	gsave 
+} def 
+/FMENDPAGE {
+	grestore 
+	pagesave restore
+	end 
+	showpage
+	} def 
+/FMFONTDEFINE { 
+	FrameDict begin
+	findfont 
+	ReEncode 
+	1 index exch 
+	definefont 
+	FMfonts 3 1 roll 
+	put
+	end 
+	} def 
+/FMFILLS {
+	FrameDict begin dup
+	array /fillvals exch def
+	dict /patCache exch def
+	end 
+	} def 
+/FMFILL {
+	FrameDict begin
+	 fillvals 3 1 roll put
+	end 
+	} def 
+/FMNORMALIZEGRAPHICS { 
+	newpath
+	0.0 0.0 moveto
+	1 setlinewidth
+	0 setlinecap
+	0 0 0 sethsbcolor
+	0 setgray 
+	} bind def
+	/fx FMLOCAL
+	/fy FMLOCAL
+	/fh FMLOCAL
+	/fw FMLOCAL
+	/llx FMLOCAL
+	/lly FMLOCAL
+	/urx FMLOCAL
+	/ury FMLOCAL
+/FMBEGINEPSF { 
+	end 
+	/FMEPSF save def 
+	/showpage {} def 
+% See Adobe's "PostScript Language Reference Manual, 2nd Edition", page 714.
+% "...the following operators MUST NOT be used in an EPS file:" (emphasis ours)
+	/banddevice {(banddevice) FMBADEPSF} def
+	/clear {(clear) FMBADEPSF} def
+	/cleardictstack {(cleardictstack) FMBADEPSF} def 
+	/copypage {(copypage) FMBADEPSF} def
+	/erasepage {(erasepage) FMBADEPSF} def
+	/exitserver {(exitserver) FMBADEPSF} def
+	/framedevice {(framedevice) FMBADEPSF} def
+	/grestoreall {(grestoreall) FMBADEPSF} def
+	/initclip {(initclip) FMBADEPSF} def
+	/initgraphics {(initgraphics) FMBADEPSF} def
+	/initmatrix {(initmatrix) FMBADEPSF} def
+	/quit {(quit) FMBADEPSF} def
+	/renderbands {(renderbands) FMBADEPSF} def
+	/setglobal {(setglobal) FMBADEPSF} def
+	/setpagedevice {(setpagedevice) FMBADEPSF} def
+	/setshared {(setshared) FMBADEPSF} def
+	/startjob {(startjob) FMBADEPSF} def
+	/lettertray {(lettertray) FMBADEPSF} def
+	/letter {(letter) FMBADEPSF} def
+	/lettersmall {(lettersmall) FMBADEPSF} def
+	/11x17tray {(11x17tray) FMBADEPSF} def
+	/11x17 {(11x17) FMBADEPSF} def
+	/ledgertray {(ledgertray) FMBADEPSF} def
+	/ledger {(ledger) FMBADEPSF} def
+	/legaltray {(legaltray) FMBADEPSF} def
+	/legal {(legal) FMBADEPSF} def
+	/statementtray {(statementtray) FMBADEPSF} def
+	/statement {(statement) FMBADEPSF} def
+	/executivetray {(executivetray) FMBADEPSF} def
+	/executive {(executive) FMBADEPSF} def
+	/a3tray {(a3tray) FMBADEPSF} def
+	/a3 {(a3) FMBADEPSF} def
+	/a4tray {(a4tray) FMBADEPSF} def
+	/a4 {(a4) FMBADEPSF} def
+	/a4small {(a4small) FMBADEPSF} def
+	/b4tray {(b4tray) FMBADEPSF} def
+	/b4 {(b4) FMBADEPSF} def
+	/b5tray {(b5tray) FMBADEPSF} def
+	/b5 {(b5) FMBADEPSF} def
+	FMNORMALIZEGRAPHICS 
+	[/fy /fx /fh /fw /ury /urx /lly /llx] {exch def} forall 
+	fx fw 2 div add fy fh 2 div add  translate
+	rotate
+	fw 2 div neg fh 2 div neg translate
+	fw urx llx sub div fh ury lly sub div scale 
+	llx neg lly neg translate 
+	/FMdicttop countdictstack 1 add def 
+	/FMoptop count def 
+	} bind def
+/FMENDEPSF {
+	count -1 FMoptop {pop pop} for 
+	countdictstack -1 FMdicttop {pop end} for 
+	FMEPSF restore
+	FrameDict begin 
+	} bind def
+FrameDict begin 
+/setmanualfeed {
+%%BeginFeature *ManualFeed True
+	 statusdict /manualfeed true put
+%%EndFeature
+	} bind def
+/max {2 copy lt {exch} if pop} bind def
+/min {2 copy gt {exch} if pop} bind def
+/inch {72 mul} def
+/pagedimen { 
+	paperheight sub abs 16 lt exch 
+	paperwidth sub abs 16 lt and
+	{/papername exch def} {pop} ifelse
+	} bind def
+	/papersizedict FMLOCAL
+/setpapername { 
+	/papersizedict 14 dict def 
+	papersizedict begin
+	/papername /unknown def 
+		/Letter 8.5 inch 11.0 inch pagedimen
+		/LetterSmall 7.68 inch 10.16 inch pagedimen
+		/Tabloid 11.0 inch 17.0 inch pagedimen
+		/Ledger 17.0 inch 11.0 inch pagedimen
+		/Legal 8.5 inch 14.0 inch pagedimen
+		/Statement 5.5 inch 8.5 inch pagedimen
+		/Executive 7.5 inch 10.0 inch pagedimen
+		/A3 11.69 inch 16.5 inch pagedimen
+		/A4 8.26 inch 11.69 inch pagedimen
+		/A4Small 7.47 inch 10.85 inch pagedimen
+		/B4 10.125 inch 14.33 inch pagedimen
+		/B5 7.16 inch 10.125 inch pagedimen
+	end
+	} bind def
+/papersize {
+	papersizedict begin
+		/Letter {lettertray letter} def
+		/LetterSmall {lettertray lettersmall} def
+		/Tabloid {11x17tray 11x17} def
+		/Ledger {ledgertray ledger} def
+		/Legal {legaltray legal} def
+		/Statement {statementtray statement} def
+		/Executive {executivetray executive} def
+		/A3 {a3tray a3} def
+		/A4 {a4tray a4} def
+		/A4Small {a4tray a4small} def
+		/B4 {b4tray b4} def
+		/B5 {b5tray b5} def
+		/unknown {unknown} def
+	papersizedict dup papername known {papername} {/unknown} ifelse get
+	end
+	statusdict begin stopped end 
+	} bind def
+/manualpapersize {
+	papersizedict begin
+		/Letter {letter} def
+		/LetterSmall {lettersmall} def
+		/Tabloid {11x17} def
+		/Ledger {ledger} def
+		/Legal {legal} def
+		/Statement {statement} def
+		/Executive {executive} def
+		/A3 {a3} def
+		/A4 {a4} def
+		/A4Small {a4small} def
+		/B4 {b4} def
+		/B5 {b5} def
+		/unknown {unknown} def
+	papersizedict dup papername known {papername} {/unknown} ifelse get
+	end
+	stopped 
+	} bind def
+/desperatepapersize {
+	statusdict /setpageparams known
+		{
+		paperwidth paperheight 0 1 
+		statusdict begin
+		{setpageparams} stopped 
+		end
+		} {true} ifelse 
+	} bind def
+/DiacriticEncoding [
+/.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/.notdef /.notdef /.notdef /.notdef /space /exclam /quotedbl
+/numbersign /dollar /percent /ampersand /quotesingle /parenleft
+/parenright /asterisk /plus /comma /hyphen /period /slash /zero /one
+/two /three /four /five /six /seven /eight /nine /colon /semicolon
+/less /equal /greater /question /at /A /B /C /D /E /F /G /H /I /J /K
+/L /M /N /O /P /Q /R /S /T /U /V /W /X /Y /Z /bracketleft /backslash
+/bracketright /asciicircum /underscore /grave /a /b /c /d /e /f /g /h
+/i /j /k /l /m /n /o /p /q /r /s /t /u /v /w /x /y /z /braceleft /bar
+/braceright /asciitilde /.notdef /Adieresis /Aring /Ccedilla /Eacute
+/Ntilde /Odieresis /Udieresis /aacute /agrave /acircumflex /adieresis
+/atilde /aring /ccedilla /eacute /egrave /ecircumflex /edieresis
+/iacute /igrave /icircumflex /idieresis /ntilde /oacute /ograve
+/ocircumflex /odieresis /otilde /uacute /ugrave /ucircumflex
+/udieresis /dagger /.notdef /cent /sterling /section /bullet
+/paragraph /germandbls /registered /copyright /trademark /acute
+/dieresis /.notdef /AE /Oslash /.notdef /.notdef /.notdef /.notdef
+/yen /.notdef /.notdef /.notdef /.notdef /.notdef /.notdef
+/ordfeminine /ordmasculine /.notdef /ae /oslash /questiondown
+/exclamdown /logicalnot /.notdef /florin /.notdef /.notdef
+/guillemotleft /guillemotright /ellipsis /.notdef /Agrave /Atilde
+/Otilde /OE /oe /endash /emdash /quotedblleft /quotedblright
+/quoteleft /quoteright /.notdef /.notdef /ydieresis /Ydieresis
+/fraction /currency /guilsinglleft /guilsinglright /fi /fl /daggerdbl
+/periodcentered /quotesinglbase /quotedblbase /perthousand
+/Acircumflex /Ecircumflex /Aacute /Edieresis /Egrave /Iacute
+/Icircumflex /Idieresis /Igrave /Oacute /Ocircumflex /.notdef /Ograve
+/Uacute /Ucircumflex /Ugrave /dotlessi /circumflex /tilde /macron
+/breve /dotaccent /ring /cedilla /hungarumlaut /ogonek /caron
+] def
+/ReEncode { 
+	dup 
+	length 
+	dict begin 
+	{
+	1 index /FID ne 
+		{def} 
+		{pop pop} ifelse 
+	} forall 
+	0 eq {/Encoding DiacriticEncoding def} if 
+	currentdict 
+	end 
+	} bind def
+FMPColor 
+	
+	{
+	/BEGINBITMAPCOLOR { 
+		BITMAPCOLOR} def
+	/BEGINBITMAPCOLORc { 
+		BITMAPCOLORc} def
+	/BEGINBITMAPTRUECOLOR { 
+		BITMAPTRUECOLOR } def
+	/BEGINBITMAPTRUECOLORc { 
+		BITMAPTRUECOLORc } def
+	}
+	
+	{
+	/BEGINBITMAPCOLOR { 
+		BITMAPGRAY} def
+	/BEGINBITMAPCOLORc { 
+		BITMAPGRAYc} def
+	/BEGINBITMAPTRUECOLOR { 
+		BITMAPTRUEGRAY } def
+	/BEGINBITMAPTRUECOLORc { 
+		BITMAPTRUEGRAYc } def
+	}
+ifelse
+/K { 
+	FMPrintAllColorsAsBlack {
+		dup 1 eq 2 index 1 eq and 3 index 1 eq and not
+			{7 {pop} repeat 0 0 0 1 0 0 0} if
+	} if 
+	FrameCurColors astore 
+	pop combineColor
+} bind def
+/graymode true def
+	/bwidth FMLOCAL
+	/bpside FMLOCAL
+	/bstring FMLOCAL
+	/onbits FMLOCAL
+	/offbits FMLOCAL
+	/xindex FMLOCAL
+	/yindex FMLOCAL
+	/x FMLOCAL
+	/y FMLOCAL
+/setPatternMode {
+	FMLevel1 {
+		/bwidth  exch def
+		/bpside  exch def
+		/bstring exch def
+		/onbits 0 def  /offbits 0 def
+		freq sangle landscape {90 add} if 
+			{/y exch def
+			 /x exch def
+			 /xindex x 1 add 2 div bpside mul cvi def
+			 /yindex y 1 add 2 div bpside mul cvi def
+			 bstring yindex bwidth mul xindex 8 idiv add get
+			 1 7 xindex 8 mod sub bitshift and 0 ne FrameNegative {not} if
+			 {/onbits  onbits  1 add def 1}
+			 {/offbits offbits 1 add def 0}
+			 ifelse
+			}
+			setscreen
+		offbits offbits onbits add div FrameNegative {1.0 exch sub} if
+		/FrameCurGray exch def
+	} { 
+		pop pop
+		dup patCache exch known {
+			patCache exch get
+		} { 
+			dup
+			patDict /bstring 3 -1 roll put
+			patDict 
+			9 PatFreq screenIndex get div dup matrix scale
+			makepattern
+			dup 
+			patCache 4 -1 roll 3 -1 roll put
+		} ifelse
+		/FrameCurGray 0 def
+		/FrameCurPat exch def
+	} ifelse
+	/graymode false def
+	combineColor
+} bind def
+/setGrayScaleMode {
+	graymode not {
+		/graymode true def
+		FMLevel1 {
+			setCurrentScreen
+		} if
+	} if
+	/FrameCurGray exch def
+	combineColor
+} bind def
+/normalize {
+	transform round exch round exch itransform
+	} bind def
+/dnormalize {
+	dtransform round exch round exch idtransform
+	} bind def
+/lnormalize { 
+	0 dtransform exch cvi 2 idiv 2 mul 1 add exch idtransform pop
+	} bind def
+/H { 
+	lnormalize setlinewidth
+	} bind def
+/Z {
+	setlinecap
+	} bind def
+	
+/PFill {
+	graymode FMLevel1 or not {
+		gsave 1 setgray eofill grestore
+	} if
+} bind def
+/PStroke {
+	graymode FMLevel1 or not {
+		gsave 1 setgray stroke grestore
+	} if
+	stroke
+} bind def
+	/fillvals FMLOCAL
+/X { 
+	fillvals exch get
+	dup type /stringtype eq
+	{8 1 setPatternMode} 
+	{setGrayScaleMode}
+	ifelse
+	} bind def
+/V { 
+	PFill gsave eofill grestore
+	} bind def
+/Vclip {
+	clip
+	} bind def
+/Vstrk {
+	currentlinewidth exch setlinewidth PStroke setlinewidth
+	} bind def
+/N { 
+	PStroke
+	} bind def
+/Nclip {
+	strokepath clip newpath
+	} bind def
+/Nstrk {
+	currentlinewidth exch setlinewidth PStroke setlinewidth
+	} bind def
+/M {newpath moveto} bind def
+/E {lineto} bind def
+/D {curveto} bind def
+/O {closepath} bind def
+	/n FMLOCAL
+/L { 
+ 	/n exch def
+	newpath
+	normalize
+	moveto 
+	2 1 n {pop normalize lineto} for
+	} bind def
+/Y { 
+	L 
+	closepath
+	} bind def
+	/x1 FMLOCAL
+	/x2 FMLOCAL
+	/y1 FMLOCAL
+	/y2 FMLOCAL
+/R { 
+	/y2 exch def
+	/x2 exch def
+	/y1 exch def
+	/x1 exch def
+	x1 y1
+	x2 y1
+	x2 y2
+	x1 y2
+	4 Y 
+	} bind def
+	/rad FMLOCAL
+/rarc 
+	{rad 
+	 arcto
+	} bind def
+/RR { 
+	/rad exch def
+	normalize
+	/y2 exch def
+	/x2 exch def
+	normalize
+	/y1 exch def
+	/x1 exch def
+	mark
+	newpath
+	{
+	x1 y1 rad add moveto
+	x1 y2 x2 y2 rarc
+	x2 y2 x2 y1 rarc
+	x2 y1 x1 y1 rarc
+	x1 y1 x1 y2 rarc
+	closepath
+	} stopped {x1 y1 x2 y2 R} if 
+	cleartomark
+	} bind def
+/RRR { 
+	/rad exch def
+	normalize /y4 exch def /x4 exch def
+	normalize /y3 exch def /x3 exch def
+	normalize /y2 exch def /x2 exch def
+	normalize /y1 exch def /x1 exch def
+	newpath
+	normalize moveto 
+	mark
+	{
+	x2 y2 x3 y3 rarc
+	x3 y3 x4 y4 rarc
+	x4 y4 x1 y1 rarc
+	x1 y1 x2 y2 rarc
+	closepath
+	} stopped
+	 {x1 y1 x2 y2 x3 y3 x4 y4 newpath moveto lineto lineto lineto closepath} if
+	cleartomark
+	} bind def
+/C { 
+	grestore
+	gsave
+	R 
+	clip
+	setCurrentScreen
+} bind def
+/CP { 
+	grestore
+	gsave
+	Y 
+	clip
+	setCurrentScreen
+} bind def
+	/FMpointsize FMLOCAL
+/F { 
+	FMfonts exch get
+	FMpointsize scalefont
+	setfont
+	} bind def
+/Q { 
+	/FMpointsize exch def
+	F 
+	} bind def
+/T { 
+	moveto show
+	} bind def
+/RF { 
+	rotate
+	0 ne {-1 1 scale} if
+	} bind def
+/TF { 
+	gsave
+	moveto 
+	RF
+	show
+	grestore
+	} bind def
+/P { 
+	moveto
+	0 32 3 2 roll widthshow
+	} bind def
+/PF { 
+	gsave
+	moveto 
+	RF
+	0 32 3 2 roll widthshow
+	grestore
+	} bind def
+/S { 
+	moveto
+	0 exch ashow
+	} bind def
+/SF { 
+	gsave
+	moveto
+	RF
+	0 exch ashow
+	grestore
+	} bind def
+/B { 
+	moveto
+	0 32 4 2 roll 0 exch awidthshow
+	} bind def
+/BF { 
+	gsave
+	moveto
+	RF
+	0 32 4 2 roll 0 exch awidthshow
+	grestore
+	} bind def
+/G { 
+	gsave
+	newpath
+	normalize translate 0.0 0.0 moveto 
+	dnormalize scale 
+	0.0 0.0 1.0 5 3 roll arc 
+	closepath 
+	PFill fill
+	grestore
+	} bind def
+/Gstrk {
+	savematrix
+    newpath
+    2 index 2 div add exch 3 index 2 div sub exch 
+    normalize 2 index 2 div sub exch 3 index 2 div add exch 
+    translate
+    scale 
+    0.0 0.0 1.0 5 3 roll arc 
+    restorematrix
+    currentlinewidth exch setlinewidth PStroke setlinewidth
+    } bind def
+/Gclip { 
+	newpath
+	savematrix
+	normalize translate 0.0 0.0 moveto 
+	dnormalize scale 
+	0.0 0.0 1.0 5 3 roll arc 
+	closepath 
+	clip newpath
+	restorematrix
+	} bind def
+/GG { 
+	gsave
+	newpath
+	normalize translate 0.0 0.0 moveto 
+	rotate 
+	dnormalize scale 
+	0.0 0.0 1.0 5 3 roll arc 
+	closepath
+	PFill
+	fill
+	grestore
+	} bind def
+/GGclip { 
+	savematrix
+	newpath
+    normalize translate 0.0 0.0 moveto 
+    rotate 
+    dnormalize scale 
+    0.0 0.0 1.0 5 3 roll arc 
+    closepath
+	clip newpath
+	restorematrix
+	} bind def
+/GGstrk { 
+	savematrix
+    newpath
+    normalize translate 0.0 0.0 moveto 
+    rotate 
+    dnormalize scale 
+    0.0 0.0 1.0 5 3 roll arc 
+    closepath 
+	restorematrix
+    currentlinewidth exch setlinewidth PStroke setlinewidth
+	} bind def
+/A { 
+	gsave
+	savematrix
+	newpath
+	2 index 2 div add exch 3 index 2 div sub exch 
+	normalize 2 index 2 div sub exch 3 index 2 div add exch 
+	translate 
+	scale 
+	0.0 0.0 1.0 5 3 roll arc 
+	restorematrix
+	PStroke
+	grestore
+	} bind def
+/Aclip {
+	newpath
+	savematrix
+	normalize translate 0.0 0.0 moveto 
+	dnormalize scale 
+	0.0 0.0 1.0 5 3 roll arc 
+	closepath 
+	strokepath clip newpath
+	restorematrix
+} bind def
+/Astrk {
+	Gstrk
+} bind def
+/AA { 
+	gsave
+	savematrix
+	newpath
+	
+	3 index 2 div add exch 4 index 2 div sub exch 
+	
+	normalize 3 index 2 div sub exch 4 index 2 div add exch
+	translate 
+	rotate 
+	scale 
+	0.0 0.0 1.0 5 3 roll arc 
+	restorematrix
+	PStroke
+	grestore
+	} bind def
+/AAclip {
+	savematrix
+	newpath
+    normalize translate 0.0 0.0 moveto 
+    rotate 
+    dnormalize scale 
+    0.0 0.0 1.0 5 3 roll arc 
+    closepath
+	strokepath clip newpath
+	restorematrix
+} bind def
+/AAstrk {
+	GGstrk
+} bind def
+	/x FMLOCAL
+	/y FMLOCAL
+	/w FMLOCAL
+	/h FMLOCAL
+	/xx FMLOCAL
+	/yy FMLOCAL
+	/ww FMLOCAL
+	/hh FMLOCAL
+	/FMsaveobject FMLOCAL
+	/FMoptop FMLOCAL
+	/FMdicttop FMLOCAL
+/BEGINPRINTCODE { 
+	/FMdicttop countdictstack 1 add def 
+	/FMoptop count 7 sub def 
+	/FMsaveobject save def
+	userdict begin 
+	/showpage {} def 
+	FMNORMALIZEGRAPHICS 
+	3 index neg 3 index neg translate
+	} bind def
+/ENDPRINTCODE {
+	count -1 FMoptop {pop pop} for 
+	countdictstack -1 FMdicttop {pop end} for 
+	FMsaveobject restore 
+	} bind def
+/gn { 
+	0 
+	{	46 mul 
+		cf read pop 
+		32 sub 
+		dup 46 lt {exit} if 
+		46 sub add 
+		} loop
+	add 
+	} bind def
+	/str FMLOCAL
+/cfs { 
+	/str sl string def 
+	0 1 sl 1 sub {str exch val put} for 
+	str def 
+	} bind def
+/ic [ 
+	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0223
+	0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0223
+	0
+	{0 hx} {1 hx} {2 hx} {3 hx} {4 hx} {5 hx} {6 hx} {7 hx} {8 hx} {9 hx}
+	{10 hx} {11 hx} {12 hx} {13 hx} {14 hx} {15 hx} {16 hx} {17 hx} {18 hx}
+	{19 hx} {gn hx} {0} {1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11} {12}
+	{13} {14} {15} {16} {17} {18} {19} {gn} {0 wh} {1 wh} {2 wh} {3 wh}
+	{4 wh} {5 wh} {6 wh} {7 wh} {8 wh} {9 wh} {10 wh} {11 wh} {12 wh}
+	{13 wh} {14 wh} {gn wh} {0 bl} {1 bl} {2 bl} {3 bl} {4 bl} {5 bl} {6 bl}
+	{7 bl} {8 bl} {9 bl} {10 bl} {11 bl} {12 bl} {13 bl} {14 bl} {gn bl}
+	{0 fl} {1 fl} {2 fl} {3 fl} {4 fl} {5 fl} {6 fl} {7 fl} {8 fl} {9 fl}
+	{10 fl} {11 fl} {12 fl} {13 fl} {14 fl} {gn fl}
+	] def
+	/sl FMLOCAL
+	/val FMLOCAL
+	/ws FMLOCAL
+	/im FMLOCAL
+	/bs FMLOCAL
+	/cs FMLOCAL
+	/len FMLOCAL
+	/pos FMLOCAL
+/ms { 
+	/sl exch def 
+	/val 255 def 
+	/ws cfs 
+	/im cfs 
+	/val 0 def 
+	/bs cfs 
+	/cs cfs 
+	} bind def
+400 ms 
+/ip { 
+	is 
+	0 
+	cf cs readline pop 
+	{	ic exch get exec 
+		add 
+		} forall 
+	pop 
+	
+	} bind def
+/rip { 
+	   
+	  
+	  bis ris copy pop 
+      is
+      0
+      cf cs readline pop 
+      {       ic exch get exec 
+              add 
+              } forall 
+	  pop pop 
+	  ris gis copy pop 
+	  dup is exch 
+	  
+      cf cs readline pop 
+      {       ic exch get exec 
+              add 
+              } forall 
+	  pop pop
+	  gis bis copy pop 
+	  dup add is exch 
+	  
+      cf cs readline pop 
+      {       ic exch get exec 
+              add 
+              } forall 
+      pop 
+      
+      } bind def
+/wh { 
+	/len exch def 
+	/pos exch def 
+	ws 0 len getinterval im pos len getinterval copy pop
+	pos len 
+	} bind def
+/bl { 
+	/len exch def 
+	/pos exch def 
+	bs 0 len getinterval im pos len getinterval copy pop
+	pos len 
+	} bind def
+/s1 1 string def
+/fl { 
+	/len exch def 
+	/pos exch def 
+	/val cf s1 readhexstring pop 0 get def
+	pos 1 pos len add 1 sub {im exch val put} for
+	pos len 
+	} bind def
+/hx { 
+	3 copy getinterval 
+	cf exch readhexstring pop pop 
+	} bind def
+	/h FMLOCAL
+	/w FMLOCAL
+	/d FMLOCAL
+	/lb FMLOCAL
+	/bitmapsave FMLOCAL
+	/is FMLOCAL
+	/cf FMLOCAL
+/wbytes { 
+      dup dup
+      24 eq { pop pop 3 mul }
+      { 8 eq {pop} {1 eq {7 add 8 idiv} {3 add 4 idiv} ifelse} ifelse } ifelse
+	} bind def
+/BEGINBITMAPBWc { 
+	1 {} COMMONBITMAPc
+	} bind def
+/BEGINBITMAPGRAYc { 
+	8 {} COMMONBITMAPc
+	} bind def
+/BEGINBITMAP2BITc { 
+	2 {} COMMONBITMAPc
+	} bind def
+/COMMONBITMAPc { 
+		 
+	/r exch def
+	/d exch def
+	gsave
+	
+	3 index 2 div add exch	
+	4 index 2 div add exch	
+	translate		
+	rotate			
+	1 index 2 div neg	
+	1 index 2 div neg	
+	translate		
+	scale			
+	/h exch def /w exch def
+	/lb w d wbytes def 
+	sl lb lt {lb ms} if 
+	/bitmapsave save def 
+	r                    
+	/is im 0 lb getinterval def 
+	ws 0 lb getinterval is copy pop 
+	/cf currentfile def 
+	w h d [w 0 0 h neg 0 h] 
+	{ip} image 
+	bitmapsave restore 
+	grestore
+	} bind def
+/BEGINBITMAPBW { 
+	1 {} COMMONBITMAP
+	} bind def
+/BEGINBITMAPGRAY { 
+	8 {} COMMONBITMAP
+	} bind def
+/BEGINBITMAP2BIT { 
+	2 {} COMMONBITMAP
+	} bind def
+/COMMONBITMAP { 
+	/r exch def
+	/d exch def
+	gsave
+	
+	3 index 2 div add exch	
+	4 index 2 div add exch	
+	translate		
+	rotate			
+	1 index 2 div neg	
+	1 index 2 div neg	
+	translate		
+	scale			
+	/h exch def /w exch def
+	/bitmapsave save def 
+	r                    
+	/is w d wbytes string def
+	/cf currentfile def 
+	w h d [w 0 0 h neg 0 h] 
+	{cf is readhexstring pop} image
+	bitmapsave restore 
+	grestore
+	} bind def
+/ngrayt 256 array def
+/nredt 256 array def
+/nbluet 256 array def
+/ngreent 256 array def
+	/gryt FMLOCAL
+	/blut FMLOCAL
+	/grnt FMLOCAL
+	/redt FMLOCAL
+	/indx FMLOCAL
+	/cynu FMLOCAL
+	/magu FMLOCAL
+	/yelu FMLOCAL
+	/k FMLOCAL
+	/u FMLOCAL
+FMLevel1 {
+/colorsetup {
+	currentcolortransfer
+	/gryt exch def
+	/blut exch def
+	/grnt exch def
+	/redt exch def
+	0 1 255 {
+		/indx exch def
+		/cynu 1 red indx get 255 div sub def
+		/magu 1 green indx get 255 div sub def
+		/yelu 1 blue indx get 255 div sub def
+		/k cynu magu min yelu min def
+		/u k currentundercolorremoval exec def
+%		/u 0 def
+		nredt indx 1 0 cynu u sub max sub redt exec put
+		ngreent indx 1 0 magu u sub max sub grnt exec put
+		nbluet indx 1 0 yelu u sub max sub blut exec put
+		ngrayt indx 1 k currentblackgeneration exec sub gryt exec put
+	} for
+	{255 mul cvi nredt exch get}
+	{255 mul cvi ngreent exch get}
+	{255 mul cvi nbluet exch get}
+	{255 mul cvi ngrayt exch get}
+	setcolortransfer
+	{pop 0} setundercolorremoval
+	{} setblackgeneration
+	} bind def
+}
+{
+/colorSetup2 {
+	[ /Indexed /DeviceRGB 255 
+		{dup red exch get 255 div 
+		 exch dup green exch get 255 div 
+		 exch blue exch get 255 div}
+	] setcolorspace
+} bind def
+} ifelse
+	/tran FMLOCAL
+/fakecolorsetup {
+	/tran 256 string def
+	0 1 255 {/indx exch def 
+		tran indx
+		red indx get 77 mul
+		green indx get 151 mul
+		blue indx get 28 mul
+		add add 256 idiv put} for
+	currenttransfer
+	{255 mul cvi tran exch get 255.0 div}
+	exch concatprocs settransfer
+} bind def
+/BITMAPCOLOR { 
+	/d 8 def
+	gsave
+	
+	3 index 2 div add exch	
+	4 index 2 div add exch	
+	translate		
+	rotate			
+	1 index 2 div neg	
+	1 index 2 div neg	
+	translate		
+	scale			
+	/h exch def /w exch def
+	/bitmapsave save def
+	FMLevel1 {	
+		colorsetup
+		/is w d wbytes string def
+		/cf currentfile def 
+		w h d [w 0 0 h neg 0 h] 
+		{cf is readhexstring pop} {is} {is} true 3 colorimage 
+	} {
+		colorSetup2
+		/is w d wbytes string def
+		/cf currentfile def 
+		7 dict dup begin
+			/ImageType 1 def
+			/Width w def
+			/Height h def
+			/ImageMatrix [w 0 0 h neg 0 h] def
+			/DataSource {cf is readhexstring pop} bind def
+			/BitsPerComponent d def
+			/Decode [0 255] def
+		end image	
+	} ifelse
+	bitmapsave restore 
+	grestore
+	} bind def
+/BITMAPCOLORc { 
+	/d 8 def
+	gsave
+	
+	3 index 2 div add exch	
+	4 index 2 div add exch	
+	translate		
+	rotate			
+	1 index 2 div neg	
+	1 index 2 div neg	
+	translate		
+	scale			
+	/h exch def /w exch def
+	/lb w d wbytes def 
+	sl lb lt {lb ms} if 
+	/bitmapsave save def 
+	FMLevel1 {	
+		colorsetup
+		/is im 0 lb getinterval def 
+		ws 0 lb getinterval is copy pop 
+		/cf currentfile def 
+		w h d [w 0 0 h neg 0 h] 
+		{ip} {is} {is} true 3 colorimage
+	} {
+		colorSetup2
+		/is im 0 lb getinterval def 
+		ws 0 lb getinterval is copy pop 
+		/cf currentfile def 
+		7 dict dup begin
+			/ImageType 1 def
+			/Width w def
+			/Height h def
+			/ImageMatrix [w 0 0 h neg 0 h] def
+			/DataSource {ip} bind def
+			/BitsPerComponent d def
+			/Decode [0 255] def
+		end image	
+	} ifelse
+	bitmapsave restore 
+	grestore
+	} bind def
+/BITMAPTRUECOLORc { 
+	/d 24 def
+        gsave
+ 	
+	3 index 2 div add exch	
+	4 index 2 div add exch	
+	translate		
+	rotate			
+	1 index 2 div neg	
+	1 index 2 div neg	
+	translate		
+	scale			
+	/h exch def /w exch def
+	/lb w d wbytes def 
+	sl lb lt {lb ms} if 
+        /bitmapsave save def 
+        
+	/is im 0 lb getinterval def	
+	/ris im 0 w getinterval def	
+	/gis im w w getinterval def	
+	/bis im w 2 mul w getinterval def 
+        
+        ws 0 lb getinterval is copy pop 
+        /cf currentfile def 
+        w h 8 [w 0 0 h neg 0 h] 
+        {w rip pop ris} {gis} {bis} true 3 colorimage
+        bitmapsave restore 
+        grestore
+        } bind def
+/BITMAPTRUECOLOR { 
+        gsave
+		
+		3 index 2 div add exch	
+		4 index 2 div add exch	
+		translate		
+		rotate			
+		1 index 2 div neg	
+		1 index 2 div neg	
+		translate		
+		scale			
+		/h exch def /w exch def
+        /bitmapsave save def 
+        /is w string def
+        /gis w string def
+        /bis w string def
+        /cf currentfile def 
+        w h 8 [w 0 0 h neg 0 h] 
+        { cf is readhexstring pop } 
+        { cf gis readhexstring pop } 
+        { cf bis readhexstring pop } 
+        true 3 colorimage 
+        bitmapsave restore 
+        grestore
+        } bind def
+/BITMAPTRUEGRAYc { 
+	/d 24 def
+        gsave
+	
+	3 index 2 div add exch	
+	4 index 2 div add exch	
+	translate		
+	rotate			
+	1 index 2 div neg	
+	1 index 2 div neg	
+	translate		
+	scale			
+	/h exch def /w exch def
+	/lb w d wbytes def 
+	sl lb lt {lb ms} if 
+        /bitmapsave save def 
+        
+	/is im 0 lb getinterval def	
+	/ris im 0 w getinterval def	
+	/gis im w w getinterval def	
+	/bis im w 2 mul w getinterval def 
+        ws 0 lb getinterval is copy pop 
+        /cf currentfile def 
+        w h 8 [w 0 0 h neg 0 h] 
+        {w rip pop ris gis bis w gray} image
+        bitmapsave restore 
+        grestore
+        } bind def
+/ww FMLOCAL
+/r FMLOCAL
+/g FMLOCAL
+/b FMLOCAL
+/i FMLOCAL
+/gray { 
+        /ww exch def
+        /b exch def
+        /g exch def
+        /r exch def
+        0 1 ww 1 sub { /i exch def r i get .299 mul g i get .587 mul
+			b i get .114 mul add add r i 3 -1 roll floor cvi put } for
+        r
+        } bind def
+/BITMAPTRUEGRAY { 
+        gsave
+		
+		3 index 2 div add exch	
+		4 index 2 div add exch	
+		translate		
+		rotate			
+		1 index 2 div neg	
+		1 index 2 div neg	
+		translate		
+		scale			
+		/h exch def /w exch def
+        /bitmapsave save def 
+        /is w string def
+        /gis w string def
+        /bis w string def
+        /cf currentfile def 
+        w h 8 [w 0 0 h neg 0 h] 
+        { cf is readhexstring pop 
+          cf gis readhexstring pop 
+          cf bis readhexstring pop w gray}  image
+        bitmapsave restore 
+        grestore
+        } bind def
+/BITMAPGRAY { 
+	8 {fakecolorsetup} COMMONBITMAP
+	} bind def
+/BITMAPGRAYc { 
+	8 {fakecolorsetup} COMMONBITMAPc
+	} bind def
+/ENDBITMAP {
+	} bind def
+end 
+	/ALDsave FMLOCAL
+	/ALDmatrix matrix def ALDmatrix currentmatrix pop
+/StartALD {
+	/ALDsave save def
+	 savematrix
+	 ALDmatrix setmatrix
+	} bind def
+/InALD {
+	 restorematrix
+	} bind def
+/DoneALD {
+	 ALDsave restore
+	} bind def
+/I { setdash } bind def
+/J { [] 0 setdash } bind def
+%%EndProlog
+%%BeginSetup
+(4.0) FMVERSION
+1 1 0 0 595.28 841.89 0 1 18 FMDOCUMENT
+0 0 /Times-Roman FMFONTDEFINE
+1 0 /Times-Bold FMFONTDEFINE
+2 0 /Times-Italic FMFONTDEFINE
+3 1 /Symbol FMFONTDEFINE
+4 0 /Courier-Bold FMFONTDEFINE
+5 0 /Courier FMFONTDEFINE
+32 FMFILLS
+0 0 FMFILL
+1 0.1 FMFILL
+2 0.3 FMFILL
+3 0.5 FMFILL
+4 0.7 FMFILL
+5 0.9 FMFILL
+6 0.97 FMFILL
+7 1 FMFILL
+8 <0f1e3c78f0e1c387> FMFILL
+9 <0f87c3e1f0783c1e> FMFILL
+10 <cccccccccccccccc> FMFILL
+11 <ffff0000ffff0000> FMFILL
+12 <8142241818244281> FMFILL
+13 <03060c183060c081> FMFILL
+14 <8040201008040201> FMFILL
+16 1 FMFILL
+17 0.9 FMFILL
+18 0.7 FMFILL
+19 0.5 FMFILL
+20 0.3 FMFILL
+21 0.1 FMFILL
+22 0.03 FMFILL
+23 0 FMFILL
+24 <f0e1c3870f1e3c78> FMFILL
+25 <f0783c1e0f87c3e1> FMFILL
+26 <3333333333333333> FMFILL
+27 <0000ffff0000ffff> FMFILL
+28 <7ebddbe7e7dbbd7e> FMFILL
+29 <fcf9f3e7cf9f3f7e> FMFILL
+30 <7fbfdfeff7fbfdfe> FMFILL
+%%EndSetup
+%%Page: "1" 1
+%%BeginPaperSize: A4
+%%EndPaperSize
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+J
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Parallel programming) 107.72 799.71 T
+(Practical W) 107.72 789.71 T
+(ork) 144.62 789.71 T
+107.72 53.86 524.41 53.86 2 L
+0.25 H
+2 Z
+N
+(Manhattan krantenweg - A parallel approach) 107.72 42.73 T
+(17 April 1997) 300.71 42.73 T
+(1) 520.41 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 24 Q
+(Manhattan krantenweg - A parallel) 148.11 755.02 T
+(approach) 272.08 725.02 T
+1 12 Q
+(Mattias Forsberg) 271.57 685.02 T
+0 F
+(Dept. of Computer and Information Science) 210.41 669.02 T
+(Link\232ping Institute of T) 233.65 653.02 T
+(echnology) 348.48 653.02 T
+(S-581 83 Link\232ping, Sweden) 245.73 637.02 T
+1 16 Q
+(1.0  Intr) 107.72 594.36 T
+(oduction) 162.98 594.36 T
+0 12 Q
+(In September 1996 a problem to solve was presented by three Dutch companies: Com-) 107.72 567.02 T
+(puter Management Group \050CMG\051, TU Eindhoven and De T) 107.72 553.02 T
+(elegraaf. The problem in) 393.82 553.02 T
+(question could be loosely described as follows:) 107.72 539.02 T
+(Given a map of a city) 161.57 518.02 T
+(, structured like Manhattan, with avenues) 264.44 518.02 T
+(and streets, and a set of 120 delivery points, calculate four dif-) 161.57 504.02 T
+(ferent routes for four news paper delivery boys so that the long-) 161.57 490.02 T
+(est route of the four is as short as possible.) 161.57 476.02 T
+-0.33 (Finding the shortest path that visits all nodes in a graph has for a long time been known) 107.72 450.02 P
+(as the \322T) 107.72 436.02 T
+(ravelling Salesman Problem\323 \050TSP\051. A great deal of literature has been writ-) 150.62 436.02 T
+-0.23 (ten on this subject. When decomposing the problem in question it is possible to use the) 107.72 422.02 P
+(similarity between the TSP and this problem. The idea is to brake up the problem into) 107.72 408.02 T
+(two separate parts: a distribution problem dealing with the problem of which nodes to) 107.72 394.02 T
+-0.04 (give to which delivery boy) 107.72 380.02 P
+-0.04 (, and a TSP problem. By decomposing the original problem) 235.45 380.02 P
+(like this we can use existing TSP heuristics, and can concentrate design ef) 107.72 366.02 T
+(forts on try-) 463.11 366.02 T
+(ing to solve the distribution problem.) 107.72 352.02 T
+(Distances are calculated using the following formula, also known as Manhattan dis-) 107.72 326.02 T
+(tances [REIN94]:) 107.72 312.02 T
+0 10 Q
+(Calculation of Manhattan distances) 231.63 248.5 T
+(\050EQ 1\051) 496.92 248.5 T
+0 12 Q
+(The aim of this project is to write a parallel program in Orca and execute it on the) 107.72 225.17 T
+(Amoeba system in order to \336nd a solution to this problem that is close to the best solu-) 107.72 211.17 T
+-0.06 (tion that has yet been found. The program must also achieve acceptable speed-ups and) 107.72 197.17 P
+(ef) 107.72 183.17 T
+(\336ciency) 116.82 183.17 T
+(.) 154.04 183.17 T
+(The optimal solution to the problem is of course very hard to \336nd. Since there are 120) 107.72 157.17 T
+-0.37 (delivery points \050or nodes\051 and four delivery boys the total number of distributions to be) 107.72 143.17 P
+(evaluated would be) 107.72 128.16 T
+( which is approximately 1.767 E72. The time necessary to) 222.48 128.16 T
+(investigate all the possibilities would be very long, therefore I had to use assumptions) 107.72 113.91 T
+(and heuristics in order to solve the problem in a reasonable amount of time.) 107.72 99.91 T
+107.72 65.2 524.41 771.02 C
+240.28 267.17 391.85 282.02 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+2 9 Q
+0 X
+0 0 0 1 0 0 0 K
+(d) 241.28 274.27 T
+(i) 246.31 274.27 T
+(s) 249.34 274.27 T
+(c) 265.8 274.27 T
+(e) 270.33 274.27 T
+(P) 280.21 274.27 T
+(Q) 290.21 274.27 T
+3 F
+(,) 285.71 274.27 T
+(\050) 276.35 274.27 T
+(\051) 297.12 274.27 T
+0 F
+(t) 253.9 274.27 T
+(a) 256.4 274.27 T
+(n) 260.4 274.27 T
+2 F
+(P) 317.88 274.27 T
+2 7 Q
+(x) 323.73 270.92 T
+2 9 Q
+(Q) 335.83 274.27 T
+2 7 Q
+(x) 342.67 270.92 T
+0 9 Q
+(\320) 329.08 274.27 T
+2 F
+(P) 359.75 274.27 T
+2 7 Q
+(y) 365.59 270.92 T
+2 9 Q
+(Q) 377.69 274.27 T
+2 7 Q
+(y) 384.53 270.92 T
+0 9 Q
+(\320) 370.95 274.27 T
+(+) 350.22 274.27 T
+(=) 306.11 274.27 T
+316.58 270.07 316.58 281.02 2 L
+0.41 H
+2 Z
+N
+346.67 270.07 346.67 281.02 2 L
+N
+358.45 270.07 358.45 281.02 2 L
+N
+388.54 270.07 388.54 281.02 2 L
+N
+107.72 65.2 524.41 771.02 C
+0 0 595.28 841.89 C
+204.03 123.91 222.48 137.17 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 9 Q
+0 X
+0 0 0 1 0 0 0 K
+(4) 205.03 128.16 T
+0 7 Q
+(1) 209.98 130.92 T
+(2) 213.48 130.92 T
+(0) 216.98 130.92 T
+0 0 595.28 841.89 C
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "1" 1
+%%Page: "2" 2
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Mattias Forsber) 430.43 799.71 T
+(g) 480.73 799.71 T
+487.56 53.86 70.87 53.86 2 L
+0.25 H
+2 Z
+N
+(2) 70.87 42.73 T
+(17 April 1997) 263.86 42.73 T
+(Manhattan krantenweg - A parallel approach) 344.27 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 12 Q
+(In this paper I describe the assumptions and heuristics that I have used to reach my) 70.87 763.02 T
+(conclusions. It will also describe the model of parallelism that has been applied in) 70.87 749.02 T
+(order to speed up the calculations together with resulting speed-up- and ef) 70.87 735.02 T
+(\336ciency-) 426.25 735.02 T
+(analysis of the program. Finally the result of the algorithm will be discussed and com-) 70.87 721.02 T
+(pared to the best known solution to this problem.) 70.87 707.02 T
+1 16 Q
+(2.0  Methods) 70.87 666.36 T
+1 14 Q
+(2.1  Components) 70.87 631.69 T
+0 12 Q
+(As mentioned previously the) 70.87 605.02 T
+1 F
+(distributor) 212.19 605.02 T
+0 F
+( is an important building-block of the pro-) 268.19 605.02 T
+(gram. Its task is to move nodes between the groups in a way that will hopefully) 70.87 591.02 T
+(improve upon the solution. The intention is to have a method inside the object which) 70.87 577.02 T
+(will return a new distribution until there are no more distributions. This is done as fol-) 70.87 563.02 T
+(lows:) 70.87 549.02 T
+(1.) 70.87 529.02 T
+(The distributor starts with an initial distribution and a \322base problem\323, i.e. a collec-) 85.04 529.02 T
+(tion of four tours. By calculating the length of these tours it knows which group in) 85.04 515.02 T
+(the distribution has the longest tour) 85.04 501.02 T
+(. This is a piece of information that is needed) 254.05 501.02 T
+(later on in the algorithm.) 85.04 487.02 T
+(2.) 70.87 467.02 T
+-0.01 (In order to shorten the longest tour we use the assumption that moving a node from) 85.04 467.02 P
+(a tour can not decrease the value of that tour) 85.04 453.02 T
+(. W) 297.32 453.02 T
+(e therefore produce new distribu-) 313.69 453.02 T
+(tions by randomly selecting x nodes \050the granularity) 85.04 435.82 T
+0 9.6 Q
+(1) 335.35 440.62 T
+0 12 Q
+( of the distribution\051 from the) 340.15 435.82 T
+(group with the longest distance and then create three new distributions by inserting) 85.04 421.82 T
+(the nodes in each one of the other groups.) 85.04 407.82 T
+(3.) 70.87 387.82 T
+-0.24 (After all possible distributions have been extracted from the distributor we have run) 85.04 387.82 P
+(out of possibilities to move nodes. W) 85.04 373.82 T
+(e then need a new base for our distributions.) 263.08 373.82 T
+-0.11 (This base has to be supplied to the distributor by a surrounding process. As the new) 85.04 359.82 P
+(base is accepted by the distributor) 85.04 345.82 T
+(, new distributions can be created.) 247.53 345.82 T
+(By feeding the distributor with new distributions that it has created itself we get a tree) 70.87 319.82 T
+(of distributions. The idea is to traverse this tree and perform cut-of) 70.87 305.82 T
+(fs where the distri-) 390.59 305.82 T
+(butions are not good enough to pursue. W) 70.87 291.82 T
+(e then stop at a certain, predestined depth of) 271.22 291.82 T
+(the tree. The depth we search to is determined by a variable in the Speci\336cationObject) 70.87 277.82 T
+(\050see \322Speci\336cationObject\323 on page) 70.87 263.64 T
+(4\051.) 242.15 263.64 T
+70.87 104.2 487.56 124.04 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+70.87 112.04 202.87 112.04 2 L
+0.25 H
+2 Z
+0 X
+0 0 0 1 0 0 0 K
+N
+0 0 595.28 841.89 C
+0 10 Q
+0 X
+0 0 0 1 0 0 0 K
+(1.) 70.87 97.53 T
+(The granularity of the distribution is used in order to test out the ef) 82.21 97.53 T
+(fects of making greater or lesser) 348.94 97.53 T
+(changes to the distribution at once. During testing it was discovered that using granularity one was) 82.21 85.53 T
+(most ef) 82.21 73.53 T
+(\336cient.) 111.75 73.53 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "2" 2
+%%Page: "3" 3
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Parallel programming) 107.72 799.71 T
+(Practical W) 107.72 789.71 T
+(ork) 144.62 789.71 T
+107.72 53.86 524.41 53.86 2 L
+0.25 H
+2 Z
+N
+(Manhattan krantenweg - A parallel approach) 107.72 42.73 T
+(17 April 1997) 300.71 42.73 T
+(3) 520.41 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+1 10 Q
+(FIGURE 1. Distribution tr) 121.89 764.36 T
+(ee) 235.6 764.36 T
+1 12 Q
+(2.1.1  T) 107.72 547.94 T
+(ourCollectionObject) 144.62 547.94 T
+0 F
+(Every node in the tree is represented by a unique T) 107.72 521.94 T
+(ourCollectionObject \050TCO\051. Each) 351.48 521.94 T
+-0.32 (TCO object contains four T) 107.72 507.75 P
+-0.32 (ourObjects \050See \322T) 238.24 507.75 P
+-0.32 (ourObject\323\051, plus variables and methods) 329.39 507.75 P
+(to support the following actions:) 107.72 493.75 T
+4 F
+(\245) 107.72 473.75 T
+0 F
+(Improve all the T) 121.89 473.75 T
+(ourObjects of the TCO) 204.7 473.75 T
+4 F
+(\245) 107.72 450.55 T
+0 F
+(Calculate the total value of the problem \050using memoization) 121.89 450.55 T
+0 9.6 Q
+(1) 410.52 455.35 T
+0 12 Q
+( techniques\051) 415.33 450.55 T
+4 F
+(\245) 107.72 430.55 T
+0 F
+(Determine if the current distribution is good enough to be pursued further) 121.89 430.55 T
+-0.47 (Not pursuing a TCO is equivalent to performing a cut-of) 107.72 404.55 P
+-0.47 (f in the tree. The determination) 374.92 404.55 P
+(pursuit of a TCO is done by looking at how many consecutive changes of the distribu-) 107.72 390.55 T
+(tion have increased the value of the TCO \050that is, made it worse\051, together with how) 107.72 376.55 T
+(big an improvement has been made since the last time. The TCO is pursued if:) 107.72 362.55 T
+4 F
+(\245) 107.72 342.55 T
+0 F
+-0.23 (Not more than) 121.89 342.55 P
+2 F
+-0.23 (z) 193.53 342.55 P
+0 F
+-0.23 ( consecutive bad distributions have been evaluated and the improve-) 198.2 342.55 P
+(ment since the last attempt is better than) 121.89 328.55 T
+2 F
+(w) 317.87 328.55 T
+0 F
+( or) 325.88 328.55 T
+4 F
+(\245) 107.72 308.55 T
+0 F
+(The improvement since the last attempt is worse than) 121.89 308.55 T
+2 F
+(q.) 380.86 308.55 T
+0 F
+(W) 107.72 282.55 T
+(e therefore end up with two methods of controlling how often cut-of) 118.08 282.55 T
+(fs should occur) 445.48 282.55 T
+(.) 518.14 282.55 T
+(The reason why this is done is to avoid possible local minima of the distributions. A) 107.72 268.55 T
+(quick analysis of the distribution algorithm gives us that) 107.72 249.6 T
+( new distributions are pro-) 393.61 249.6 T
+(duced for every base, where) 107.72 229.53 T
+2 F
+(n) 245.66 229.53 T
+0 F
+( is the number of nodes in the worst group and) 251.66 229.53 T
+2 F
+(x) 477.96 229.53 T
+0 F
+( is the) 483.29 229.53 T
+-0.04 (granularity) 107.72 215.53 P
+-0.04 (. In order not to get too many distributions, we must rule out highly improb-) 159.59 215.53 P
+(able distributions, that are not worth examining, and this is what is done with the pur-) 107.72 201.53 T
+(suit function. I have set the values of) 107.72 187.53 T
+2 F
+(z) 287.36 187.53 T
+0 F
+(,) 292.02 187.53 T
+2 F
+(w) 298.02 187.53 T
+0 F
+(and) 309.03 187.53 T
+2 F
+( q) 326.36 187.53 T
+0 F
+( to 3, 0.80 and 1.20.) 335.36 187.53 T
+107.72 92.2 524.41 112.04 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+107.72 100.04 239.72 100.04 2 L
+0.25 H
+2 Z
+0 X
+0 0 0 1 0 0 0 K
+N
+0 0 595.28 841.89 C
+0 10 Q
+0 X
+0 0 0 1 0 0 0 K
+(1.) 107.72 85.53 T
+-0.27 (Memoization is a technique that enables us to only calculate a value if something has changed, so that) 119.06 85.53 P
+(we don\325) 119.06 73.53 T
+(t calculate the same value several times.) 151.37 73.53 T
+107.72 65.2 524.41 771.02 C
+149.81 573.94 482.32 761.02 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 X
+0 0 0 1 0 0 0 K
+90 450 2.83 2.83 321.87 717.56 G
+0.5 H
+0 Z
+90 450 2.83 2.83 321.87 717.56 A
+90 450 2.83 2.83 276.52 683.54 G
+90 450 2.83 2.83 276.52 683.54 A
+90 450 2.83 2.83 293.53 683.54 G
+90 450 2.83 2.83 293.53 683.54 A
+90 450 2.83 2.83 310.53 683.54 G
+90 450 2.83 2.83 310.53 683.54 A
+90 450 2.83 2.83 327.54 683.54 G
+90 450 2.83 2.83 327.54 683.54 A
+90 450 2.83 2.83 372.9 683.54 G
+90 450 2.83 2.83 372.9 683.54 A
+90 450 2.83 2.83 231.16 649.53 G
+90 450 2.83 2.83 231.16 649.53 A
+90 450 2.83 2.83 248.17 649.53 G
+90 450 2.83 2.83 248.17 649.53 A
+90 450 2.83 2.83 265.18 649.53 G
+90 450 2.83 2.83 265.18 649.53 A
+90 450 2.83 2.83 282.19 649.53 G
+90 450 2.83 2.83 282.19 649.53 A
+90 450 2.83 2.83 327.54 649.53 G
+90 450 2.83 2.83 327.54 649.53 A
+90 450 2.83 2.83 197.15 598.5 G
+90 450 2.83 2.83 197.15 598.5 A
+90 450 2.83 2.83 214.16 598.5 G
+90 450 2.83 2.83 214.16 598.5 A
+90 450 2.83 2.83 231.16 598.5 G
+90 450 2.83 2.83 231.16 598.5 A
+90 450 2.83 2.83 248.17 598.5 G
+90 450 2.83 2.83 248.17 598.5 A
+90 450 2.83 2.83 293.53 598.5 G
+90 450 2.83 2.83 293.53 598.5 A
+319.04 714.72 279.35 686.38 2 L
+V
+2 Z
+N
+319.04 714.72 296.36 686.38 2 L
+V
+N
+321.83 718.27 310.17 684.1 2 L
+V
+N
+321.83 719.1 326.83 684.1 2 L
+V
+N
+321.83 718.27 373.5 684.1 2 L
+V
+N
+276 684.1 231 649.1 2 L
+V
+N
+276 684.1 247.67 649.93 2 L
+V
+N
+276 683.27 265.17 649.93 2 L
+V
+N
+276 684.1 281.83 649.93 2 L
+V
+N
+276.83 684.1 327.67 649.1 2 L
+V
+N
+229.33 649.1 221.83 639.1 2 L
+V
+N
+231.83 649.1 230.17 637.43 2 L
+V
+N
+231.83 649.1 240.17 639.93 2 L
+V
+N
+196.83 599.1 203.5 610.76 2 L
+V
+N
+215.17 599.93 218.5 609.1 2 L
+V
+N
+231 599.1 231 609.1 2 L
+V
+N
+247.67 599.1 246.83 609.93 2 L
+V
+N
+291.83 599.1 280.17 607.43 2 L
+V
+N
+340.17 670.76 351 687.43 R
+7 X
+V
+0 12 Q
+0 X
+(...) 340.17 679.43 T
+294.83 640.26 305.67 656.93 R
+7 X
+V
+0 X
+(...) 294.83 648.93 T
+263.67 588.1 274.5 604.77 R
+7 X
+V
+0 X
+(...) 263.67 596.77 T
+224.05 615.65 234.89 632.32 R
+7 X
+V
+0 X
+(...) 224.05 624.32 T
+389.33 587.43 409.33 603.27 R
+7 X
+V
+2 F
+0 X
+(n) 389.33 595.27 T
+389.75 641.02 409.75 656.86 R
+7 X
+V
+0 F
+0 X
+(2) 389.75 648.86 T
+389.75 676.21 409.75 692.05 R
+7 X
+V
+0 X
+(1) 389.75 684.05 T
+353.05 709.05 409.75 724.89 R
+7 X
+V
+0 X
+(Depth: 0) 353.05 716.89 T
+(New bases) 155.48 707.67 T
+212.17 735.04 302.88 752.05 R
+7 X
+V
+0 X
+(Initial distribution) 212.17 744.05 T
+270.77 701.61 274.53 689.69 265.02 697.8 267.89 699.71 4 Y
+3 X
+V
+29.55 90 51.02 20.32 223.51 689.68 A
+320.25 735.83 319.89 723.7 313.77 734.18 317.01 735.01 4 Y
+V
+33.81 90 17.01 20.32 302.88 723.7 A
+233.56 671.9 229.18 655.67 224.29 671.76 228.92 671.83 4 Y
+V
+17.3 90 5.67 54.33 223.51 655.67 A
+107.72 65.2 524.41 771.02 C
+0 0 595.28 841.89 C
+380.72 239.53 393.61 262.55 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 9 Q
+0 X
+0 0 0 1 0 0 0 K
+(3) 381.72 249.6 T
+2 F
+(n) 386.93 254.8 T
+(x) 387.18 243.78 T
+0 F
+(-) 386.93 249.81 T
+(-) 388.42 249.81 T
+(-) 388.43 249.81 T
+0 0 595.28 841.89 C
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "3" 3
+%%Page: "4" 4
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Mattias Forsber) 430.43 799.71 T
+(g) 480.73 799.71 T
+487.56 53.86 70.87 53.86 2 L
+0.25 H
+2 Z
+N
+(4) 70.87 42.73 T
+(17 April 1997) 263.86 42.73 T
+(Manhattan krantenweg - A parallel approach) 344.27 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+1 12 Q
+(2.1.2  T) 70.87 763.02 T
+(ourObject) 107.77 763.02 T
+0 F
+(A T) 70.87 737.02 T
+(ourObject represents one group \050or subset\051 of a distribution with a sense of order) 89.02 737.02 T
+-0.2 (among the nodes and a value for this order) 70.87 723.02 P
+-0.2 (. The group is represented by the ADT T) 273.23 723.02 P
+-0.2 (our) 466.42 723.02 P
+-0.2 (.) 481.76 723.02 P
+-0.03 (The T) 70.87 709.02 P
+-0.03 (ourObject also has methods to improve it, calculate its own value, check for con-) 98.99 709.02 P
+(sistency and to insert and remove nodes from the tour) 70.87 695.02 T
+(.) 327.83 695.02 T
+(When creating the tour) 70.87 669.02 T
+(, two steps are performed. One initialization of order between) 180.69 669.02 T
+(the nodes and thereafter improvement is made upon this order) 70.87 655.02 T
+(.) 367.82 655.02 T
+(The initialization of the \336rst ordering of the nodes is performed with the Nearest) 70.87 629.02 T
+(Neighbour algorithm [REIN94]. I have also tried using a random algorithm for) 70.87 615.02 T
+-0.13 (increased speed at creation time, but the speed gained there is lost when improving the) 70.87 601.02 P
+(tour) 70.87 587.02 T
+(. For the value of the tour after the improvement step it does not make a big dif) 89.54 587.02 T
+(fer-) 468.61 587.02 T
+(ence which one is used.) 70.87 573.02 T
+(For improvement, the T) 70.87 547.02 T
+(ourObject uses two dif) 184.69 547.02 T
+(ferent algorithms: Lin-Kernighans r) 293.45 547.02 T
+(-opt) 464.85 547.02 T
+([LIN71] and a T) 70.87 533.02 T
+(wo-opt algorithm described in [REIN94].  These two heuristic TSP-) 149 533.02 T
+-0.2 (algorithms work alternatively on the set until no improvement is possible. The two-opt) 70.87 519.02 P
+(algorithm starts, after which the r) 70.87 505.02 T
+(-opt algorithm takes its turn and then this process is) 230.6 505.02 T
+(iterated until no further improvement can be made) 70.87 487.82 T
+0 9.6 Q
+(1) 312.49 492.62 T
+0 12 Q
+(. This is a normal TSP problem) 317.29 487.82 T
+-0.07 (with the exception here being that we do not have to return to the node from which we) 70.87 473.82 P
+(started.) 70.87 459.82 T
+-0.18 (As a distribution changes there are also methods to insert and delete nodes from a tour) 70.87 433.82 P
+-0.18 (.) 481.74 433.82 P
+(This is done using) 70.87 419.82 T
+2 F
+(best-insert) 161.54 419.82 T
+0 F
+( and) 212.2 419.82 T
+2 F
+(best-r) 235.53 419.82 T
+(emove) 263.08 419.82 T
+0 F
+(. Best-insert inserts a node into the tour) 293.73 419.82 T
+(in the position where it induces the least increase to the tour length. Best-remove) 70.87 405.82 T
+(removes a speci\336ed node from the tour) 70.87 391.82 T
+(. Both calculate a new tour value based on the) 257.5 391.82 T
+(node inserted or removed.) 70.87 377.82 T
+-0.14 (In order  not to improve the same tour twice, a transposition table [MARS82] has been) 70.87 351.82 P
+(included which stores all improvements in tuples of) 70.87 337.82 T
+(<) 124.72 316.82 T
+2 F
+(original-tour) 131.49 316.82 T
+0 F
+(,) 193.69 316.82 T
+2 F
+(impr) 199.69 316.82 T
+(oved-tour) 221.91 316.82 T
+0 F
+(,) 268.09 316.82 T
+2 F
+(impr) 274.09 316.82 T
+(oved-value) 296.31 316.82 T
+0 F
+(>) 348.96 316.82 T
+(From the last two elements in the tuple, tours can be regenerated. This could enable a) 70.87 290.82 T
+(transposition table to be saved and loaded from a persistent store, and execution could) 70.87 276.82 T
+(possibly be speeded up if the loading phase is quick enough.) 70.87 262.82 T
+-0.04 (The value calculation of the T) 70.87 236.82 P
+-0.04 (ourObject uses) 214.11 236.82 P
+2 F
+-0.04 (memoization) 288.67 236.82 P
+0 F
+-0.04 ( in order to become quicker) 350 236.82 P
+-0.04 (,) 481.6 236.82 P
+-0.23 (that is, the tours value is stored together with a boolean that speci\336es if the value is cor-) 70.87 222.82 P
+(rect or not. As soon as the tour changes the boolean must be reset. This causes a recal-) 70.87 208.82 T
+(culation of the tour the next time the tour value is asked for) 70.87 194.82 T
+(.) 354.83 194.82 T
+1 F
+(2.1.3  Speci\336cationObject) 70.87 162.82 T
+0 F
+-0.01 (All parameters are passed to the program via the \336le) 70.87 136.82 P
+0 9.6 Q
+-0.01 (PROBLEM) 324.73 136.82 P
+0 12 Q
+-0.01 (.) 370.07 136.82 P
+0 9.6 Q
+-0.01 (TSP) 373.07 136.82 P
+0 12 Q
+-0.01 (. Theses parameters) 389.61 136.82 P
+(are then contained in a special) 70.87 122.82 T
+2 F
+(Speci\336cationObject) 218.83 122.82 T
+0 F
+(. This also contains methods to) 312.81 122.82 T
+70.87 80.2 487.56 100.04 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+70.87 88.04 202.87 88.04 2 L
+0.25 H
+2 Z
+0 X
+0 0 0 1 0 0 0 K
+N
+0 0 595.28 841.89 C
+0 10 Q
+0 X
+0 0 0 1 0 0 0 K
+(1.) 70.87 73.53 T
+(Usually this loop iterates 2 or 3 times.) 82.21 73.53 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "4" 4
+%%Page: "5" 5
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Parallel programming) 107.72 799.71 T
+(Practical W) 107.72 789.71 T
+(ork) 144.62 789.71 T
+107.72 53.86 524.41 53.86 2 L
+0.25 H
+2 Z
+N
+(Manhattan krantenweg - A parallel approach) 107.72 42.73 T
+(17 April 1997) 300.71 42.73 T
+(5) 520.41 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 12 Q
+(access this information such as distance functions \050euclidean for testing and manhat-) 107.72 763.02 T
+(tan\051 and parameter accessors.) 107.72 749.02 T
+(A description of the syntax of the) 107.72 723.02 T
+0 9.6 Q
+(PROBLEM) 271.36 723.02 T
+0 12 Q
+(.) 316.7 723.02 T
+0 9.6 Q
+(TSP) 319.7 723.02 T
+0 12 Q
+(:) 336.24 723.02 T
+5 10 Q
+(NAME : [The problem name]) 161.57 704.36 T
+(COMMENT : [A comment to the problem]) 161.57 692.36 T
+(TYPE : TSP) 161.57 680.36 T
+(DIMENSION : [ The number of nodes in problem except 0 ]) 161.57 668.36 T
+(EDGE_WEIGHT_TYPE :  MAN_2D | EUC_2D) 161.57 656.36 T
+(SEARCH_DEPTH : [Integer: Distribution tree search depth]) 161.57 644.36 T
+(DEBUG_MODE : ON | OFF) 161.57 632.36 T
+(DELIVERY_BOYS : 4) 161.57 620.36 T
+(NODE_COORD_SECTION) 161.57 608.36 T
+(  0     375    375) 161.57 596.36 T
+(  1      17    310) 161.57 584.36 T
+(  2      39     85) 161.57 572.36 T
+(  3      48    403) 161.57 560.36 T
+(etc...) 161.57 548.36 T
+(EOF) 161.57 536.36 T
+0 12 Q
+(The Speci\336cationObject speci\336es part of the initial state for the program. The other) 107.72 511.02 T
+(part of the initial state comes from the persistence that has been added: In order to be) 107.72 497.02 T
+-0.18 (able to run the program on dif) 107.72 483.02 P
+-0.18 (ferent occasions, but at the same time being able to carry) 250.41 483.02 P
+(on from where it previously stopped, the best distribution is always stored to disk at) 107.72 469.02 T
+(program termination. When the program restarts, it reads the distribution from disk,) 107.72 455.02 T
+(and starts building the tree \050Figure) 107.72 440.84 T
+(1, \322Distribution tree,\323 on page) 276.36 440.84 T
+(2\051 based on that dis-) 424.67 440.84 T
+(tribution.) 107.72 426.84 T
+1 14 Q
+(2.2  Parallelism - combining the blocks) 107.72 393.51 T
+0 12 Q
+-0.25 (How do we run this program on a parallel system like Amoeba? I have chosen a coarse) 107.72 366.84 P
+(grained Manager) 107.72 352.84 T
+(-W) 189.11 352.84 T
+(orker model of parallelism. There are three manager processes:) 203.48 352.84 T
+(The) 107.72 338.84 T
+2 F
+(Pr) 129.38 338.84 T
+(oducer) 140.93 338.84 T
+0 F
+(, the) 173.78 338.84 T
+2 F
+(Evaluator) 197.44 338.84 T
+0 F
+(, another process performing load distribution and over-) 244.96 338.84 T
+(viewing the others: the) 107.72 324.84 T
+2 F
+(ExecutionContr) 220.37 324.84 T
+(ol) 295.92 324.84 T
+0 F
+(, and a number of worker processes.) 305.26 324.84 T
+(The) 107.72 298.84 T
+2 F
+(Pr) 129.38 298.84 T
+(oducer) 140.93 298.84 T
+0 F
+( creates the initial levels of the distribution tree and inserts each node) 174.26 298.84 T
+-0.16 (produced \050a TCO\051 into a job-queue, shared between the Producer and its W) 107.72 284.84 P
+-0.16 (orkers. The) 467.08 284.84 P
+2 F
+(W) 107.72 270.84 T
+(orkers) 116.61 270.84 T
+0 F
+( take jobs from this job-queue, improve upon them or try to estimate what an) 147.27 270.84 T
+(improvement would be by using the best-insert algorithm, and traverse these sub trees) 107.72 256.84 T
+-0.26 (to the depth speci\336ed in the speci\336cation. The worker improves the tour every n / 3 lev-) 107.72 242.84 P
+(els \050where n is the depth of the tree that is searched\051. When a TCO is changed it is) 107.72 228.84 T
+(directly sent to the evaluation queue. From this queue the) 107.72 214.84 T
+2 F
+(Evaluator) 386.02 214.84 T
+0 F
+( picks TCOs and) 434.02 214.84 T
+(compares them with the currently best known TCO. If it can update the best-known) 107.72 200.84 T
+(value, even partially) 107.72 183.64 T
+0 9.6 Q
+(1) 205.36 188.44 T
+0 12 Q
+(, it does this.) 210.16 183.64 T
+(The) 107.72 157.64 T
+2 F
+(ExecutionContr) 129.38 157.64 T
+(ol) 204.93 157.64 T
+0 F
+( process can communicate with the two master processes) 214.26 157.64 T
+(through a) 107.72 143.64 T
+2 F
+(CommunicationObject) 156.38 143.64 T
+0 F
+(. Using this it can see what state they are in and thus) 265.04 143.64 T
+(control load balancing. It can also communicate with the W) 107.72 129.64 T
+(orkers through special) 393.38 129.64 T
+107.72 92.2 524.41 112.04 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+107.72 100.04 239.72 100.04 2 L
+0.25 H
+2 Z
+0 X
+0 0 0 1 0 0 0 K
+N
+0 0 595.28 841.89 C
+0 10 Q
+0 X
+0 0 0 1 0 0 0 K
+(1.) 107.72 85.53 T
+(A partial update occurs when only some tours are transferred into the best tour collection, not all of) 119.06 85.53 T
+(them. All in order to get as good as possible overall value.) 119.06 73.53 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "5" 5
+%%Page: "6" 6
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Mattias Forsber) 430.43 799.71 T
+(g) 480.73 799.71 T
+487.56 53.86 70.87 53.86 2 L
+0.25 H
+2 Z
+N
+(6) 70.87 42.73 T
+(17 April 1997) 263.86 42.73 T
+(Manhattan krantenweg - A parallel approach) 344.27 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+2 12 Q
+-0.32 (Monitors) 70.87 763.02 P
+0 F
+-0.32 (. I have called them monitors because the metaphor I want to use is a W) 114.87 763.02 P
+-0.32 (indow) 454.88 763.02 P
+-0.11 (through which the controlling process can overview its workers. It is important to note) 70.87 749.02 P
+(that this concept is not the same as the Monitors discussed in operating systems con-) 70.87 735.02 T
+(texts.) 70.87 721.02 T
+1 10 Q
+(FIGURE 2. Model of parallelism.) 85.04 696.36 T
+0 12 Q
+(Some notational explanations for the picture above:) 70.87 466.02 T
+4 F
+(\245) 70.87 446.02 T
+0 F
+(The circles represent shared objects between processes.) 85.04 446.02 T
+4 F
+(\245) 70.87 426.02 T
+0 F
+(The squares are processes.) 85.04 426.02 T
+4 F
+(\245) 70.87 406.02 T
+0 F
+(Fat lines show the way in which TCOs travel between the processes.) 85.04 406.02 T
+4 F
+(\245) 70.87 386.02 T
+0 F
+(The objects with double lines surrounding them represent several objects of the) 85.04 386.02 T
+(same kind.) 85.04 372.02 T
+-0.25 (The existence of an ExecutionControl process can at \336rst glance seem strange. The rea-) 70.87 346.02 P
+-0.46 (son for its existence is, apart from the load balancing functions mentioned above, that it) 70.87 332.02 P
+(provides the possibility of producing messages showing what state the computations) 70.87 318.02 T
+(have reached and what state the dif) 70.87 304.02 T
+(ferent processes are in during run-time. For a pro-) 239.26 304.02 T
+-0.22 (gram which continues to run for a very long time, as this one does, this is a useful func-) 70.87 290.02 P
+(tionality to clarify what is going on.) 70.87 276.02 T
+1 14 Q
+(2.3  Phase two - further impr) 70.87 242.69 T
+(ovement of solution) 243.64 242.69 T
+0 12 Q
+(Since there are numerous TSP  heuristics which perform dif) 70.87 216.02 T
+(ferently on dif) 358.27 216.02 T
+(ferent test) 426.7 216.02 T
+(sets I came to the conclusion that it would be better to include a \336nal phase in which) 70.87 202.02 T
+(more time is spent improving the TSP tour of the distribution found during phase one.) 70.87 188.02 T
+-0.35 (After the \336rst phase, the following algorithm tries to \336nd a better tour for each group of) 70.87 174.02 P
+(nodes. If any such tour is found, the current best tour is updated.) 70.87 160.02 T
+(I wanted to \336nd an algorithm that was fundamentally dif) 70.87 134.02 T
+(ferent in comparison with the) 341.62 134.02 T
+(2- and R-opt algorithms used previously so that they could complement each other) 70.87 120.02 T
+(.) 466.83 120.02 T
+(This is what the following algorithm does:) 70.87 106.02 T
+(1.) 70.87 86.02 T
+(Determine a start sequence of nodes: A) 85.04 86.02 T
+70.87 65.2 487.56 771.02 C
+70.87 490.02 487.56 693.02 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 85 404 503 595 418 191 69.41 496.36 FMBEGINEPSF
+%%BeginDocument: <inline>
+%!PS-Adobe-2.0 EPSF-1.2
+%%Creator: idraw
+%%DocumentFonts: Courier
+%%Pages: 1
+%%BoundingBox: 85 404 503 595
+%%EndComments
+
+%%BeginIdrawPrologue
+/arrowhead {
+0 begin
+transform originalCTM itransform
+/taily exch def
+/tailx exch def
+transform originalCTM itransform
+/tipy exch def
+/tipx exch def
+/dy tipy taily sub def
+/dx tipx tailx sub def
+/angle dx 0 ne dy 0 ne or { dy dx atan } { 90 } ifelse def
+gsave
+originalCTM setmatrix
+tipx tipy translate
+angle rotate
+newpath
+arrowHeight neg arrowWidth 2 div moveto
+0 0 lineto
+arrowHeight neg arrowWidth 2 div neg lineto
+patternNone not {
+originalCTM setmatrix
+/padtip arrowHeight 2 exp 0.25 arrowWidth 2 exp mul add sqrt brushWidth mul
+arrowWidth div def
+/padtail brushWidth 2 div def
+tipx tipy translate
+angle rotate
+padtip 0 translate
+arrowHeight padtip add padtail add arrowHeight div dup scale
+arrowheadpath
+ifill
+} if
+brushNone not {
+originalCTM setmatrix
+tipx tipy translate
+angle rotate
+arrowheadpath
+istroke
+} if
+grestore
+end
+} dup 0 9 dict put def
+
+/arrowheadpath {
+newpath
+arrowHeight neg arrowWidth 2 div moveto
+0 0 lineto
+arrowHeight neg arrowWidth 2 div neg lineto
+} def
+
+/leftarrow {
+0 begin
+y exch get /taily exch def
+x exch get /tailx exch def
+y exch get /tipy exch def
+x exch get /tipx exch def
+brushLeftArrow { tipx tipy tailx taily arrowhead } if
+end
+} dup 0 4 dict put def
+
+/rightarrow {
+0 begin
+y exch get /tipy exch def
+x exch get /tipx exch def
+y exch get /taily exch def
+x exch get /tailx exch def
+brushRightArrow { tipx tipy tailx taily arrowhead } if
+end
+} dup 0 4 dict put def
+
+%%EndIdrawPrologue
+
+/arrowHeight 10 def
+/arrowWidth 5 def
+
+/IdrawDict 51 dict def
+IdrawDict begin
+
+/reencodeISO {
+dup dup findfont dup length dict begin
+{ 1 index /FID ne { def }{ pop pop } ifelse } forall
+/Encoding ISOLatin1Encoding def
+currentdict end definefont
+} def
+
+/ISOLatin1Encoding [
+/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef
+/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef
+/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef
+/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef
+/space/exclam/quotedbl/numbersign/dollar/percent/ampersand/quoteright
+/parenleft/parenright/asterisk/plus/comma/minus/period/slash
+/zero/one/two/three/four/five/six/seven/eight/nine/colon/semicolon
+/less/equal/greater/question/at/A/B/C/D/E/F/G/H/I/J/K/L/M/N
+/O/P/Q/R/S/T/U/V/W/X/Y/Z/bracketleft/backslash/bracketright
+/asciicircum/underscore/quoteleft/a/b/c/d/e/f/g/h/i/j/k/l/m
+/n/o/p/q/r/s/t/u/v/w/x/y/z/braceleft/bar/braceright/asciitilde
+/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef
+/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef/.notdef
+/.notdef/dotlessi/grave/acute/circumflex/tilde/macron/breve
+/dotaccent/dieresis/.notdef/ring/cedilla/.notdef/hungarumlaut
+/ogonek/caron/space/exclamdown/cent/sterling/currency/yen/brokenbar
+/section/dieresis/copyright/ordfeminine/guillemotleft/logicalnot
+/hyphen/registered/macron/degree/plusminus/twosuperior/threesuperior
+/acute/mu/paragraph/periodcentered/cedilla/onesuperior/ordmasculine
+/guillemotright/onequarter/onehalf/threequarters/questiondown
+/Agrave/Aacute/Acircumflex/Atilde/Adieresis/Aring/AE/Ccedilla
+/Egrave/Eacute/Ecircumflex/Edieresis/Igrave/Iacute/Icircumflex
+/Idieresis/Eth/Ntilde/Ograve/Oacute/Ocircumflex/Otilde/Odieresis
+/multiply/Oslash/Ugrave/Uacute/Ucircumflex/Udieresis/Yacute
+/Thorn/germandbls/agrave/aacute/acircumflex/atilde/adieresis
+/aring/ae/ccedilla/egrave/eacute/ecircumflex/edieresis/igrave
+/iacute/icircumflex/idieresis/eth/ntilde/ograve/oacute/ocircumflex
+/otilde/odieresis/divide/oslash/ugrave/uacute/ucircumflex/udieresis
+/yacute/thorn/ydieresis
+] def
+/Courier reencodeISO def
+
+/none null def
+/numGraphicParameters 17 def
+/stringLimit 65535 def
+
+/Begin {
+save
+numGraphicParameters dict begin
+} def
+
+/End {
+end
+restore
+} def
+
+/SetB {
+dup type /nulltype eq {
+pop
+false /brushRightArrow idef
+false /brushLeftArrow idef
+true /brushNone idef
+} {
+/brushDashOffset idef
+/brushDashArray idef
+0 ne /brushRightArrow idef
+0 ne /brushLeftArrow idef
+/brushWidth idef
+false /brushNone idef
+} ifelse
+} def
+
+/SetCFg {
+/fgblue idef
+/fggreen idef
+/fgred idef
+} def
+
+/SetCBg {
+/bgblue idef
+/bggreen idef
+/bgred idef
+} def
+
+/SetF {
+/printSize idef
+/printFont idef
+} def
+
+/SetP {
+dup type /nulltype eq {
+pop true /patternNone idef
+} {
+dup -1 eq {
+/patternGrayLevel idef
+/patternString idef
+} {
+/patternGrayLevel idef
+} ifelse
+false /patternNone idef
+} ifelse
+} def
+
+/BSpl {
+0 begin
+storexyn
+newpath
+n 1 gt {
+0 0 0 0 0 0 1 1 true subspline
+n 2 gt {
+0 0 0 0 1 1 2 2 false subspline
+1 1 n 3 sub {
+/i exch def
+i 1 sub dup i dup i 1 add dup i 2 add dup false subspline
+} for
+n 3 sub dup n 2 sub dup n 1 sub dup 2 copy false subspline
+} if
+n 2 sub dup n 1 sub dup 2 copy 2 copy false subspline
+patternNone not brushLeftArrow not brushRightArrow not and and { ifill } if
+brushNone not { istroke } if
+0 0 1 1 leftarrow
+n 2 sub dup n 1 sub dup rightarrow
+} if
+end
+} dup 0 4 dict put def
+
+/Circ {
+newpath
+0 360 arc
+patternNone not { ifill } if
+brushNone not { istroke } if
+} def
+
+/CBSpl {
+0 begin
+dup 2 gt {
+storexyn
+newpath
+n 1 sub dup 0 0 1 1 2 2 true subspline
+1 1 n 3 sub {
+/i exch def
+i 1 sub dup i dup i 1 add dup i 2 add dup false subspline
+} for
+n 3 sub dup n 2 sub dup n 1 sub dup 0 0 false subspline
+n 2 sub dup n 1 sub dup 0 0 1 1 false subspline
+patternNone not { ifill } if
+brushNone not { istroke } if
+} {
+Poly
+} ifelse
+end
+} dup 0 4 dict put def
+
+/Elli {
+0 begin
+newpath
+4 2 roll
+translate
+scale
+0 0 1 0 360 arc
+patternNone not { ifill } if
+brushNone not { istroke } if
+end
+} dup 0 1 dict put def
+
+/Line {
+0 begin
+2 storexyn
+newpath
+x 0 get y 0 get moveto
+x 1 get y 1 get lineto
+brushNone not { istroke } if
+0 0 1 1 leftarrow
+0 0 1 1 rightarrow
+end
+} dup 0 4 dict put def
+
+/MLine {
+0 begin
+storexyn
+newpath
+n 1 gt {
+x 0 get y 0 get moveto
+1 1 n 1 sub {
+/i exch def
+x i get y i get lineto
+} for
+patternNone not brushLeftArrow not brushRightArrow not and and { ifill } if
+brushNone not { istroke } if
+0 0 1 1 leftarrow
+n 2 sub dup n 1 sub dup rightarrow
+} if
+end
+} dup 0 4 dict put def
+
+/Poly {
+3 1 roll
+newpath
+moveto
+-1 add
+{ lineto } repeat
+closepath
+patternNone not { ifill } if
+brushNone not { istroke } if
+} def
+
+/Rect {
+0 begin
+/t exch def
+/r exch def
+/b exch def
+/l exch def
+newpath
+l b moveto
+l t lineto
+r t lineto
+r b lineto
+closepath
+patternNone not { ifill } if
+brushNone not { istroke } if
+end
+} dup 0 4 dict put def
+
+/Text {
+ishow
+} def
+
+/idef {
+dup where { pop pop pop } { exch def } ifelse
+} def
+
+/ifill {
+0 begin
+gsave
+patternGrayLevel -1 ne {
+fgred bgred fgred sub patternGrayLevel mul add
+fggreen bggreen fggreen sub patternGrayLevel mul add
+fgblue bgblue fgblue sub patternGrayLevel mul add setrgbcolor
+eofill
+} {
+eoclip
+originalCTM setmatrix
+pathbbox /t exch def /r exch def /b exch def /l exch def
+/w r l sub ceiling cvi def
+/h t b sub ceiling cvi def
+/imageByteWidth w 8 div ceiling cvi def
+/imageHeight h def
+bgred bggreen bgblue setrgbcolor
+eofill
+fgred fggreen fgblue setrgbcolor
+w 0 gt h 0 gt and {
+l w add b translate w neg h scale
+w h true [w 0 0 h neg 0 h] { patternproc } imagemask
+} if
+} ifelse
+grestore
+end
+} dup 0 8 dict put def
+
+/istroke {
+gsave
+brushDashOffset -1 eq {
+[] 0 setdash
+1 setgray
+} {
+brushDashArray brushDashOffset setdash
+fgred fggreen fgblue setrgbcolor
+} ifelse
+brushWidth setlinewidth
+originalCTM setmatrix
+stroke
+grestore
+} def
+
+/ishow {
+0 begin
+gsave
+fgred fggreen fgblue setrgbcolor
+/fontDict printFont printSize scalefont dup setfont def
+/descender fontDict begin 0 [FontBBox] 1 get FontMatrix end
+transform exch pop def
+/vertoffset 1 printSize sub descender sub def {
+0 vertoffset moveto show
+/vertoffset vertoffset printSize sub def
+} forall
+grestore
+end
+} dup 0 3 dict put def
+/patternproc {
+0 begin
+/patternByteLength patternString length def
+/patternHeight patternByteLength 8 mul sqrt cvi def
+/patternWidth patternHeight def
+/patternByteWidth patternWidth 8 idiv def
+/imageByteMaxLength imageByteWidth imageHeight mul
+stringLimit patternByteWidth sub min def
+/imageMaxHeight imageByteMaxLength imageByteWidth idiv patternHeight idiv
+patternHeight mul patternHeight max def
+/imageHeight imageHeight imageMaxHeight sub store
+/imageString imageByteWidth imageMaxHeight mul patternByteWidth add string def
+0 1 imageMaxHeight 1 sub {
+/y exch def
+/patternRow y patternByteWidth mul patternByteLength mod def
+/patternRowString patternString patternRow patternByteWidth getinterval def
+/imageRow y imageByteWidth mul def
+0 patternByteWidth imageByteWidth 1 sub {
+/x exch def
+imageString imageRow x add patternRowString putinterval
+} for
+} for
+imageString
+end
+} dup 0 12 dict put def
+
+/min {
+dup 3 2 roll dup 4 3 roll lt { exch } if pop
+} def
+
+/max {
+dup 3 2 roll dup 4 3 roll gt { exch } if pop
+} def
+
+/midpoint {
+0 begin
+/y1 exch def
+/x1 exch def
+/y0 exch def
+/x0 exch def
+x0 x1 add 2 div
+y0 y1 add 2 div
+end
+} dup 0 4 dict put def
+
+/thirdpoint {
+0 begin
+/y1 exch def
+/x1 exch def
+/y0 exch def
+/x0 exch def
+x0 2 mul x1 add 3 div
+y0 2 mul y1 add 3 div
+end
+} dup 0 4 dict put def
+
+/subspline {
+0 begin
+/movetoNeeded exch def
+y exch get /y3 exch def
+x exch get /x3 exch def
+y exch get /y2 exch def
+x exch get /x2 exch def
+y exch get /y1 exch def
+x exch get /x1 exch def
+y exch get /y0 exch def
+x exch get /x0 exch def
+x1 y1 x2 y2 thirdpoint
+/p1y exch def
+/p1x exch def
+x2 y2 x1 y1 thirdpoint
+/p2y exch def
+/p2x exch def
+x1 y1 x0 y0 thirdpoint
+p1x p1y midpoint
+/p0y exch def
+/p0x exch def
+x2 y2 x3 y3 thirdpoint
+p2x p2y midpoint
+/p3y exch def
+/p3x exch def
+movetoNeeded { p0x p0y moveto } if
+p1x p1y p2x p2y p3x p3y curveto
+end
+} dup 0 17 dict put def
+
+/storexyn {
+/n exch def
+/y n array def
+/x n array def
+n 1 sub -1 0 {
+/i exch def
+y i 3 2 roll put
+x i 3 2 roll put
+} for
+} def
+
+/SSten {
+fgred fggreen fgblue setrgbcolor
+dup true exch 1 0 0 -1 0 6 -1 roll matrix astore
+} def
+
+/FSten {
+dup 3 -1 roll dup 4 1 roll exch
+newpath
+0 0 moveto
+dup 0 exch lineto
+exch dup 3 1 roll exch lineto
+0 lineto
+closepath
+bgred bggreen bgblue setrgbcolor
+eofill
+SSten
+} def
+
+/Rast {
+exch dup 3 1 roll 1 0 0 -1 0 6 -1 roll matrix astore
+} def
+
+%%EndProlog
+
+%I Idraw 10 Grid 5 5 
+
+%%Page: 1 1
+
+Begin
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 0.796717 0 0 0.796717 0 0 ] concat
+/originalCTM matrix currentmatrix def
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 10 -20 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 180 694 ] concat
+%I
+[
+(ExecutionControl)
+] Text
+End
+
+Begin %I Rect
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 107 234 ] concat
+%I
+58 441 183 471 Rect
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 -55 -60 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 220 619 ] concat
+%I
+[
+(Producer)
+] Text
+End
+
+Begin %I Rect
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 127 159 ] concat
+%I
+58 441 183 471 Rect
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 40 -55 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 490 729 ] concat
+%I
+[
+(Evaluator)
+] Text
+End
+
+Begin %I Rect
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 397 269 ] concat
+%I
+58 441 183 471 Rect
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 -105 145 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 330 464 ] concat
+%I
+[
+(Transposition)
+(Table)
+] Text
+End
+
+Begin %I Elli
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 207 299 ] concat
+%I
+158 156 50 20 Elli
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 5 -25 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 365 724 ] concat
+%I
+[
+(Best-so-far)
+] Text
+End
+
+Begin %I Elli
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1.32092 -0 -0 0.97619 116.024 459.857 ] concat
+%I
+213 266 35 20 Elli
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 125 35 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 180 524 ] concat
+%I
+[
+(Job-queue)
+] Text
+End
+
+Begin %I Elli
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 82 319 ] concat
+%I
+123 201 35 20 Elli
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 -210 205 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 335 529 ] concat
+%I
+[
+(Communication)
+(Object)
+] Text
+End
+
+Begin %I Elli
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 212 364 ] concat
+%I
+158 156 50 20 Elli
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 0 -100 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 440 674 ] concat
+%I
+[
+(Worker 1)
+()
+(...)
+()
+(Worker n)
+] Text
+End
+
+Begin %I Rect
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 0.984314 -0 -0 2.28306 349.871 -390.322 ] concat
+%I
+58 441 183 471 Rect
+End
+
+Begin %I Rect
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1.0303 -0 -0 0.97561 98.1212 245.122 ] concat
+%I
+293 376 423 456 Rect
+End
+
+Begin %I Rect
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 0.142857 -0 -0 0.5 473.857 422 ] concat
+%I
+423 376 428 376 Rect
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 -70 135 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 490 499 ] concat
+%I
+[
+(Monitors)
+] Text
+End
+
+Begin %I Elli
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 107 259 ] concat
+%I
+408 236 35 20 Elli
+End
+
+Begin %I Elli
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1.11828 -0 -0 1.21027 58.9415 210.161 ] concat
+%I
+408 236 35 20 Elli
+End
+
+End %I eop
+
+Begin %I Pict
+%I b u
+%I cfg u
+%I cbg u
+%I f u
+%I p u
+%I t
+[ 1 0 0 1 245 145 ] concat
+
+Begin %I Text
+%I cfg Black
+0 0 0 SetCFg
+%I f -*-courier-medium-r-normal-*-10-*-*-*-*-*-*-*
+Courier 10 SetF
+%I t
+[ 1 0 0 1 320 419 ] concat
+%I
+[
+(Eval-queue)
+] Text
+End
+
+Begin %I Elli
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 0 0 1 227 214 ] concat
+%I
+123 201 35 20 Elli
+End
+
+End %I eop
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+68 471 68 336 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+118 491 478 491 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+478 491 478 451 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+353 371 353 356 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+218 366 308 356 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 97 234 ] concat
+%I
+163 421 163 386 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+2 0 1 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+163 321 203 321 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+2 0 1 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+273 321 308 321 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+2 0 1 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 87 234 ] concat
+%I
+508 346 508 421 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+208 441 263 461 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+208 431 353 421 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 92 234 ] concat
+%I
+103 476 118 451 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+0 0 0 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 107 234 ] concat
+%I
+388 436 343 461 Line
+%I 1
+End
+
+Begin %I Line
+%I b 65535
+2 0 1 [] 0 SetB
+%I cfg Black
+0 0 0 SetCFg
+%I cbg White
+1 1 1 SetCBg
+none SetP %I p n
+%I t
+[ 1 -0 -0 1 107 234 ] concat
+%I
+428 326 453 326 Line
+%I 1
+End
+
+End %I eop
+
+showpage
+
+%%Trailer
+
+end
+
+%%EndDocument
+FMENDEPSF
+70.87 65.2 487.56 771.02 C
+0 0 595.28 841.89 C
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "6" 6
+%%Page: "7" 7
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Parallel programming) 107.72 799.71 T
+(Practical W) 107.72 789.71 T
+(ork) 144.62 789.71 T
+107.72 53.86 524.41 53.86 2 L
+0.25 H
+2 Z
+N
+(Manhattan krantenweg - A parallel approach) 107.72 42.73 T
+(17 April 1997) 300.71 42.73 T
+(7) 520.41 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 12 Q
+(2.) 107.72 763.02 T
+(Swap two random nodes in the sequence. A => B) 121.89 763.02 T
+(3.) 107.72 743.02 T
+-0.41 (Create a new sequence by inserting the elements from B in the order they occur) 121.89 743.02 P
+-0.41 (, into) 497.56 743.02 P
+-0 (the new sequence C, in the position where they require the least cost \050least increase) 121.89 729.02 P
+(in length of tour\051.) 121.89 715.02 T
+(4.) 107.72 695.02 T
+(If this tour is better than the best one so far) 121.89 695.02 T
+(, update it.) 327.38 695.02 T
+(5.) 107.72 675.02 T
+(If the end criterion \050e.g. out of execution time\051 is met stop, otherwise go to step 2.) 121.89 675.02 T
+(This algorithm is run for a predetermined amount of time. The time does decrease if) 107.72 649.02 T
+(more processors are added, but runtime is never less than 15 seconds. It is then of) 107.72 635.02 T
+(course also parallelized in a way so that every processor gets a dif) 107.72 621.02 T
+(ferent starting) 424.08 621.02 T
+(sequence and a dif) 107.72 607.02 T
+(ferent randomizer) 196.47 607.02 T
+(.) 281.44 607.02 T
+1 16 Q
+(3.0  Results) 107.72 566.36 T
+1 14 Q
+(3.1  Speed-ups and ef\336ciency) 107.72 531.69 T
+0 12 Q
+-0.26 (Speed-up and ef) 107.72 505.02 P
+-0.26 (\336ciency were measured up to 40 processors using the original problem) 184.96 505.02 P
+(speci\336cation. In order to measure the execution time I limited the search tree of distri-) 107.72 491.02 T
+-0.44 (butions to a depth of 8 during measurements. The input used for measurements is given) 107.72 477.02 P
+(in \322Appendix B - Problem speci\336cation\323.) 107.72 462.84 T
+(I have taken two dif) 107.72 436.84 T
+(ferent time-measures of the program; one for the entire execution) 203.48 436.84 T
+(time, and another for the time of the main distribution - improvement phase. The rea-) 107.72 422.84 T
+(son for this is that the dif) 107.72 408.84 T
+(ference between the dif) 227.5 408.84 T
+(ferent phases could af) 339.57 408.84 T
+(fect the overall) 444.32 408.84 T
+(speed-up and ef) 107.72 394.84 T
+(\336ciency and I wanted to see if that is the case.) 183.47 394.84 T
+1 10 Q
+(T) 121.89 372.17 T
+(ABLE 1. Speed-ups and ef\336ciency) 127.82 372.17 T
+(Measur) 122.22 351.17 T
+(e) 154.81 351.17 T
+(5) 212.93 351.17 T
+(10) 246.95 351.17 T
+(15) 280.96 351.17 T
+(20) 314.98 351.17 T
+(25) 348.99 351.17 T
+(30) 383.01 351.17 T
+(35) 417.02 351.17 T
+(40) 451.04 351.17 T
+0 F
+(Speed-up) 122.22 335.17 T
+(4.98) 212.93 335.17 T
+(9.09) 246.95 335.17 T
+(14.2) 280.96 335.17 T
+(18.1) 314.98 335.17 T
+(22.1) 348.99 335.17 T
+(24.4) 383.01 335.17 T
+(28.0) 417.02 335.17 T
+(32.9) 451.04 335.17 T
+(T) 122.22 319.17 T
+(otal speed-up) 127.63 319.17 T
+(4.97) 212.93 319.17 T
+(9.09) 246.95 319.17 T
+(14.2) 280.96 319.17 T
+(18.0) 314.98 319.17 T
+(21.8) 348.99 319.17 T
+(24.0) 383.01 319.17 T
+(27.4) 417.02 319.17 T
+(31.7) 451.04 319.17 T
+(Ef) 122.22 303.17 T
+(\336ciency \050%\051) 131.48 303.17 T
+(99) 212.93 303.17 T
+(90) 246.95 303.17 T
+(95) 280.96 303.17 T
+(91) 314.98 303.17 T
+(88) 348.99 303.17 T
+(81) 383.01 303.17 T
+(80) 417.02 303.17 T
+(82) 451.04 303.17 T
+(Ef) 122.22 287.17 T
+(\336ciency) 131.48 287.17 T
+(, tot \050%\051) 162.49 287.17 T
+(99) 212.93 287.17 T
+(91) 246.95 287.17 T
+(95) 280.96 287.17 T
+(90) 314.98 287.17 T
+(87) 348.99 287.17 T
+(80) 383.01 287.17 T
+(78) 417.02 287.17 T
+(79) 451.04 287.17 T
+116.22 365.84 479.05 365.84 2 L
+V
+0.5 H
+0 Z
+N
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "7" 7
+%%Page: "8" 8
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Mattias Forsber) 430.43 799.71 T
+(g) 480.73 799.71 T
+487.56 53.86 70.87 53.86 2 L
+0.25 H
+2 Z
+N
+(8) 70.87 42.73 T
+(17 April 1997) 263.86 42.73 T
+(Manhattan krantenweg - A parallel approach) 344.27 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 12 Q
+(Representing the speed-up graphically) 70.87 763.02 T
+(, the following graph is obtained:) 254.38 763.02 T
+1 10 Q
+(FIGURE 3. Speed-up graph) 85.04 738.36 T
+1 14 Q
+(3.2  TSP Heuristics) 70.87 502.73 T
+0 12 Q
+(In order to see how good my TSP heuristic algorithms actually were I compared the) 70.87 476.06 T
+(result of the heuristics to existing, well-known TSP problems where the optimal solu-) 70.87 462.06 T
+(tion has already been found [TSPLIB]. By dividing the result of my TSP heuristic by) 70.87 448.06 T
+-0.1 (the optimal solution I obtained a value showing how much worse the approximation is.) 70.87 434.06 P
+(These results were reached when performing \336rst T) 70.87 235.07 T
+(wo-opt then Three-opt, and repeat-) 317.62 235.07 T
+(ing it until no better value could be obtained.) 70.87 221.07 T
+-0.03 (In order to see if the \336nal step was really necessary the performance of the TSP heuris-) 70.87 195.07 P
+(tics \050above\051 was compared to the performance of the \336nal step by examining how) 70.87 181.07 T
+-0.4 (much the \336nal step could improve the heuristic solution. The measurements were made) 70.87 167.07 P
+-0.07 (on subsets of dif) 70.87 153.07 P
+-0.07 (ferent sizes of the problem de\336nition set. Since the heuristics only run) 149.44 153.07 P
+1 10 Q
+(T) 85.04 411.4 T
+(ABLE 2. Results of TSP Heuristics) 90.97 411.4 T
+(Pr) 85.37 390.4 T
+(oblem) 95.74 390.4 T
+(Cities) 139.23 390.4 T
+(Heuristic) 193.09 390.4 T
+(Optimal) 246.95 390.4 T
+(%) 300.8 390.4 T
+0 F
+(bier127) 85.37 374.4 T
+(127) 139.23 374.4 T
+(133160) 193.09 374.4 T
+(1) 246.95 374.4 T
+(18282) 251.57 374.4 T
+(12.58) 300.8 374.4 T
+(eil51) 85.37 358.4 T
+(51) 139.23 358.4 T
+(441) 193.09 358.4 T
+(426) 246.95 358.4 T
+(3.52) 300.8 358.4 T
+(eil76) 85.37 342.4 T
+(76) 139.23 342.4 T
+(548) 193.09 342.4 T
+(538) 246.95 342.4 T
+(1.86) 300.8 342.4 T
+(eil101) 85.37 326.4 T
+(101) 139.23 326.4 T
+(634) 193.09 326.4 T
+(629) 246.95 326.4 T
+(0.79) 300.8 326.4 T
+(kroC100) 85.37 310.4 T
+(100) 139.23 310.4 T
+(21944) 193.09 310.4 T
+(20749) 246.95 310.4 T
+(5.76) 300.8 310.4 T
+(kroD100) 85.37 294.4 T
+(100) 139.23 294.4 T
+(22630) 193.09 294.4 T
+(21294) 246.95 294.4 T
+(6.27) 300.8 294.4 T
+(st70) 85.37 278.4 T
+(70) 139.23 278.4 T
+(682) 193.09 278.4 T
+(675) 246.95 278.4 T
+(1.04) 300.8 278.4 T
+2 F
+(A) 246.95 262.4 T
+(verage:) 252.51 262.4 T
+(4.55) 300.8 262.4 T
+79.37 405.06 348.66 405.06 2 L
+V
+0.5 H
+0 Z
+N
+70.87 65.2 487.56 771.02 C
+159.45 530.07 398.97 735.02 C
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 X
+0 0 0 1 0 0 0 K
+%%BeginBinary:  4490     
+474 402 227.52 192.96 0 165.45 536.07 BEGINBITMAPBWc
+J"
+O-C0
+
+
+
+7"
+63#J"
+FE5DO(EF$j"
+FD5DFEO)3F"
+FB&Q"P"Q"P"Q"P"Q"P#
+F81DFE7FFB7FF77FF77FF77FC3FF#J"
+FF5DO(037"J#
+63O'FE817"J#
+FFO'FDEFJ"
+O)FBJ"
+O)E7J"
+O)DFJ"
+O)BFJ"
+O)7FJ#
+O(FCFFJ"
+O(FBJ"
+O(F7J"
+O(EFJ"
+O(9FJ"
+O(7FJ#
+O'FEFFJ"
+O'FDJ"
+O'F3J"
+O'EFJ"
+O'DFJ"
+O'BFJ"
+O'7FJ#
+O&FCFFJ"
+O&FBJ"
+O&F7J"
+O&EFJ"
+O&9FJ"
+O&7FJ#
+O%FEFFJ"
+O%FDJ"
+O%F3J"
+O%EFJ"
+O%DFJ"
+O%BFJ#
+O$7E7FJ#
+O$7DFFJ"
+O$7BJ"
+O$77J"
+O$4FJ"
+O$3FJ"
+O#FEJ"
+O$1FJ"
+O#F8J#
+O#F40FJ#
+O#EF7FJ"
+O#DFJ"
+O#3FJ#
+O"FEFFJ"
+O"FDJ"
+O"F3J"
+O"EFJ"
+O"DFJ"
+O"BFJ#
+O!FE7FJ#="
+O!FDFF01J">"
+O!FB49J">"
+O!F701J">"
+O!CF25J">"
+O!BF81J">"
+O!7F09J#=#
+O FCFFFE21J">#
+O FBFDEFJ">"
+O F7F3J">"
+O EFEFJ">"
+O 9FDFJ">#
+O 7FBFC7J#=$
+MFEFFFE7F83J">$
+MFDFDFF01J">$
+MF3FBFF83J">$
+MEFF7FF47J">$
+MDFCFFCEFJ">#
+MBFBFFBJ#>#
+LFE7F7FE7J#=$
+LFDFFFCFFDFJ">$
+LFBFBFFBFJ">$
+LE7F7FE7FJ">$
+LDFEFFDFFJ">#
+LBF9FF3#J">#
+FCE3J7F7FEF#J#=$
+FB5DIF4FFFEFF9F"J">$
+FFJF3FDFF7F$j
+FCDDFEO)&Q"P"Q"P"Q"P"Q)
+FF5DFE7FFB7FF77FF77FE17FFFEFFBFFFFEFFFJ">#
+K81DFE7#J">#
+F8E3I403FDF#J#=$
+FFFFHFEF7FEFFBFJ">$
+JFDFDFE7FJ">$
+JF3FBFDFFJ">#
+JEFE7F3J">#
+JDFDFEFJ">#
+J3FBF9FJ#>#
+IFEFF7F7FJ">$
+IFD7CFCFFJ">#
+IFB7BFBJ"=$
+IE7F807E7J"=$
+IDFFC9FDFJ"=$
+IBFF80FBFJ"=$
+I7FF92E7FJ#=$
+HFCFFFC0DFFJ">#
+HFBF093J">#
+HF7C80FJ">#
+HCFBC1FJ"=$
+HBFFE780FJ"=$
+H7FF9FC1FJ#=$
+GFEFFE7F23FJ">$
+GF9DFCF7FJ">#
+GF73F3FJ"=$
+GEFFCFCFFJ"=#
+GDFFBF3J"=#
+G3FE7EFJ#=#
+FFEFF9F9FJ"=$
+FFDFE7E7FJ"=$
+FFBFDF9FFJ"=#
+FE7F3E7J"=#
+FDFCF9FJ"=#
+FBF3E7FJ#<$
+E7E7FFEFDFFJ#<#
+E7DFFF9F3J"=#
+E7BE7CFJ"=#
+E779F3FJ"=#
+E4F7CFFJ"<#
+E3FFCF3J"=#
+DFEF3CFJ"<#
+E1FEFBFJ"<$
+DF8809E7FJ#;$
+DF40FC979FFJ#;#
+DEF7F80E7J"<#
+DDF929FJ"<#
+D3F007FJ#;$
+CFEFFFCC1FFJ"<#
+CFDE380J"<#
+CF31F01J";$
+CEFF8F8E3J";$
+CDFE7C7F7J";#
+CBF1E3FJ#:$
+BFE7FF8F9FFJ#:#
+BFDFFC7C7J";#
+BFB3E3FJ":$
+BF7F8F1FFJ":#
+BCFC78FJ":#
+BBF3C7FJ"9$
+B7FF8E3FFJ#9#
+AFCFFC71FJ"8%
+AFBF80E38FFJ"8$
+AF7FA49E7J"8$
+AEFF8171FJ"8$
+A9FFC08FFJ"8#
+A7FF807J#8#
+@FEFFF00FJ"9#
+@FDE81FJ"9#
+@F3923FJ"9#
+@EF6F7FJ"8#
+@DFFC9FJ"8#
+@BFF27FJ#8#
+?FE7FEDFFJ#8"
+?FDFF93J"8#
+?FBFE4FJ"8#
+?E7FDBFJ"8#
+?DFF27FJ"8#
+?BFE9FF#J"8"
+FE63=7F97#J&
+FD9D<F4FFFFFE4F"J"8#
+FF=F3FD3F9j
+O)7%Q"P"Q"P)P"Q"P#
+5DFE7FFB7FF77FE1FFFFCBFFFFFF7FF77FEFFF#J"8"
+FEDD<81A7#J%
+FC23<40FFFE1F#J&
+FFFF;FEF7FFFD7FJ"8#
+=FDF0FFJ"8"
+=F3C3J"8"
+=EFAFJ%
+=DFF7FE1FJ%
+=3FF7F87FJ&
+<FEFFF7F5FFJ"8"
+<FDC3J%
+<FBFF808FJ%
+<E7FFA4BFJ%
+<DFFF807FJ"8"
+<BFFFJ"
+<7FJ#
+;FCFFJ%
+;FBFFFE01J%
+;F7FFF8F7J$
+;CFFFF1J$
+;BFFFC7J$
+;7FFF1FJ%
+:FEFFFE3FJ%
+:F9FFF8FFJ$
+:F7FFE3J$
+:EFFFC7J$
+:DFFF1FJ$
+:3FFE7FJ%
+9FEFFF8FFJ$
+9FDFFE3J$
+9FBFFCFJ$
+9E7FF3FJ$
+9DFFC7FJ$
+9BFF9FFJ$
+87E7FE7J$
+87DFFCFJ$
+87BFF3FJ$
+877FCFFJ#
+84FF9J#
+83FE7J$
+7FE3F9FJ#
+81F3FJ$
+7F81CFFJ#
+7F00BJ#
+7E807J#
+7D80FJ"
+738J#
+6FEF8J#
+6FDFCJ$
+6F3F02FJ$
+6EFEF7FJ#
+6DFDFJ#
+6BF3FJ$
+5FE7EFFJ#
+5FDFDJ#
+5FBFBJ#
+5F7E7J#
+5CFDFJ#
+5BFBFJ#
+57F7FJ$
+4FCFEFFJ#
+4FBF9J#
+4F7F7J#
+4EFEFJ#
+49FDFJ#
+47F3FI$
+FEFEFFI#
+FDFDI#
+F3FBI#
+EFE7I#
+DFDFI#
+BFBFH$
+FE7F7FH$
+FDFCFFH#
+FBFBH#
+E7F7H#
+DFEFH#
+BF9F#F#
+FCE37F7F#E$
+FEDDF4FEFFG#
+F3FD9j
+O)9#Q"P#P"P"Q"P"Q"P#
+7FFB7FE1E77FF77FF77FEFFFG#
+81DF#E#
+FC6340BF#D$
+FFFFFE807FF$
+FDA0FFF#
+F380F"
+EFF"
+DFF#
+3FC2E$
+FEFE00E$
+FDFDF7E#
+FBF3E#
+E7EFE#
+DF9FE#
+BE7FE#
+7DFFD#
+FCF3D#
+FBEFD#
+F79FD#
+CF7FD#
+BCFFD"
+7BC#
+FEE7C#
+F9DFC#
+F73FC#
+EEFFC"
+D9C"
+37B#
+FECFB#
+FDBFB#
+FA7FB#
+E1FFB"
+D7B"
+8FA#
+7E3FA#
+7C7FA#
+79FF@#
+F803@#
+FA0F@"
+F8
+
+
+@"
+E4@#
+9F7F@"
+7F?#
+FCFF?"
+FB?"
+E7?"
+9F?"
+7F>#
+FCFF>"
+FB>"
+E7>"
+9F>"
+7F=#
+FCFF="
+FB="
+E7="
+9F="
+7F<#
+FCFF<"
+FB<"
+E7<"
+9F<"
+7F;#
+FCFF;"
+FB;"
+E7:#
+C01F:#
+D07F:"
+C0
+
+
+:"
+E0:#
+FBFF
+7"
+E37"
+DD
+9j
+O)
+8Z
+O+7"
+E37"
+FF
+
+
+
+:";#;";#;";#;";#;"
+F3FE3F38F38F98F98F38F38FB1:"<";#:#;#:#:$:#;"
+FBFFB77FFBBF677FF6BFFED77FEDBF2E@#B";";#:"<#:#
+FC7F1FE7FE1FFFFD1FFEAE@#B"B";";#:"
+FFBFEFEF37F3EFFDJ";"<";";#
+>D7FDD7FDFC0EJ";"H#
+>B7FBFFAE:";#;#:#;#:#:$:#;"
+F1FC7F18FFF11F08FFF01FFE38FFE31FB1:";#;";#;";#:#;#;"
+FFFFFFFFFFFFFFFFFFFFFFFFFFFF
+
+
+
+
+
+J"
+>E7J"
+>F7
+
+
+
+J"
+>E3J"
+>FF
+
+
+
+
+
+
+
+
+
+
+
+@#8"@#8":";%;"
+F87FCFFC3FE7F9F81FFFC7F9@"9"@#8"8$;'9"
+F7EFFBBFF7BFF7FDFDCFFFBFFFDFFDJ"
+IEF@(>+<,
+F3E0F1C729907FF9F078E394C83F1C238DEE250E380FE01E38E5320F@(>+<,
+F9F66EBA4DDB3FFCFB375D26ED9FBB976DCDD1BDD35FDACDD749BB67@(>+;-
+FCF76082EDDBBFFE7BB04176EDDFBBD7EDFC1C17BC17DFDEEC105DBB77@%A%;";+
+FE776FBEFF3BB7DF8DFDFDF7BDF7DFE6EDF7DD>$D#="A"
+E03FF7FBBB6DFA>"9%=#8(;-
+E9669A6D9BFC7FB34D36CDDFA9D57FFDFCD7BCD357DAECD34DB3>*<-:.
+E03FF0F0F1C704487FF83FF87878E382243F9C33003FF8FE231E38CFC61E38E0890F=+;.8%P'
+F81240FFF7FFFFFFFBFFF800007FFBFFFFFFFDFFFFFFFFFC00003FFEFFFFFFFF7F=$B%A%
+FFE03FFFF83FFFFFFE1FFF>%9"=%9"="=#8#
+E4BFFFE3F1FC7FFFF1F8FCFC7FFE3F>%9"=%9">"<#8#
+F03FFFFFFFFEFFFFFFFF0FFFFFFFFF>#C"D#
+FFFFFFFFFF
+
+
+
+
+
+
+
+
+ENDBITMAP
+%%EndBinary
+70.87 65.2 487.56 771.02 C
+0 0 595.28 841.89 C
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "8" 8
+%%Page: "9" 9
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Parallel programming) 107.72 799.71 T
+(Practical W) 107.72 789.71 T
+(ork) 144.62 789.71 T
+107.72 53.86 524.41 53.86 2 L
+0.25 H
+2 Z
+N
+(Manhattan krantenweg - A parallel approach) 107.72 42.73 T
+(17 April 1997) 300.71 42.73 T
+(9) 520.41 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 12 Q
+-0.39 (on one processor) 107.72 763.02 P
+-0.39 (, so does the \336nalization algorithm. The \336nalization algorithm was run) 187.76 763.02 P
+-0.17 (for a period of 30 seconds. The percentage column shows how many percent better the) 107.72 562.02 P
+(solution reached by the \336nalization algorithm was compared to the heuristics. Please) 107.72 548.02 T
+(note that the column \322Finalization\323 shows the value after that algorithm has been) 107.72 534.02 T
+(applied. The result of the program is of course taken as the best of the two.) 107.72 520.02 T
+1 14 Q
+(3.3  Manhattan krantenweg - r) 107.72 486.69 T
+(esults) 291 486.69 T
+0 12 Q
+-0.39 (My program has achieved a value of 1) 107.72 460.02 P
+-0.39 (191, but as computing continues, the value keeps) 288.85 460.02 P
+(shrinking. Below you will \336nd the resulting tour of the program:) 107.72 446.02 T
+5 10 Q
+-0.44 (Subtour: \0500 85 83 84 71 52 32 35 41 43 46 29 28 23 20 19) 161.57 427.36 P
+(16 9 7 4 3 11 12 15 17 22 24 27 31 30 25 13 10 8 1 \051) 161.57 415.36 T
+(Subtour value: 1177) 161.57 403.36 T
+-0.5 (Subtour: \0500 89 86 96 104 111 110 107 100 99 82 74 77 103) 161.57 391.36 P
+(108 116 119 117 118 120 115 109 113 114 105 106 98 102) 161.57 379.36 T
+(101 95 88 87 93 94 112 97 92 90 \051) 161.57 367.36 T
+(Subtour value: 1169) 161.57 355.36 T
+-0.42 (Subtour: \0500 55 45 44 36 34 33 14 6 5 2 21 18 42 37 39 47) 161.57 343.36 P
+(48 40 38 26 \051) 161.57 331.36 T
+(Subtour value: 1191) 161.57 319.36 T
+-0.44 (Subtour: \0500 91 73 69 61 50 53 54 60 72 81 65 68 67 59 58) 161.57 307.36 P
+(57 62 70 75 78 80 76 66 63 64 79 56 51 49 \051) 161.57 295.36 T
+(Subtour value: 1190) 161.57 283.36 T
+(Total value: 1191) 161.57 271.36 T
+0 12 Q
+(The best known value of the problem is 1) 107.72 246.02 T
+(183.) 306.58 246.02 T
+1 16 Q
+(4.0  Discussion) 107.72 205.36 T
+1 14 Q
+(4.1  Speed-up and ef\336ciency) 107.72 170.69 T
+0 12 Q
+(When using 40 processors the program reaches an ef) 107.72 144.02 T
+(\336ciency of 80 percent. The rea-) 360.76 144.02 T
+-0.25 (sons for the ef) 107.72 130.02 P
+-0.25 (\336ency decrease is of course the communication overhead and some prob-) 175.05 130.02 P
+(lem related issues.) 107.72 116.02 T
+(The TCO objects and the speci\336cation object are quite lar) 107.72 90.02 T
+(ge objects. If they migrate) 384.45 90.02 T
+(around between the processors is up to the Orca compiler and run-time system to) 107.72 76.02 T
+1 10 Q
+(T) 121.89 740.36 T
+(ABLE 3.) 127.82 740.36 T
+(Cities) 122.22 707.36 T
+-0.08 (Heuristic) 176.08 719.36 P
+(\050time\051) 176.08 707.36 T
+-0.08 (Heuristic) 229.94 719.36 P
+(\050value\051) 229.94 707.36 T
+(Finalization) 283.8 719.36 T
+(\050value\051) 283.8 707.36 T
+(Impr) 348.99 719.36 T
+(ovement) 371.03 719.36 T
+(\050%\051) 348.99 707.36 T
+0 F
+(7) 122.22 691.36 T
+(0.1) 176.08 691.36 T
+(993) 229.94 691.36 T
+(848) 283.8 691.36 T
+(17.1) 348.99 691.36 T
+(16) 122.22 675.36 T
+(0.2) 176.08 675.36 T
+(1275) 229.94 675.36 T
+(1096) 283.8 675.36 T
+(16.3) 348.99 675.36 T
+(24) 122.22 659.36 T
+(0.5) 176.08 659.36 T
+(1579) 229.94 659.36 T
+(1389) 283.8 659.36 T
+(13.7) 348.99 659.36 T
+(30) 122.22 643.36 T
+(1.1) 176.08 643.36 T
+(1735) 229.94 643.36 T
+(1617) 283.8 643.36 T
+(7.3) 348.99 643.36 T
+(35) 122.22 627.36 T
+(1.7) 176.08 627.36 T
+(1883) 229.94 627.36 T
+(1748) 283.8 627.36 T
+(7.7) 348.99 627.36 T
+(40) 122.22 611.36 T
+(2.1) 176.08 611.36 T
+(2032) 229.94 611.36 T
+(1962) 283.8 611.36 T
+(3.6) 348.99 611.36 T
+(45) 122.22 595.36 T
+(1.8) 176.08 595.36 T
+(2104) 229.94 595.36 T
+(1983) 283.8 595.36 T
+(6.1) 348.99 595.36 T
+(120) 122.22 579.36 T
+(26.6) 176.08 579.36 T
+(4798) 229.94 579.36 T
+(4966) 283.8 579.36 T
+(-3.4) 348.99 579.36 T
+116.22 734.02 413.86 734.02 2 L
+V
+0.5 H
+0 Z
+N
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "9" 9
+%%Page: "10" 10
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Mattias Forsber) 430.43 799.71 T
+(g) 480.73 799.71 T
+487.56 53.86 70.87 53.86 2 L
+0.25 H
+2 Z
+N
+(10) 70.87 42.73 T
+(17 April 1997) 263.86 42.73 T
+(Manhattan krantenweg - A parallel approach) 344.27 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 12 Q
+(decide but considering how the objects move in the parallel model, one can imagine) 70.87 763.02 T
+(that there is some communication overhead. The CommunicationObject and Monitor-) 70.87 749.02 T
+(Objects also produce some communication that is more frequent but maybe not as) 70.87 735.02 T
+(great in extent.) 70.87 721.02 T
+(The problem related issues here are that every job in the JobQueue takes quite some) 70.87 695.02 T
+(time to handle. There is a tree to traverse and several improvements to be made. That) 70.87 681.02 T
+(means that at the end of program execution, when the job queue is empty and workers) 70.87 667.02 T
+(start \336nishing their jobs, some processes will have more work left to deal with than) 70.87 653.02 T
+(others. There will, in the end, be processes doing nothing but waiting for their col-) 70.87 639.02 T
+(leagues to \336nish. This problem becomes more serious as more processes are added to) 70.87 625.02 T
+(the execution, and the same problem occurs at the beginning of execution. A solution) 70.87 611.02 T
+(would be to split up the jobs that are currently being processed onto the other proces-) 70.87 597.02 T
+(sors. I have not tried that, and it is possible that such a thing would yield too much) 70.87 583.02 T
+(communication overhead and slow down the main calculations too much to be valua-) 70.87 569.02 T
+(ble.) 70.87 555.02 T
+-0.04 (Besides the fact that starting up the processes is expensive, the start-up of the program) 70.87 529.02 P
+(is also expensive and sequential. W) 70.87 515.02 T
+(e have to read the speci\336cation and initialize the) 240.55 515.02 T
+-0.41 (speci\336cation object. Also reading the initial distribution from disk and the initialization) 70.87 501.02 P
+(of the separate distribution objects for each worker process takes some time. Even) 70.87 487.02 T
+-0.46 (though this is done in parallel it is not ef) 70.87 473.02 P
+-0.46 (\336cient computing time. In order to initialize the) 260.22 473.02 P
+(best-so-far variable, the initial distribution is improved using heuristics, which also) 70.87 459.02 T
+-0.33 (take sequential computing time since the heuristic algorithms do not use parallelism by) 70.87 445.02 P
+(themselves.) 70.87 431.02 T
+(From Figure) 70.87 404.84 T
+(3, \322Speed-up graph,\323 on page) 134.2 404.84 T
+(7 we can see that the two speed-up graphs) 279.16 404.84 T
+(follow each other closely until ~30 computation units are used, when they start to dif-) 70.87 390.84 T
+-0.24 (fer) 70.87 376.84 P
+-0.24 (. This is due to the time limit of 15 seconds set for the \336nalization algorithm. W) 83.53 376.84 P
+-0.24 (e see) 461.39 376.84 P
+(that it does not make a big dif) 70.87 362.84 T
+(ference, since the time spent in \336nalization is small in) 213.64 362.84 T
+(comparison to the main phase, but still it is noticable.) 70.87 348.84 T
+(The table \322Results of TSP Heuristics\323 on page) 70.87 322.66 T
+(8 shows us how the \336nalization algo-) 296.84 322.66 T
+(rithm af) 70.87 308.66 T
+(fects the \336nal result of the program. From the table we can see that the results) 108.98 308.66 T
+(increase quite a lot for test problems with a small number of nodes, whereas when the) 70.87 294.66 T
+-0.25 (number of nodes is bigger \050e.g. 120\051 we get worse results. T) 70.87 280.66 P
+-0.25 (est runs show that the prob-) 355.84 280.66 P
+(lem sizes vary between 18 and 42 nodes of size. Thus, we will most probably get an) 70.87 266.66 T
+(improvement from that algorithm of about 6% - 14%.) 70.87 252.66 T
+(In conclusion we can say that the speed-up and ef) 70.87 226.66 T
+(\336ciency of the program is relatively) 308.92 226.66 T
+(high and comparable to that of other Orca/Amoeba programs [BAL96].) 70.87 212.66 T
+1 14 Q
+(4.2  Other r) 70.87 179.32 T
+(esults) 140.6 179.32 T
+0 12 Q
+-0.27 (There are some minor results related to program details that have become apparent dur-) 70.87 152.66 P
+(ing the development process. The granularity of the distribution proved to be most) 70.87 138.66 T
+-0.16 (ef) 70.87 124.66 P
+-0.16 (fective when only one node per distribution is moved. The original theory was that it) 79.97 124.66 P
+-0.07 (would be good to apply a lar) 70.87 110.66 P
+-0.07 (ger granularity of distribution on rather bad original distri-) 207.52 110.66 P
+(butions, but thanks to the persistence of the program \050saving the best distribution and) 70.87 96.66 T
+(starting with that one next time\051 the initial distribution is usually quite good. What) 70.87 82.66 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "10" 10
+%%Page: "11" 11
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Parallel programming) 107.72 799.71 T
+(Practical W) 107.72 789.71 T
+(ork) 144.62 789.71 T
+107.72 53.86 524.41 53.86 2 L
+0.25 H
+2 Z
+N
+(Manhattan krantenweg - A parallel approach) 107.72 42.73 T
+(17 April 1997) 300.71 42.73 T
+(1) 516.71 42.73 T
+(1) 520.41 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 12 Q
+(would also work well would be to have a dynamic granularity that decreases as the) 107.72 763.02 T
+(problem value gets better and better) 107.72 749.02 T
+(, or as more computation time is dedicated to the) 279.53 749.02 T
+(problem.) 107.72 735.02 T
+(The number of levels of initial search that the Producer process creates depends on a) 107.72 709.02 T
+-0.46 (number of issues: Primarily it has to produce enough nodes so that every processor gets) 107.72 695.02 P
+(a job to work on. Secondarily it has to do this very quickly so that every W) 107.72 681.02 T
+(orker can) 467.06 681.02 T
+-0.37 (start working as soon as possible, and speed-up values can get better) 107.72 667.02 P
+-0.37 (. This means that it) 431.59 667.02 P
+(can not carry out any improvements during this initial phase. It also means that we) 107.72 653.02 T
+(have to \336nd a value not too big and not too small. 3 turns out to be the perfect value,) 107.72 639.02 T
+-0.07 (since combined with the values determining which TCO\325) 107.72 625.02 P
+-0.07 (s to pursue, about 72 jobs are) 381.56 625.02 P
+(produced for a maximum of 64 processors \050of the Amoeba processor pool\051.) 107.72 611.02 T
+(The TSP heuristics give a rather uneven result when tried out on already solved TSP) 107.72 585.02 T
+(problems. W) 107.72 571.02 T
+(ith results ranging from 12.58% to a 0.79% longer tour than the optimal) 169.23 571.02 T
+-0.18 (solution we see that there is a need for another kind of algorithm to be run on the distri-) 107.72 557.02 P
+(butions. The algorithm that is used for improving the solution in the \336nal phase does) 107.72 543.02 T
+-0.06 (show an improvement on the sets of sizes close to the sizes of the independent groups.) 107.72 529.02 P
+-0.4 (The probable reason why no improvement is made on lar) 107.72 515.02 P
+-0.4 (ger sets \050120 nodes\051 is that the) 378.21 515.02 P
+-0.15 (algorithm needs more time for these, and time is distributed statically in my implemen-) 107.72 501.02 P
+(tation.) 107.72 487.02 T
+(The result of the initial problem I have managed to achieve was 1) 107.72 461.02 T
+(191, and the best) 421.88 461.02 T
+(known solution to the problem \050so far\051 is 1) 107.72 447.02 T
+(183. Thus the solution retrieved by this pro-) 312.59 447.02 T
+-0.01 (gram is not far away from the best known solution. I have not tried to run the program) 107.72 433.02 P
+(for a very long period of time since the main objective of the report has already been) 107.72 419.02 T
+(reached. It is possible that an even better solution could be found by running the pro-) 107.72 405.02 T
+-0.27 (gram for a longer period of time, and that might be something that could be done in the) 107.72 391.02 P
+(future, if it would be of interest.) 107.72 377.02 T
+1 16 Q
+(5.0  Refer) 107.72 336.36 T
+(ences) 173.62 336.36 T
+0 12 Q
+-0.14 ([BAL96] H.E. Bal, R. Bhoedjang, R. Hofman, C. Jacobs, K. Langendoen, R. Ruhl and) 107.72 309.02 P
+(M.F) 107.72 295.02 T
+(. Kaashoek:) 127.1 295.02 T
+2 F
+(Or) 186.75 295.02 T
+(ca: a Portable User) 199.64 295.02 T
+(-Level Shar) 295.05 295.02 T
+(ed Object System) 350.26 295.02 T
+0 F
+(, IR-408, V) 432.9 295.02 T
+(rije) 486.84 295.02 T
+(Universiteit, Amsterdam, June 1996) 107.72 281.02 T
+([LIN71] S. Lin, B.W) 107.72 255.02 T
+(. Kernighan:) 207.27 255.02 T
+2 F
+(An Effective Heuristic Algorithm for the T) 270.26 255.02 T
+(ravelling) 471.59 255.02 T
+(Salesman Pr) 107.72 241.02 T
+(oblem) 168.27 241.02 T
+0 F
+(; Bell T) 197.6 241.02 T
+(elephone Laboratories, Incorporated, Murray Hill, N.J. 1971) 233.43 241.02 T
+([REIN94] Reinelt, Gerhard:) 107.72 215.02 T
+2 F
+(The T) 245.02 215.02 T
+(ravelling Salesman: computational solutions for) 272.03 215.02 T
+0 F
+(;) 504.04 215.02 T
+(Berlin: Springer) 107.72 201.02 T
+(, cop 1994) 184.9 201.02 T
+([TSPLIB] TSPLIB; http://www) 107.72 175.02 T
+(.iwr) 258.95 175.02 T
+(.uni-heidelber) 277.29 175.02 T
+(g.de/iwr/comopt/soft/TSPLIB95/) 344.06 175.02 T
+(TSPLIB.html; October 1996) 107.72 161.02 T
+([MARS82] T) 107.72 135.02 T
+(.A. Marsland, M. Campbell:) 171.16 135.02 T
+2 F
+(Parallel Sear) 309.82 135.02 T
+(ch of Str) 373.71 135.02 T
+(ongly Or) 413.93 135.02 T
+(der) 456.48 135.02 T
+(ed Game) 472.04 135.02 T
+(T) 107.72 121.02 T
+(r) 113.73 121.02 T
+(ees) 117.95 121.02 T
+0 F
+(; Computing surveys, V) 133.28 121.02 T
+(ol. 14, No 4, December 1982) 246.4 121.02 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "11" 11
+%%Page: "12" 12
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Mattias Forsber) 430.43 799.71 T
+(g) 480.73 799.71 T
+487.56 53.86 70.87 53.86 2 L
+0.25 H
+2 Z
+N
+(12) 70.87 42.73 T
+(17 April 1997) 263.86 42.73 T
+(Appendix A - mankrant) 411.35 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 24 Q
+(Appendix A - mankrant) 164.9 755.02 T
+5 10 Q
+(#) 70.87 716.36 T
+(# NAME:) 70.87 704.36 T
+(#     mankrant - Manhattan Krantenweg parallel solver) 70.87 692.36 T
+(#) 70.87 680.36 T
+(# SYNOPSIS:) 70.87 668.36 T
+(#     gax [options] mankrant [ncpus]) 70.87 656.36 T
+(#) 70.87 644.36 T
+(# DESCRIPTION:) 70.87 632.36 T
+-0.62 (#     The program will solve the Manhattan Krantenweg problem, given a) 70.87 620.36 P
+(#     problem specif) 70.87 608.36 T
+(ication.) 190.87 608.36 T
+(#) 70.87 596.36 T
+(# DIAGNOSTICS:) 70.87 584.36 T
+(#     If no run-time errors occurrs the program exits with) 70.87 572.36 T
+(#     errorcode 0. All warnings given during execution can) 70.87 560.36 T
+(#     be read in the f) 70.87 548.36 T
+(ile \322Warnings\323. Error are saved in) 202.87 548.36 T
+(#     the f) 70.87 536.36 T
+(ile \322Errors\323.) 136.87 536.36 T
+(#     Messages, warnings and errors are written in the format:) 70.87 524.36 T
+(#     MESSAGE: CPU cpu-nr: [YYYY-MM-DD HH.MM.SS] Message) 70.87 512.36 T
+(#     WARNING: CPU cpu-nr: [YYYY-MM-DD HH.MM.SS] Message) 70.87 500.36 T
+(#     ERROR: CPU cpu-nr: [YYYY-MM-DD H.MM.SS] Message) 70.87 488.36 T
+(#) 70.87 476.36 T
+-0.24 (#     During execution the evolving solution \050what is being worked on\051) 70.87 464.36 P
+-0.21 (#     will be written to stdout. Every time a better solution is found) 70.87 452.36 P
+(#     it is immediatly written. Messages informing the user regarding) 70.87 440.36 T
+(#     which phase the program is executing in are also shown.) 70.87 428.36 T
+(#) 70.87 416.36 T
+(# FILES:) 70.87 404.36 T
+(#     problem.tsp : The default problem specif) 70.87 392.36 T
+(ication.) 346.87 392.36 T
+(#) 70.87 380.36 T
+(                   This f) 76.87 380.36 T
+(ile specif) 226.87 380.36 T
+(ies what nodes are to be used,) 286.87 380.36 T
+(#                   which distance function, and some control) 70.87 368.36 T
+(#                   parameters.) 70.87 356.36 T
+(#     Solution : This f) 70.87 344.36 T
+(ile will contain the f) 208.87 344.36 T
+(inal solution) 340.87 344.36 T
+(#) 70.87 332.36 T
+(                when the program is f) 76.87 332.36 T
+(inished.) 298.87 332.36 T
+(#     InitialDistribution : Contains the distribution that was best) 70.87 320.36 T
+(#                last time the program was run.) 70.87 308.36 T
+(#     Errors : Contains all error messages from the program execution) 70.87 296.36 T
+(#) 70.87 284.36 T
+(     Warnings : Contains all warning messages from the program) 76.87 284.36 T
+(#                execution.) 70.87 272.36 T
+(#) 70.87 260.36 T
+(# VERSION:) 70.87 248.36 T
+(#     1.0) 70.87 236.36 T
+(#) 70.87 224.36 T
+(# AUTHOR:) 70.87 212.36 T
+(#     Mattias Forsberg, forsberg@cs.vu.nl \050c92matfo@und.ida.liu.se\051) 70.87 200.36 T
+(#) 70.87 188.36 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "12" 12
+%%Page: "13" 13
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Parallel programming) 107.72 799.71 T
+(Practical W) 107.72 789.71 T
+(ork) 144.62 789.71 T
+107.72 53.86 524.41 53.86 2 L
+0.25 H
+2 Z
+N
+(Appendix B - Problem speci\336cation) 107.72 42.73 T
+(17 April 1997) 300.71 42.73 T
+(13) 516.41 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+0 24 Q
+(Appendix B - Problem speci\336cation) 143.41 755.02 T
+0 12 Q
+(Below the input \336le to the program is shown. This is the input that was used during) 107.72 715.02 T
+(testing and measurement of the program.  The data is taken from the original Manhat-) 107.72 701.02 T
+(tan krantenweg problem speci\336cation.) 107.72 687.02 T
+5 10 Q
+(NAME : Newspaper delivery) 161.57 668.36 T
+(COMMENT : Manhattan delivery for four newspaperboys.) 161.57 656.36 T
+(TYPE : TSP) 161.57 644.36 T
+(DIMENSION : 120) 161.57 632.36 T
+(EDGE_WEIGHT_TYPE : MAN_2D) 161.57 620.36 T
+(SEARCH_DEPTH : 8) 161.57 608.36 T
+(DEBUG_MODE : ON) 161.57 596.36 T
+(DELIVERY_BOYS : 4) 161.57 584.36 T
+(NODE_COORD_SECTION) 161.57 572.36 T
+(  0     375    375) 161.57 560.36 T
+(  1      17    310) 161.57 548.36 T
+(  2      39     85) 161.57 536.36 T
+(  3      48    403) 161.57 524.36 T
+(  4      49    444) 161.57 512.36 T
+(  5      55    153) 161.57 500.36 T
+(  6      59    250) 161.57 488.36 T
+(  7      59    476) 161.57 476.36 T
+(  8      62    353) 161.57 464.36 T
+(  9      81    441) 161.57 452.36 T
+( 10      85    367) 161.57 440.36 T
+( 11      85    419) 161.57 428.36 T
+( 12      89    418) 161.57 416.36 T
+( 13     105    376) 161.57 404.36 T
+( 14     109    258) 161.57 392.36 T
+( 15     110    411) 161.57 380.36 T
+( 16     110    447) 161.57 368.36 T
+( 17     118    413) 161.57 356.36 T
+( 18     120     49) 161.57 344.36 T
+( 19     120    451) 161.57 332.36 T
+( 20     120    459) 161.57 320.36 T
+( 21     122    104) 161.57 308.36 T
+( 22     133    410) 161.57 296.36 T
+( 23     142    439) 161.57 284.36 T
+( 24     145    412) 161.57 272.36 T
+( 25     146    364) 161.57 260.36 T
+( 26     161    190) 161.57 248.36 T
+( 27     161    414) 161.57 236.36 T
+( 28     161    434) 161.57 224.36 T
+( 29     162    458) 161.57 212.36 T
+( 30     165    374) 161.57 200.36 T
+( 31     167    399) 161.57 188.36 T
+( 32     178    409) 161.57 176.36 T
+( 33     179    265) 161.57 164.36 T
+( 34     179    365) 161.57 152.36 T
+( 35     179    427) 161.57 140.36 T
+( 36     182    359) 161.57 128.36 T
+( 37     184     76) 161.57 116.36 T
+( 38     184    198) 161.57 104.36 T
+( 39     185    124) 161.57 92.36 T
+( 40     186    169) 161.57 80.36 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "13" 13
+%%Page: "14" 14
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Mattias Forsber) 430.43 799.71 T
+(g) 480.73 799.71 T
+487.56 53.86 70.87 53.86 2 L
+0.25 H
+2 Z
+N
+(14) 70.87 42.73 T
+(17 April 1997) 263.86 42.73 T
+(Appendix B - Problem speci\336cation) 372.45 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+5 10 Q
+( 41     186    440) 124.72 764.36 T
+( 42     188     63) 124.72 752.36 T
+( 43     194    433) 124.72 740.36 T
+( 44     197    352) 124.72 728.36 T
+( 45     200    376) 124.72 716.36 T
+( 46     211    462) 124.72 704.36 T
+( 47     212    140) 124.72 692.36 T
+( 48     222    181) 124.72 680.36 T
+( 49     223     21) 124.72 668.36 T
+( 50     223    328) 124.72 656.36 T
+( 51     233     27) 124.72 644.36 T
+( 52     235    405) 124.72 632.36 T
+( 53     239    229) 124.72 620.36 T
+( 54     276    231) 124.72 608.36 T
+( 55     284    362) 124.72 596.36 T
+( 56     286     24) 124.72 584.36 T
+( 57     292    148) 124.72 572.36 T
+( 58     299    188) 124.72 560.36 T
+( 59     302    184) 124.72 548.36 T
+( 60     317    237) 124.72 536.36 T
+( 61     320    331) 124.72 524.36 T
+( 62     323    137) 124.72 512.36 T
+( 63     324     85) 124.72 500.36 T
+( 64     325     74) 124.72 488.36 T
+( 65     329    217) 124.72 476.36 T
+( 66     335    109) 124.72 464.36 T
+( 67     338    168) 124.72 452.36 T
+( 68     338    208) 124.72 440.36 T
+( 69     338    332) 124.72 428.36 T
+( 70     342    143) 124.72 416.36 T
+( 71     345    427) 124.72 404.36 T
+( 72     346    247) 124.72 392.36 T
+( 73     353    350) 124.72 380.36 T
+( 74     353    488) 124.72 368.36 T
+( 75     354    135) 124.72 356.36 T
+( 76     356    113) 124.72 344.36 T
+( 77     362    491) 124.72 332.36 T
+( 78     364    129) 124.72 320.36 T
+( 79     365     34) 124.72 308.36 T
+( 80     368    129) 124.72 296.36 T
+( 81     368    230) 124.72 284.36 T
+( 82     371    470) 124.72 272.36 T
+( 83     375    387) 124.72 260.36 T
+( 84     375    401) 124.72 248.36 T
+( 85     390    379) 124.72 236.36 T
+( 86     391    441) 124.72 224.36 T
+( 87     392    183) 124.72 212.36 T
+( 88     392    196) 124.72 200.36 T
+( 89     396    420) 124.72 188.36 T
+( 90     397     96) 124.72 176.36 T
+( 91     399    365) 124.72 164.36 T
+( 92     406    103) 124.72 152.36 T
+( 93     408    158) 124.72 140.36 T
+( 94     410    152) 124.72 128.36 T
+( 95     410    203) 124.72 116.36 T
+( 96     410    432) 124.72 104.36 T
+( 97     412    128) 124.72 92.36 T
+( 98     413    236) 124.72 80.36 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "14" 14
+%%Page: "15" 15
+595.28 841.89 0 FMBEGINPAGE
+[0 0 0 1 0 0 0]
+[ 0 1 1 0 1 0 0]
+[ 1 0 1 0 0 1 0]
+[ 1 1 0 0 0 0 1]
+[ 1 0 0 0 0 1 1]
+[ 0 1 0 0 1 0 1]
+[ 0 0 1 0 1 1 0]
+ 7 FrameSetSepColors
+FrameNoSep
+0 0 0 1 0 0 0 K
+0 8 Q
+0 X
+0 0 0 1 0 0 0 K
+(Parallel programming) 107.72 799.71 T
+(Practical W) 107.72 789.71 T
+(ork) 144.62 789.71 T
+107.72 53.86 524.41 53.86 2 L
+0.25 H
+2 Z
+N
+(Appendix B - Problem speci\336cation) 107.72 42.73 T
+(17 April 1997) 300.71 42.73 T
+(15) 516.41 42.73 T
+0 0 0 1 0 0 0 K
+0 0 0 1 0 0 0 K
+5 10 Q
+( 99     413    473) 161.57 764.36 T
+(100     417    466) 161.57 752.36 T
+(101     418    211) 161.57 740.36 T
+(102     421    218) 161.57 728.36 T
+(103     421    495) 161.57 716.36 T
+(104     429    420) 161.57 704.36 T
+(105     434    321) 161.57 692.36 T
+(106     436    253) 161.57 680.36 T
+(107     438    465) 161.57 668.36 T
+(108     443    491) 161.57 656.36 T
+(109     444    398) 161.57 644.36 T
+(110     444    468) 161.57 632.36 T
+(111     449    452) 161.57 620.36 T
+(112     452    141) 161.57 608.36 T
+(113     452    394) 161.57 596.36 T
+(114     453    379) 161.57 584.36 T
+(115     479    412) 161.57 572.36 T
+(116     483    487) 161.57 560.36 T
+(117     484    424) 161.57 548.36 T
+(118     485    419) 161.57 536.36 T
+(119     489    480) 161.57 524.36 T
+(120     496    409) 161.57 512.36 T
+(EOF) 161.57 500.36 T
+0 0 0 1 0 0 0 K
+FMENDPAGE
+%%EndPage: "15" 15
+%%Trailer
+%%BoundingBox: 0 0 595.28 841.89
+%%PageOrder: Ascend
+%%Pages: 15
+%%DocumentFonts: Times-Roman
+%%+ Times-Bold
+%%+ Times-Italic
+%%+ Symbol
+%%+ Courier-Bold
+%%+ Courier
+%%EOF

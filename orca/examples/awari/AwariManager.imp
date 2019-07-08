@@ -1,0 +1,221 @@
+#-----------------------------------------------#
+# Authors: H. Staalman  and  E.J.J. de Waal	#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+MODULE IMPLEMENTATION AwariManager;
+
+
+FROM	AwariTypes	IMPORT	PitsPerBoard, ManyStones;
+FROM	DataBaseTypes	IMPORT	DataBaseObject;
+FROM	Finish		IMPORT	Finish;
+FROM	InOut		IMPORT	ReadInt, ReadString, WriteString, Flush;
+FROM	AwariWorker	IMPORT	AwariWorker;
+FROM	Time		IMPORT	SysMilli, PrintTime;
+FROM	AwariTypes	IMPORT	BinomiumType;
+FROM	BinomiumObject	IMPORT	Init_Binomium;
+#OBJECT BinomiumT = NEW BinomiumObject((ManyStones + PitsPerBoard), ManyStones);
+		IMPORT	SyncObject;
+		IMPORT	DBMetaDataObject;
+		IMPORT	ElectionObject;
+		IMPORT	buffer;
+		IMPORT	terminate;
+		IMPORT  barrier;
+FROM buffer IMPORT buffers;
+
+FROM	args		IMPORT	Argc, Argv;
+FROM	conversions	IMPORT	StringToInt;
+
+
+
+
+# for debugging memory usage
+FUNCTION block(s: string);
+	t: integer;
+BEGIN
+    WriteLine(s);
+    ReadInt(t);
+END;
+
+PROCESS OrcaMain();
+    # The binomium is needed to calculate the total number of 
+    # configuration the database has.
+	binomium: BinomiumType[0..(ManyStones+PitsPerBoard)][0..ManyStones];
+
+    # All needed objects.
+	awari_database: DataBaseObject[0 ..(NCPUS()-1)];
+	bufs:		buffers[0 .. (NCPUS()-1)];
+	meta_data:	DBMetaDataObject;
+	synchronizer:	SyncObject;
+	poll_station:	ElectionObject;
+	term:		terminate;
+	bar:		barrier;
+
+    # Vars needed for reading pseudo command-line parameters.
+	output_filename:string;
+	nr_stones:	integer;
+
+    # Vars to help calculating something.
+	nr_configs:		longint;
+	nr_dbpart_objects:	integer;
+	    # This variable denotes the number of - instantiations of - 
+	    # DBPartObjects being used. 
+	    # It is set in AwariManager and depends on the actual DB 
+	    # being computed.
+
+    # Vars needed for ...., just needed.
+	unattainable: integer;
+
+  start_FWD_computing_time,
+  start_BWD_computing_time, end_computing_time,
+  start_forking_time,
+  begin_rw_time, end_rw_time:		integer;
+
+  dummy:	integer;
+
+BEGIN
+    IF Argc() = 1 THEN
+	WriteLine("Give name of output file: ");
+	ReadString(output_filename);
+	WriteLine("Give the size of the DB: ");
+	ReadInt(nr_stones);
+    ELSIF Argc() = 3 THEN
+	output_filename := Argv(1);
+	nr_stones       := StringToInt(Argv(2), dummy);
+    ELSE
+	WriteLine("usage: ", Argv(0), " <output file> <database size>");
+	RETURN;
+    FI;
+
+    begin_rw_time := SysMilli();
+    
+    meta_data$Set_DB_Size(nr_stones);
+    meta_data$Set_Unattainable(0);
+
+    Init_Binomium(binomium, (ManyStones+PitsPerBoard), ManyStones);
+    nr_configs := binomium[(PitsPerBoard + nr_stones)][ nr_stones];
+
+    nr_dbpart_objects := (TRUNC(FLOAT(nr_configs) / 
+			       (FLOAT((TRUNC(FLOAT(nr_configs) /
+					    (FLOAT(NCPUS()) * 8.0))
+				       + 1) * 8))) + 1);
+
+	#  (	 (nr_configs)		  )
+	#  (------------------------------) + 1
+	#  (  ((  nr_configs  )     )	  )
+	#  (  (( -------------) + 1 ) * 8 )
+	#  (  ((  (NCPUS * 8) )     )	  )
+
+    WriteLine("Using ", nr_dbpart_objects, " CPU's for the ", nr_stones," stones DB");
+
+    meta_data$Set_DB_MetaData(nr_configs, nr_dbpart_objects);
+    meta_data$Set_IO_Filenames("file_with_no_name", output_filename);
+
+    poll_station$Init(nr_dbpart_objects);
+    synchronizer$init(nr_dbpart_objects);
+
+    start_forking_time := SysMilli();
+
+    Strategy(synchronizer, 0, 0);	# Don't replicate synchronizer
+
+    FOR cpu IN 0..(nr_dbpart_objects - 1) 
+    DO
+	Strategy(awari_database[cpu], 0, cpu);
+	    # tell the RTS to put object awari_database[cpu] on 
+	    # processor 'cpu' permanently
+	Strategy(bufs[cpu], 0, cpu);
+        # Write(cpu); block("  Before init buffer");
+	bufs[cpu]$InitBuffer(nr_dbpart_objects);
+        # Write(cpu); block("  After init buffer");
+    OD;
+
+    # The termination object must be replicated, since the worker poll it
+    Strategy(term, 1, 0);
+
+
+    term$init(nr_dbpart_objects);	# initialize termination object
+    bar$init(nr_dbpart_objects);	# initialize barrier object
+
+    FOR cpu IN 0..(nr_dbpart_objects - 1) 
+    DO
+	FORK AwariWorker(awari_database,
+			 meta_data,
+			 synchronizer, 
+			 poll_station,
+			 bufs,
+			 term,
+			 bar)		ON (cpu);
+    OD;
+
+	# OrcaMain is waiting for all Databases to be initialized.
+    synchronizer$WaitForWorkers();
+
+	# OrcaMain gives the turn to process 0 to start reading the
+	# previous database.
+    synchronizer$TurnInc();
+
+	# OrcaMain is waiting for all processes to be ready reading.
+    synchronizer$WaitForWorkers();
+
+    start_FWD_computing_time := SysMilli();
+
+    WriteLine("++OrcaMain(): Starting FWD RA"); Flush();
+
+    synchronizer$WaitForWorkers();
+
+
+    #block("Before backward pass");
+    start_BWD_computing_time := SysMilli();
+
+    WriteLine("++OrcaMain(): Starting BWD RA"); Flush();
+
+    REPEAT
+	synchronizer$WaitForWorkers();
+
+	    # Handy status info: every dot means a completion of 
+	    # a database pass resulting in an incrementation of 
+	    # unattainable.
+	WriteString(". "); Flush();
+
+	term$clear();	# clear termination object for next round
+	unattainable := meta_data$Increase_Unattainable();
+	synchronizer$SetUnattainable(unattainable);
+	poll_station$Init(nr_dbpart_objects);
+    UNTIL (unattainable = nr_stones);
+
+    WriteLine(""); Flush();
+
+    synchronizer$WaitForWorkers();
+
+    end_computing_time := SysMilli();
+    #block("After backward pass");
+
+    WriteLine("<< RUN INFO >>");
+    WriteLine("Computing time (FWD)		 : ", 
+	       start_BWD_computing_time - start_FWD_computing_time, " [ms]");
+    WriteLine("Computing time (BWD)		 : ", 
+	       end_computing_time - start_BWD_computing_time, " [ms]");
+    WriteLine("Computing time (FWD + BWD)	 : ", 
+	       end_computing_time - start_FWD_computing_time, " [ms]");
+    WriteLine("Working time (FWD + BWD + Forking): ", 
+	       end_computing_time - start_forking_time, " [ms]");
+    PrintTime("awari", end_computing_time - start_forking_time);
+
+	# OrcaMain is waiting for everything to be written to disk.");
+    synchronizer$TurnInc();
+    synchronizer$WaitForWorkers();
+
+    end_rw_time := SysMilli();
+
+    WriteLine("Total time (incl. IO)		 : ", 
+	       end_rw_time - begin_rw_time, " [ms]");
+
+	# OrcaMain can finish the programm
+#   term$PrintStatistics();
+    Finish();
+END;
+
+
+
+END; # AwariManager

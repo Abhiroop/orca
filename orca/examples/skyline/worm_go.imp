@@ -1,0 +1,115 @@
+ ## ===========================================================================
+ ##
+ ##    File:    worm_go.imp
+ ##    Type:    generic object implementation
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ GENERIC
+ OBJECT IMPLEMENTATION worm_go ;
+
+
+ ## ===========================================================================
+ ##
+ ##  Data Fields:
+ ## 
+ ## ---------------------------------------------------------------------------
+
+ N    : integer    ;  ##  Total number of iterations in the sliding window.
+ CID  : integer    ;  ##  Identifier of latest iteration of which an item is
+                      ##  in store. 
+
+ ITEM : item_array ;  ##  Buffer of `N' data items.
+
+
+ ## ===========================================================================
+ ## 
+ ##  Exported Operations:
+ ## 
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ init         - Initialize the object to handle
+ ##
+ ##    n : integer  - windowsize `n'
+ ##
+
+ OPERATION init( n : integer );
+
+ BEGIN   N :=  n ;
+       CID := -1 ;
+
+       item_array_m.set_bounds( 0, n-1, ITEM );
+ END   ;
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ put             - Store
+ ##
+ ##    item : item_pt  - the data `item'
+ ##      id : integer  - of iteration `id'
+ ##
+
+ OPERATION put( item : item_pt 
+              ;   id : integer 
+             );
+
+ BEGIN CID := id ;
+       ITEM[ id % N ] := item ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ get             - Retrieve
+ ##
+ ##    item : item_pt  - the data `item'
+ ##      id : integer  - of iteration `id'
+ ##
+
+ OPERATION get( item : OUT item_pt
+              ;   id :     integer
+             );
+
+ BEGIN GUARD CID >= id
+       DO    item := ITEM[ id % N ];
+       OD    ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  The more data items that are buffered the more iterations a process could
+ ##  "run behind"  on  others.  To  retrieve all data items from the requested
+ ##  iteration up to and including the most recently stored, use `mget'.
+ ##
+ ##  @ mget                - Retrieve
+ ##
+ ##    items : item_array  - all currently available data `items'
+ ##       id : integer     - starting with that of iteration `id' onward
+ ##
+ ##  The `items' array can be indexed by iteration identifier. The lower bound
+ ##  will  equal  `id' and the upper bound will equal the iteration identifier
+ ##  of the most recently stored data item. It will at least equal `id' and at
+ ##  most  equal  `id + N -1' (Because in that case, iteration `id + N' is yet
+ ##  be provided by the process now performing the `mget' operation).
+ ##
+
+ OPERATION mget( items : OUT item_array
+               ;    id :     integer
+              );
+
+ BEGIN GUARD CID >= id 
+       DO    item_array_m.set_bounds( id, CID, items ); 
+             FOR i IN id .. CID
+             DO  items[ i ] := ITEM[ i % N ];
+             OD  ;
+       OD    ;
+ END   ;
+
+
+ ## ===========================================================================
+
+ END
+ GENERIC ;

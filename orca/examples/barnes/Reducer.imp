@@ -1,0 +1,121 @@
+OBJECT IMPLEMENTATION Reducer;
+    FROM vectmath IMPORT Vectmath, NDIM;
+ 
+    CNT : integer;
+    cur : real;
+    cur1 : Vectmath;
+    cur2 : Vectmath;
+    released : integer;
+
+FUNCTION Maxim( x, y : SHARED Vectmath);
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+    	IF x[i] < y[i] THEN x[i] := y[i]; FI;
+    OD;
+END;
+
+FUNCTION Minim( x, y : SHARED Vectmath);
+BEGIN
+    FOR i IN 0..NDIM-1 DO
+    	IF x[i] > y[i] THEN x[i] := y[i]; FI;
+    OD;
+END;
+
+OPERATION minmax(V1 : Vectmath; V2 : Vectmath);
+BEGIN
+    GUARD released = NCPUS() DO
+	IF CNT = 0 THEN
+	    cur1 := V1;
+	    cur2 := V2;
+        FI;
+        CNT +:= 1;
+        IF CNT = NCPUS() THEN
+	    released := 0;
+	FI;
+        Maxim( cur1, V1);
+        Minim( cur2, V2);
+    OD;
+END;
+
+
+OPERATION add( V : real);
+BEGIN
+    GUARD released = NCPUS() DO
+        IF CNT = 0 THEN
+            cur := 0.0;
+        FI;
+ 
+        CNT +:= 1;
+        cur +:= V;
+ 
+        IF CNT = NCPUS() THEN
+             released := 0;
+        FI;
+    OD;
+END;
+
+
+
+OPERATION wait() : real;
+BEGIN
+    GUARD CNT = NCPUS() DO
+	released +:= 1;
+	IF released = NCPUS() THEN
+	    CNT := 0;
+	FI;
+	RETURN cur;
+    OD;
+END;
+
+OPERATION wait_m(M, m: OUT Vectmath);
+BEGIN
+    GUARD CNT = NCPUS() DO
+	released +:= 1;
+	IF released = NCPUS() THEN
+	    CNT := 0;
+	FI;
+	M := cur1;
+	m := cur2;
+    OD;
+END;
+
+OPERATION wait_bar();
+BEGIN
+    GUARD CNT = NCPUS() DO
+        released +:= 1;
+        IF released = NCPUS() THEN
+            CNT := 0;
+        FI;
+    OD;
+END;
+
+OPERATION done();
+BEGIN
+    GUARD released = NCPUS() DO
+        CNT +:= 1;
+        IF CNT = NCPUS() THEN
+            released := 0;
+        FI;
+    OD;
+END;
+
+FUNCTION sync( b : SHARED Reducer);
+BEGIN
+    b$done();
+    b$wait_bar();
+END;
+
+OPERATION Init();
+BEGIN
+    CNT := 0;
+    released := NCPUS();
+    cur := 0.0;
+END;
+
+
+
+END;
+
+
+
+

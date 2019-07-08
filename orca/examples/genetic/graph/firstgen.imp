@@ -1,0 +1,42 @@
+MODULE IMPLEMENTATION firstgen;
+
+	FROM IntMatrix IMPORT IntMatrix;
+	FROM Random IMPORT Random;
+	FROM CromoVector IMPORT individual, population, DynPopulation;
+	FROM GenTypes IMPORT configuration;
+	FROM genfunct IMPORT bitmask, equalize_01, quicksort, fitness;
+	FROM matrixfunct IMPORT evaluation, heuristic;
+
+  
+#
+# generates an individual
+# cromozom is intialized with a random vector of true and false values
+# eval is evaluated
+#
+FUNCTION generate_indiv(A: IntMatrix; symmetric: boolean; 
+                        nb_nodes: integer; individ: SHARED individual;
+			r: Random);
+BEGIN
+	individ.cromozom := bitmask(nb_nodes, r);
+	equalize_01(individ.cromozom, nb_nodes, r);
+	heuristic(A, nb_nodes, individ.cromozom);
+	evaluation(A, symmetric, nb_nodes, individ);
+END;
+
+#
+# initializes the population with random individuals
+# all 2*nb_individuals positions are filled
+#
+FUNCTION first_generation(Pop: SHARED population; config: configuration;
+		A: IntMatrix; symmetric: boolean;  nb_nodes: integer;
+		r: Random);
+BEGIN
+	Pop := DynPopulation(nb_nodes, config.nb_individuals);
+	FOR i IN 0..2*config.nb_individuals-1 DO
+ 		generate_indiv(A, symmetric, nb_nodes, Pop[Pop.p[i]].ind, r);
+	OD;
+	quicksort(Pop, 0, 2*config.nb_individuals-1);
+	fitness(Pop, config);
+END;
+
+END;

@@ -1,0 +1,62 @@
+#!/bin/csh -f
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+
+switch ( `uname -r` )
+case 4*:
+	set binsuf = sun4
+	breaksw
+case 5*:
+	set binsuf = sol2
+	breaksw
+endsw
+
+set ORCA_HOME	= /usr/proj/orca
+
+set bin		= $ORCA_HOME/bin.$binsuf
+unset cpp_out
+unset cpp_in
+set flags	= ""
+
+while ($#argv > 0)
+	switch ( $1 )
+
+	case -[PCIDU]*:
+			set flags = "$flags $1"
+			breaksw
+	case -F:
+			set no_std_incl
+			breaksw
+	case -T:
+			set flags = "$flags -M8"
+			breaksw
+	case -V:
+			set cpp_verbose
+			breaksw
+	case -o:
+			breaksw
+	default:
+			if ( $?cpp_out ) then
+				echo "ancpp-T800: 1 cpp_in, 1 cpp_out"
+				exit 5
+			else if ( $?cpp_in ) then
+				set cpp_out = $1
+			else
+				set cpp_in = $1
+			endif
+	endsw
+
+	shift
+end
+
+if ($?no_std_incl) then
+	set flags = "$flags -I"
+endif
+
+if ($?cpp_out) then
+	$bin/ncpp $flags $cpp_in | $bin/mfilter > $cpp_out
+else
+	$bin/ncpp $flags $cpp_in | $bin/mfilter
+endif

@@ -1,0 +1,144 @@
+MODULE IMPLEMENTATION scheduler;
+
+FROM semaphore       IMPORT semaphore;
+FROM task_graph_obj  IMPORT task_graph_obj, is_nil_task;
+FROM task_stack      IMPORT task_stack, task_descr, push, pop, emptyS, list;
+FROM action_list_obj IMPORT action_specifier, action_list_obj, action_rec,
+			    print_action;
+FROM main            IMPORT worker;
+FROM ParamRes        IMPORT WriteParam;
+
+PROCESS scheduler(task_graph  : SHARED task_graph_obj;
+		  action_list : SHARED action_list_obj;
+		  ncpus       : integer;
+		  print_sema  : SHARED semaphore);
+
+action      : action_rec;
+new_task    : task_descr;
+idle_cpus   : integer;
+ready_tasks : ARRAY[integer 0..ncpus-1] OF integer;
+cpu         : integer;
+parent_cpu  : integer;
+ready_Q     : task_stack;
+task_name   : integer;
+
+BEGIN
+    WriteLine("scheduler started on cpu ", MYCPU());
+    idle_cpus := ncpus;
+    FOR i IN 0 .. ncpus - 1 DO
+	ready_tasks[i] := 0;
+    OD;
+    DO  
+	# print_sema$P();
+	# WriteLine("Action list before deQ:");
+	# action_list$list(MYCPU());
+	# print_sema$V();
+	IF NOT action_list$deQ(action) THEN
+	    RETURN;
+	FI;
+	# print_sema$P();
+	# Write("scheduler dequeues action: ");
+	# print_action(action);
+	# WriteLine("ready q contains: ");
+	# list(ready_Q);
+	# Write("exec-ing tasks:          ");
+	# FOR i IN 0 .. ncpus - 1
+	# DO Write("x[", i, "] = ", ready_tasks[i], " ");
+	# OD;
+	# WriteLine();
+	# print_sema$V();
+			# don't use action.cpu because of sun3-rss bug in
+			# FORK .. ON cpu (i.e. always on cpu 0 ...)
+	CASE action.type OF
+	FINISHED =>
+	    cpu := task_graph$cpu(action.task_id);
+	    ready_tasks[cpu] -:= 1;
+	    IF ready_tasks[cpu] = 0 THEN
+		idle_cpus +:= 1;
+	    FI;
+	    IF (NOT is_nil_task(action.parent_id)) THEN
+		IF (task_graph$wait_count(action.parent_id) = 1) THEN
+		    parent_cpu := task_graph$cpu(action.parent_id);
+		    task_name := 0;
+			    # task_graph$name(action.parent_id);
+		    IF ready_tasks[parent_cpu] = 0 THEN
+			idle_cpus -:= 1;
+		    FI;
+		    # WriteLine("resume task", task_name,
+				# " on cpu ", parent_cpu);
+		    ready_tasks[parent_cpu] +:= 1;
+		FI;
+	    FI;
+	    IF (ready_tasks[cpu] = 0) AND (NOT emptyS(ready_Q)) THEN
+		ready_tasks[cpu] +:= 1;
+		idle_cpus -:= 1;
+		pop(ready_Q,new_task);
+		task_graph$set_cpu(new_task.task, cpu);
+		# print_sema$P();
+		# WriteLine("pop task", new_task.task_id,
+			   # " for cpu ", cpu);
+		# print_sema$V();
+		FORK worker(new_task, task_graph, action_list, print_sema) ON
+			cpu;
+	    FI;
+	    task_graph$notify(action.parent_id);
+	| FORKED =>
+	    cpu := task_graph$cpu(action.task_id);
+	    IF (ready_tasks[cpu] = 1) AND (NOT emptyS(ready_Q)) THEN
+		pop(ready_Q,new_task);
+		task_graph$set_cpu(new_task.task, cpu);
+		# print_sema$P();
+		# WriteLine("pop task", new_task.task_id,
+			   # " for cpu ", cpu);
+		# print_sema$V();
+		FORK worker(new_task, task_graph, action_list, print_sema) ON
+			cpu;
+	    ELSE
+		ready_tasks[cpu] -:= 1;
+		IF ready_tasks[cpu] = 0 THEN
+		    idle_cpus +:= 1;
+		FI;
+	    FI;
+	| CREATED =>
+	    task_name := task_graph$name(action.task_id);
+	    new_task := task_descr:{
+			    action.task_id,
+			    action.parent_id,
+			    action.child_num,
+			    action.mess.params,
+			    task_name};
+	    IF idle_cpus > 0 THEN
+		cpu := 0;
+		WHILE (cpu < ncpus) AND (ready_tasks[cpu] /= 0) DO
+		    cpu +:= 1;
+		OD;
+		# WriteLine("Idle cpu: ", cpu);
+		ready_tasks[cpu] +:= 1;
+		idle_cpus -:= 1;
+		task_graph$set_cpu(action.task_id, cpu);
+		# print_sema$P();
+		# Write("going to fork task", task_name, " f(");
+		# WriteParam(action.mess.params);
+		# WriteLine(") on cpu ", cpu);
+		# print_sema$V();
+		FORK worker(new_task, task_graph, action_list, print_sema) ON
+			cpu;
+	    ELSE
+		push(ready_Q,new_task);
+		# print_sema$P();
+		# WriteLine("action enQ-ed into ready q: ");
+		# list(ready_Q);
+		# print_sema$V();
+	    FI;
+	ESAC;
+	# print_sema$P();
+	# Write("exec-ing tasks:          ");
+	# FOR cpu IN 0 .. ncpus - 1
+	# DO Write("x[", cpu, "] = ", ready_tasks[cpu], " ");
+	# OD;
+	# WriteLine();
+	# print_sema$V();
+    OD;
+END;
+
+END;

@@ -1,0 +1,24 @@
+# from Winograd's "Langauage as a cognitive process", p92
+#
+sentence -> NP VP
+sentence -> VP
+NP -> determiner NP2
+NP -> NP2
+NP -> NP PP
+NP2 -> noun
+NP2 -> adjective NP2
+PP -> preposition NP
+VP -> verb
+VP -> verb NP
+VP -> VP PP
+
+determiner -> am
+noun -> arrow
+noun -> flies
+noun -> time
+verb -> flies
+verb -> like
+verb -> time
+preposition -> like
+adjective -> time
+

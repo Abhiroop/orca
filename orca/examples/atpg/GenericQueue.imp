@@ -1,0 +1,157 @@
+GENERIC
+OBJECT IMPLEMENTATION GenericQueue;
+
+	TYPE Queuelink = NODENAME OF Queue;
+	TYPE Queue = GRAPH
+			first: Queuelink;
+			last : Queuelink;
+		     NODES
+			previous: Queuelink;
+			data: T;
+		     END;
+
+	queue:Queue;
+	
+	OPERATION IsEmpty():boolean;	# Check if Queue empty
+
+	BEGIN
+	 	RETURN (queue.first=NIL);
+	END; # OPERATION IsEmpty
+
+ 
+	OPERATION EnQueue(item:T);
+
+	# Only when the item to be enqueued is unique it is enqueued.
+	# This operation inserts the item at the tail of the queue. When the
+	# item is already present in the queue the item is not inserted.
+
+	ptr,p: Queuelink;
+
+	BEGIN
+
+		# Check if queue empty
+		IF queue.first=NIL THEN
+			# Queue is empty
+			p:=ADDNODE(queue);
+			# queue[p].previous:=NIL;
+			queue[p].data:=item;
+			queue.first:=p;
+			queue.last:=p;
+			RETURN;
+		FI;
+		# New item, is it necessary to queue it ?
+		ptr:=queue.first;
+		WHILE (ptr/=NIL) DO
+			IF queue[ptr].data=item THEN
+				# item is already on queue
+				RETURN;
+			FI;
+			ptr:=queue[ptr].previous;
+		OD;
+		# A new node must be added
+		p:=ADDNODE(queue);
+		queue[p].data:=item;
+		# item must be added to the end of the queue
+		# queue[p].previous:=NIL;
+		queue[queue.last].previous:=p;
+		queue.last:=p;
+	END;
+
+
+	OPERATION DeQueue(item:OUT T):boolean;
+
+	p,oldfirst: Queuelink;
+
+	BEGIN
+		IF queue.first = NIL THEN
+			RETURN false;
+		ELSE
+			item := queue[queue.first].data;
+			oldfirst:=queue.first;	
+			p:=queue[queue.first].previous;
+			IF p = NIL THEN
+				queue.first:=NIL;
+				queue.last:=NIL;
+			ELSE
+				queue.first:=p;
+			FI;
+			DELETENODE(queue,oldfirst);
+			RETURN true;
+		FI;
+	END;
+
+	OPERATION Is_Element(item:T):boolean;
+
+	# If the named item is on the queue the operation returns true.
+	# If the named item is not on the queue the operation returns false.
+
+	ptr:Queuelink;
+
+	BEGIN
+                ptr:=queue.first;
+                WHILE (ptr/=NIL) DO
+                        IF queue[ptr].data=item THEN
+                                # item is already on queue
+                                RETURN true;
+                        FI;
+                        ptr:=queue[ptr].previous;
+                OD;
+		RETURN false;
+	END; # OPERATION Is_Element
+
+	OPERATION Delete(item:T);
+
+	ptr,prev: Queuelink;
+
+	BEGIN
+		# prev:=NIL;
+                ptr:=queue.first;
+                WHILE (ptr/=NIL) DO
+                        IF queue[ptr].data=item THEN
+                       	   # item is on queue
+			   IF (ptr/=queue.last) AND (ptr/=queue.first) THEN
+				     queue[prev].previous:=queue[ptr].previous;
+			   ELSE
+				IF ptr=queue.first THEN
+					queue.first:=queue[ptr].previous;
+				FI;
+				IF ptr=queue.last THEN
+					queue.last:=prev;
+					IF prev/=NIL THEN
+						queue[prev].previous:=NIL;
+					FI;
+				FI;
+			    FI;
+			    # delete node
+			    DELETENODE(queue,ptr);
+                            RETURN;
+                        FI;
+			prev:=ptr;
+                        ptr:=queue[ptr].previous;
+                OD;
+	END; # OPERATION Delete
+
+
+# DEBUG
+	OPERATION PrintQueue();
+
+	# Print the contents of the queue
+	# Note: This can only be done if the items can be printed
+
+	ptr: Queuelink;
+
+	BEGIN
+		ptr:=queue.first;
+		WHILE ptr/=NIL DO
+			# Write(queue[ptr].data);
+			ptr:=queue[ptr].previous;
+		OD;
+		WriteLine();
+	END; # OPERATION PrintQueue()
+
+# END DEBUG
+
+BEGIN
+	queue.first:= NIL;	# Initialize queue (empty)
+	queue.last:= NIL;	# Initialize queue 
+END GENERIC; # OBJECT IMPLEMENTATION GenericQueue

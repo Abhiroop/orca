@@ -1,0 +1,6 @@
+OBJECT SPECIFICATION IntList;
+	OPERATION AppendItem(item: integer);  # append an item at end of list
+	OPERATION GetHead(): integer; 
+	  # remove first element of list; error if list is empty
+	OPERATION IsEmpty(): boolean;  # list empty ?
+END;

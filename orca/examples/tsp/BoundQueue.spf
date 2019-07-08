@@ -1,0 +1,14 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: BoundQueue.spf,v 1.2 1999/04/21 10:05:24 ceriel Exp $
+
+GENERIC (TYPE T; CONST MAXSZ: integer)
+OBJECT SPECIFICATION BoundQueue;
+	OPERATION AddJob(job: T);  # add a job to the tail of the queue
+	OPERATION NoMoreJobs();  # invoked when no more jobs will be added
+	OPERATION GetJob(job: OUT T): boolean;
+		# Fetch a job from the head of the queue. This operation
+		# fails if the queue is empty and NoMoreJobs has been invoked.
+END GENERIC;

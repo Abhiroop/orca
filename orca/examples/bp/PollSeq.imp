@@ -1,0 +1,39 @@
+OBJECT IMPLEMENTATION PollSeq;
+         # Gallup poll consisting of a sequence of simple polls
+         # If all voters say yes, the result of a simple poll is yes.
+         # if anyone votes no, the result of the simple poll is `no'
+
+	lastiter: integer; # poll "lastiterion" (if > 0) returns "yes"
+	votes: integer;
+	nvoters: integer;
+	CurrDec,dec: boolean;
+	
+        OPERATION init(n: integer);
+	BEGIN
+	nvoters := n;
+	lastiter:=0;
+	CurrDec :=true;
+ 	END;
+		
+        OPERATION vote(iter: integer; YesOrNo: boolean);
+	BEGIN
+	GUARD iter = lastiter+1 DO
+	votes:= votes+1;
+	CurrDec:=CurrDec AND YesOrNo;
+	IF votes = nvoters THEN
+		dec:=CurrDec;
+		CurrDec:=true;
+		lastiter:=lastiter+1;
+	   	votes:=0;
+	FI;
+	OD;
+	END;
+
+        OPERATION AwaitDecision(iter: integer): boolean;
+	BEGIN
+	GUARD iter=lastiter DO 
+		RETURN dec; 
+	OD;
+	END;
+
+END;

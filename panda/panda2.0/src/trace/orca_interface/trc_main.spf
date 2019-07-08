@@ -1,0 +1,5 @@
+MODULE SPECIFICATION trc_main;
+
+PROCESS OrcaMain();
+
+END;

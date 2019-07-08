@@ -1,0 +1,39 @@
+ ## ===========================================================================
+ ##
+ ##    File:    array_gm.imp
+ ##    Type:    generic module implementation
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ GENERIC
+ MODULE IMPLEMENTATION array_gm ;
+
+ ## ===========================================================================
+ ## 
+ ##  Exported Functions:
+ ##
+ ## ---------------------------------------------------------------------------
+ ## 
+ ##  @ set_bounds     - Empty function, its purpose is to (re-)initialize ..
+ ##
+ ##    lb : integer   - the lower- ..
+ ##    ub : integer   - and upper bound ..
+ ##     a : array_gt  - of an array variable.
+ ##
+ ##                     of which the contents will be undefined upon return.
+ ## 
+
+ FUNCTION set_bounds( lb :     integer 
+                    ; ub :     integer 
+                    ;  a : OUT array_gt[ lb .. ub ]
+                   );
+ BEGIN
+ END   ;
+
+
+ ## ===========================================================================
+
+ END
+ GENERIC ;

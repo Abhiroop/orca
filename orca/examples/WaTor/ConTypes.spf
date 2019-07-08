@@ -1,0 +1,47 @@
+MODULE SPECIFICATION ConTypes;
+  CONST MAXOPER = 2000;
+  TYPE Vali    = ARRAY[integer] OF integer;
+  TYPE Valb    = ARRAY[integer] OF boolean;
+  TYPE Mat = ARRAY[integer] OF Vali;
+  TYPE MMat = ARRAY [integer] OF Mat;
+  TYPE elem_o = (FISH, SHARK, FISHT, SHARKT,  EMPTY, REUSABLE, RBUSY, BUSY);
+  TYPE OPER = (MOVE, NOU, DEL, EAT, ENOU, AGES);
+
+# position : upper, lowe, left, right, 
+# upper left corrner and lower right corner
+# upper right corner and lower left corner  
+# middle
+
+  TYPE POSITION = (UPPER, LOWER, LEFT, RIGHT, ULLR, URLL, MIDDLE);
+  TYPE Valp = ARRAY[POSITION UPPER ..  MIDDLE] OF integer;
+  TYPE elem_l_m = RECORD		 # elem for modif list
+                    tip : elem_o;
+                    operation : OPER; 
+                    fromx : integer;	  # initial pos for MOVE
+                    fromy : integer;
+                    wherex : integer;	  # destination pos for all oper
+                    wherey : integer;
+		    age : integer;
+		    eat : integer;
+                  END;           
+ TYPE ModList = ARRAY [integer 0 .. MAXOPER] OF elem_l_m; 
+ TYPE MatModList = ARRAY [POSITION UPPER .. MIDDLE] OF ModList;
+ TYPE entry_ocean = RECORD			# elem for ocen
+                      what : elem_o;
+		      age : integer;
+		      eat : integer;
+                    END;
+  TYPE  elem_lp    = RECORD			# elem for init list
+                      wherex : integer;
+                      wherey : integer;
+                    END;
+  TYPE ListaPFish  = ARRAY [integer] OF elem_lp;
+
+
+END; 
+
+
+
+
+
+

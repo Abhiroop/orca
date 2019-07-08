@@ -1,0 +1,52 @@
+# ========================================================================
+# == File:      GenSimList.spf						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Generic list type 					==
+# ==            implements generic type for a list, containing a 	==
+# ==		key, which is a non-object type.			==
+# ==            In any case, the assignment operator should be defined	==
+# ==		on the key type. Comp_func(K1, K2 : Key_t) is a 	==
+# ==            function which returns -1, 0 or 1 if K1 is 		==
+# == 		smaller, equal of larger than K2 			==
+# ========================================================================
+
+GENERIC (TYPE Key_t; FUNCTION Comp_func(K1 : Key_t; K2 : Key_t) : integer)
+
+OBJECT SPECIFICATION GenSimList;
+
+# ========================================================================
+# == operations								==
+# ========================================================================
+
+OPERATION create(
+) : boolean;					# succes?
+
+
+OPERATION delete(
+);
+
+
+OPERATION insert_elt(				
+	key : Key_t				# key to be inserted
+) : boolean;					# succes?
+
+
+OPERATION num_elts(				
+) : integer;					# nr of elements in list
+
+
+OPERATION give_ith_elt(
+	index : integer; 			# index in the list
+	key   : OUT Key_t			# key on position i
+) : boolean;
+
+
+OPERATION is_in_list(
+	key   : Key_t; 				# is this key in the list
+	index : OUT integer			# position in the list
+) : boolean;					# is in list or not?
+
+END GENERIC;
+
+

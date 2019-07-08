@@ -1,0 +1,12 @@
+OBJECT SPECIFICATION PointArray;
+FROM Points IMPORT Point;
+	OPERATION init(size: integer);
+     	  # Set size of the array
+	OPERATION at(index: integer): Point;
+     	  # Answer the point at index
+	OPERATION atPut(index: integer; p : Point);
+     	  # put p at index index
+	OPERATION size():integer;
+	OPERATION printItMma();
+	  # print contents suitable for Mathematica input
+END;

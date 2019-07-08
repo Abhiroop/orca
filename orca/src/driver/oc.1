@@ -1,0 +1,218 @@
+.\"
+.\" (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+.\" For full copyright and restrictions on use see the file COPYRIGHT in the
+.\" top level of the Orca distribution.
+.\"
+.\" $Id: oc.1,v 1.11 1998/10/27 15:44:11 ceriel Exp $
+.TH OC 1
+.ad
+.SH NAME
+oc \- an Orca compiler
+.SH SYNOPSIS
+.B oc
+.RI [ option ] 
+.I sources
+.br
+.B oc_check
+.RI [ option ] 
+.I sources
+.SH INTRODUCTION
+This document provides an introduction to the use of the
+.I oc
+driver for the Orca compiler.
+Its task is to call
+the Orca compiler, which translates Orca modules/objects into ANSI C modules,
+then call an ANSI C compiler to process the Orca compiler output,
+and then call a link editor to combine the
+object files and the Orca runtime system into a binary.
+.SH USAGE
+Users are expected to use the
+.I oc
+command through one of the shell scripts
+.IR oc_bcast-rpc (1),
+.IR oc_panda (1),
+.IR oc_unixproc (1),
+or
+.IR oc_sinproc (1).
+These shell scripts set the various variables and options right for the
+runtime system chosen.
+.SH FILENAMES
+Usually, an Orca program consists of several specification and implementation
+modules.
+Specification modules must reside in files with names having a
+".spf" extension.
+Implementation modules must reside in files having a ".imp" extension.
+The name of the file in which a specification module is stored must be the
+same as the module-name, apart from the extension.
+.SH DESCRIPTION
+There are two commands: \fIoc\fP,
+which tries to run the full compilation pipeline including linking,
+and \fIoc_check\fP, which only runs
+the Orca compiler, producing a C module.
+The usual mode of working is that the user writes an Orca program,
+consisting of a number of specification and implementation modules/objects.
+The user may then run \fIoc_check\fP on each implementation module/object,
+and then run \fIoc\fP on the implementation module containing the
+Orca main process (called \fIOrcaMain\fP), or he may just do the latter.
+\fIOc\fP will find the modules/objects used if they reside in the
+current directory or any of the other source directories given with
+the \-\fBS\fP option, and recompile them if necessary.
+.LP
+The input is taken from
+.IR sources .
+In addition, \fIoc\fP also examines import lists in an attempt to collect the complete
+sources of the Orca program.
+However, it only looks for source files in the current directory.
+Source files from other directories must be specified explicitly.
+.LP
+.I Option
+is a, possibly empty, sequence of the following combinations:
+.IP \-\fBS\fIdirname\fR
+.br
+append \fIdirname\fP to the list of directories where sources are looked
+for. By default, this is only the current directory.
+.IP \-\fBI\fIdirname\fR
+.br
+append \fIdirname\fR to the list of directories where specifications
+are looked for.
+When the compiler needs a specification, it is first searched for
+in the current directory, and then in the directories given to it by the
+\-\fBI\fR flag
+in the order given, and then in the directory containing the
+specifications for the standard Orca library, currently $OC_HOME/$OC_LIBNAM/std.
+.IP \-\fBLIN\fP
+.br
+don't generate code for file name and line number administration.
+.IP \-\fBL\fP
+generate line directives in the C code.
+.IP \-\fBCHK\fP
+.br
+don't generate runtime checks (for instance for array references,
+graph references).
+.IP \-\fBv\fP
+verbose flag.
+Print commands before they are executed.
+.IP \-\fBw\fP
+suppress warning messages from the Orca compiler.
+.IP \-\fBvalues\fP
+.br
+Only print the values of the variables described below.
+.IP "\-\fBp\fP, \-\fBpg\fP"
+.br
+profiling. This flag is passed on to the C compiler, and a profiling version
+of the runtime system is selected.
+.IP \-\fBtrc\fP
+.br
+tracing. Use a tracing version of the runtime system. This feature is only
+available for the Panda runtime system.
+See "Panda trace package".
+.IP \-\fBc\fP
+compile, but do not link.
+.IP \-\fBu\fP
+do not complain about functions mentioned in the specification but not
+present in the implementation. This may be useful for functions that
+are written in another language.
+.IP \-\-\fIflag\fP
+.br
+pass the debug flag \-\-\fIflag\fP on to the Orca compiler.
+.IP \-\fBo\fP\0\fIfilename\fP
+.br
+produce the resulting binary in \fIfilename\fP, instead of \fBa.out\fP.
+.LP
+.IP \fIname\fP=\fIvalue\fP
+.br
+\fIOc\fP and \fIoc_check\fP have a number of variables with default
+values which can be changed through the environment or on the command
+line. 
+See the "environment" paragraph for the names and default values of
+these variables.
+.LP
+Unrecognized options (starting with a '\-') are passed to the C compiler.
+.LP
+Each Orca module compiles into a separate C module (usually a .c and a .h file,
+but for generic modules a .gc and a .gh file). 
+It is also possible to just compile an Orca specification, but this is
+only needed when the implementation is written in another language.
+In this case, the relocatable object file (or the C file)
+of this implementation must be passed on to \fIoc\fP
+explicitly. 
+.SH ENVIRONMENT
+There are several variables in the driver which can be changed by the user.
+Values in the environment override default values, and values given on
+the command line override both default values and environment values.
+The variables are:
+.IP OC_HOME
+.br
+This variable indicates the path to the root of the Orca tree.
+.IP OC_LIBNAM
+.br
+This variable indicates the path from $OC_HOME to the libraries.
+Its value usually is "lib".
+.IP OC_SPECIAL
+.br
+This variable indicates a special version of the libraries, for instance
+"optimized" or "profiling".
+.IP OC_MACH
+.br
+This variable contains a <machine>_<operating system> combination, for instance
+"sparc_sunos4", and indicates what kind of system the compilation is for.
+.IP OC_RTSNAM
+.br
+This variable indicates the name of the Orca runtime system, for instance
+"panda" or "unixproc".
+.IP OC_COMP
+.br
+This variable indicates the path to the Orca compiler.
+.IP OC_FLAGS
+.br
+This variable indicates the flags passed to the Orca compiler.
+.IP OC_INCLUDES
+.br
+This variable indicates a list of -I options for the 
+include directories for Orca.
+.IP OC_RTSINCLUDES
+.br
+This variable indicates a list of -I options for the 
+include directories of the Orca runtime system. These are required for the
+C compilation of the resulting C programs.
+.IP OC_CCOMP
+.br
+This variable indicates the C compiler used.
+This must be an ANSI C compiler.
+.IP OC_CFLAGS	
+.br
+This variable indicated the flags passed to the C compiler.
+.IP OC_LD
+.br
+This variable indicate the linker used.
+.IP OC_LDFLAGS
+.br
+This variable indicates the flags passed to the linker.
+.IP OC_STARTOFF
+.br
+This variable indicated the runtime start-off used.
+.IP OC_LIBS
+.br
+This variable indicates a list of runtime libraries.
+.LP
+The default values for these environment variables are suitable for
+running the Orca program with the unixproc RTS.
+.SH STANDARD MODULES
+The specifications for the standard modules can be found in the
+directory $OC_HOME/$OC_LIBNAM/std.
+.SH DIAGNOSTICS
+All warning and error messages are written on standard error output.
+.SH "SEE ALSO"
+oc_bcast-rpc(1)
+oc_panda(1)
+oc_unixproc(1)
+oc_sinproc(1)
+"User's Manual of the Programming Language Orca", by Ceriel Jacobs,
+"Panda trace package" by Rutger Hofman.
+.SH REMARKS
+To avoid cluttering up the working directory, \fIoc\fP uses its own
+working directory, \fI.oc_driver\fP, and other file names starting with
+a '.'.
+.LP
+This is a product under development. 
+Please send comments and bug-reports to ceriel@cs.vu.nl.

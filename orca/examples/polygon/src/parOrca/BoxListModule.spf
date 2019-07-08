@@ -1,0 +1,84 @@
+ ###############################################################################
+ ######  BoxListModule.spf                                                ######
+ ###                                                                         ###
+
+MODULE SPECIFICATION BoxListModule;
+
+ ##-----------------------------------------------------------------------------
+ ## Imports:
+ ##-----------------------------------------------------------------------------
+
+FROM BoxModule IMPORT Box;
+
+ ##-----------------------------------------------------------------------------
+ ## Types.
+ ##-----------------------------------------------------------------------------
+
+TYPE BoxListNode = NODENAME OF BoxList;
+
+TYPE BoxList =
+    GRAPH
+	head: BoxListNode;
+     NODES
+	box: Box;          # Information field.
+	next: BoxListNode; # Single list 'pointer'.
+    END; # BoxList
+
+ ##-----------------------------------------------------------------------------
+ ## Function prototypes.
+ ##-----------------------------------------------------------------------------
+ 
+FUNCTION addToBoxList(
+    list: SHARED BoxList;
+    box:  IN Box
+);
+
+FUNCTION delFirstFromBoxList(
+    list: SHARED BoxList
+);
+
+FUNCTION delNextBoxFromList(
+    list: SHARED BoxList;
+    node: IN BoxListNode
+);
+
+FUNCTION insertBoxInList(
+    box:  IN Box;
+    list: SHARED BoxList;
+    node: SHARED BoxListNode
+);
+
+FUNCTION isEmptyBoxList(
+    list: IN BoxList
+): boolean;
+
+FUNCTION length(
+    list: IN BoxList
+): integer;
+
+FUNCTION mSortBoxListCorner1X(
+    list:   SHARED BoxList;     # List to sort.
+    head:   SHARED BoxListNode; # Head of the list to sort.
+    length: IN     integer      # Length of the list to sort.
+);
+
+FUNCTION qSortBoxListCorner1X(
+    list:   SHARED BoxList;     # List to sort.
+    head:   IN     BoxListNode; # Head of the list to sort.
+    length: IN     integer      # Length of the list to sort.
+);
+
+FUNCTION returnEmptyBoxList(
+): BoxList;
+
+FUNCTION swapBoxList(
+    list:  SHARED BoxList;
+    nodeA: SHARED BoxListNode;
+    nodeB: SHARED BoxListNode
+);
+
+END; # BoxListModule
+ 
+ ###                                                                         ###
+ ######  BoxListModule.spf                                                ######
+ ###############################################################################

@@ -1,0 +1,34 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION Common;
+
+CONST   NRDISTANCES	= 13;
+
+TYPE OrderType		= (DISP, VEL, ACC,
+			   DER_3, DER_4, DER_5, DER_6, FORCES);
+TYPE DirectionType	= (XDIR, YDIR, ZDIR);
+TYPE AtomType		= (H1, O, H2);
+TYPE AtomTableType	= ARRAY [AtomType H1 .. H2] OF longreal;
+TYPE DirAtomsArray	= ARRAY [DirectionType XDIR .. ZDIR,
+			         AtomType H1 .. H2] OF longreal;
+
+TYPE DirTableType	= ARRAY [DirectionType XDIR .. ZDIR] OF longreal;
+TYPE DistanceTableType	= ARRAY [integer 0 .. NRDISTANCES] OF longreal;
+TYPE DirDistanceType	= ARRAY [DirectionType XDIR .. ZDIR,
+				 integer 0 .. NRDISTANCES] OF longreal;
+
+TYPE SmallMolDataType	= ARRAY [integer] OF DirAtomsArray;
+TYPE AllCpuDataType	= ARRAY [integer] OF SmallMolDataType;
+
+
+TYPE TLC_Type		= ARRAY [integer 0 .. 99] OF longreal;
+TYPE PCC_Type		= ARRAY [OrderType DISP .. FORCES] OF longreal;
+
+
+TYPE array_of_reals	= ARRAY [integer] OF longreal;
+TYPE InputArrayType	= ARRAY [integer] OF array_of_reals;
+
+
+END;

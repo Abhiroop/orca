@@ -1,0 +1,16 @@
+MODULE SPECIFICATION Inputc;
+
+FROM ConTypes IMPORT Vali;
+FUNCTION  init_val( unit, nr, lung, lat, NF, NS, ABF, ABS, TS : SHARED integer;
+                   fish, shark : SHARED Vali);
+
+FUNCTION random ( secventa : SHARED Vali);
+FUNCTION write_rezultate(nslaves, nf, ns, time : integer;
+                         timp , fish_n, shark_n, fish_e,
+                         shark_s, noper_fis, noper_sh: SHARED Vali);
+
+
+FUNCTION init_random();
+
+END;
+

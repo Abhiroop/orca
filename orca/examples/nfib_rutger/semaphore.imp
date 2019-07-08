@@ -1,0 +1,22 @@
+OBJECT IMPLEMENTATION semaphore;
+
+x: integer;
+
+OPERATION V();
+BEGIN
+    IF x /= 1 THEN
+	WriteLine("V on semaphore ", x, "!!!!");
+    FI;
+    x := 0;
+END;
+
+OPERATION P();
+BEGIN
+    GUARD x = 0 DO
+	x := 1;
+    OD;
+END;
+
+BEGIN
+    x := 0;
+END;

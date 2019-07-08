@@ -1,0 +1,234 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION ida;
+
+# Version with recursive expand() that uses an explicit stack of jobs
+
+	IMPORT Game;
+	FROM Game IMPORT Nsqrt;
+
+	IMPORT barrier;
+	FROM barrier IMPORT sync;
+
+	IMPORT IntObject;
+	FROM Time IMPORT SysMilli, PrintTime;
+
+	FROM args IMPORT Argc, Argv;
+
+	FROM conversions IMPORT StringToInt;
+
+	FROM Finish IMPORT Finish;
+
+	# Most time is spent in copying boards, so use chars iso integers
+	TYPE Board    = ARRAY [integer 1..Nsqrt, integer 1..Nsqrt] OF char;
+	TYPE Position = RECORD x, y : integer; END;
+	TYPE Move     = RECORD dx, dy : integer; END;
+	TYPE Job      = RECORD
+			     board : Board;
+			     distance : integer;
+			     bound : integer;
+			     blank : Position;
+			     prev : Move;
+		        END;
+	TYPE JobList  = ARRAY [integer] OF Job;
+
+	MODULE DJQ = NEW DistrJobQueue(Job);
+
+
+	TYPE record = RECORD bound : integer; END;
+	MODULE bound_event = NEW trace_gen(record, "search", "depth = %d", 5000);
+
+
+	# Performance hack: use SHARED parameter iso function result to
+	# minimize copying
+	FUNCTION move( j : SHARED Job; dx, dy : integer; puzzle : Game);
+		v, x, y : integer;
+	BEGIN
+		x := j.blank.x + dx;
+		y := j.blank.y + dy;
+		v := ORD(j.board[x,y]);
+
+		j.bound -:= 1;
+		j.distance +:= -puzzle$Distance(v, x, y)
+			       + puzzle$Distance(v, j.blank.x, j.blank.y);
+
+		j.board[j.blank.x,j.blank.y] := CHR(v);
+		j.prev.dx := dx;
+		j.prev.dy := dy;
+		j.blank.x := x;
+		j.blank.y := y;
+	END;
+
+	# Performance hack: use SHARED joblist to minimize copying
+	FUNCTION MakeMoves( n : SHARED integer; puzzle : Game;
+			    job : SHARED JobList);
+	j : integer;
+	# Optimization: don't generate (cyclic) moves that undo the last move
+	BEGIN
+		j := n;
+		IF (job[j].blank.x > 1) AND (job[j].prev.dx /= 1) THEN
+		    n +:= 1;
+		    job[n] := job[j];
+		    move(job[n], -1, 0, puzzle);
+		FI;
+		IF (job[j].blank.x < Nsqrt) AND (job[j].prev.dx /= -1) THEN
+		    n +:= 1;
+		    job[n] := job[j];
+		    move(job[n], 1, 0, puzzle);
+		FI;
+		IF (job[j].blank.y > 1) AND (job[j].prev.dy /= 1) THEN
+		    n +:= 1;
+		    job[n] := job[j];
+		    move(job[n], 0, -1, puzzle);
+		FI;
+		IF (job[j].blank.y < Nsqrt) AND (job[j].prev.dy /= -1) THEN
+		    n +:= 1;
+		    job[n] := job[j];
+		    move(job[n], 0, 1, puzzle);
+		FI;
+	END;
+
+	FUNCTION Expand( job : SHARED JobList; j : integer;
+			 q : SHARED DJQ.queue; threshold : integer;
+			 solutions : SHARED IntObject; puzzle : Game);
+
+	mine : integer;
+	chld : integer;
+	BEGIN
+            IF job[j].distance = 0 THEN
+                solutions$inc();
+
+            # Prune paths with too high estimates
+            ELSIF job[j].distance <= job[j].bound THEN
+                chld := j;
+                MakeMoves( chld, puzzle, job);
+                IF chld > j THEN
+                    # Optimization: don't put all jobs in the
+                    # jobqueue, but keep one myself
+		    mine := j+1;
+                    WHILE chld > mine DO
+                        # Expand fine-grained jobs immediately
+                        IF job[chld].bound - job[chld].distance < threshold THEN
+                            Expand( job, chld, q, threshold, solutions, puzzle);
+                        ELSE
+                            DJQ.AddJob(q, job[chld]);
+                        FI;
+                        chld -:= 1;
+                    OD;
+                    Expand( job, mine, q, threshold, solutions, puzzle);
+                FI;
+            FI;
+	END;
+
+	FUNCTION expand( j : Job; q : SHARED DJQ.queue; threshold : integer;
+			 solutions : SHARED IntObject; puzzle : Game);
+	job : JobList [0 .. 3*j.bound+1];    # branch factor 3
+	BEGIN
+		job[0] := j;
+		Expand( job, 0, q, threshold, solutions, puzzle);
+	END;
+
+	FUNCTION DoWorker( q : SHARED DJQ.queue; threshold : integer;
+			   solutions : SHARED IntObject; puzzle : Game);
+		j : Job;
+	BEGIN
+		# WHILE (solutions$value() = 0) AND DJQ.GetJob(q, j) DO
+		# deterministic results, please, so search complete tree
+		WHILE DJQ.GetJob(q, j) DO
+		    expand( j, q, threshold, solutions, puzzle);
+		OD;
+	END;
+
+
+	PROCESS Worker( q : SHARED DJQ.queue; threshold : integer;
+			bar : SHARED barrier; solutions : SHARED IntObject;
+			puzzle : Game);
+	BEGIN
+		sync(bar);		# Start at the same time
+		REPEAT
+		    DoWorker(q, threshold, solutions, puzzle);
+		UNTIL solutions$value() > 0;
+	END;
+
+
+	PROCESS OrcaMain();
+		q: DJQ.queue;	
+		bar: barrier;
+		solutions : IntObject;
+		start, stop: integer;
+		j : Job;
+		v : integer;
+		bound : integer;
+		puzzle: Game;
+		threshold : integer;
+                dummy : integer;
+        BEGIN
+		IF Argc() = 1 THEN
+		    # Use some suitable default values
+		    threshold := 5;
+		    puzzle$Init(58);
+		ELSIF Argc() = 3 THEN
+		    threshold := StringToInt(Argv(1),dummy);
+                    puzzle$Init( StringToInt(Argv(2),dummy));
+		ELSE
+                    WriteLine( "Usage: ", Argv(0), " threshold length");
+                    RETURN;
+                FI;
+		solutions$assign(0);
+
+		# initialize starting position
+		j.prev.dx := 0;
+		j.prev.dy := 0;
+		j.distance := 0;
+		FOR y IN 1..Nsqrt DO
+		    FOR x IN 1 .. Nsqrt DO
+			v := puzzle$Value(x,y);
+			j.board[x,y] := CHR(v);
+			j.distance +:= puzzle$Distance(v, x, y);
+			IF v = 0 THEN
+			    j.blank.x := x;
+			    j.blank.y := y;
+			FI;
+IF v = 0 THEN
+	Write( '.');
+ELSIF v <= 9 THEN
+	Write( v);
+ELSE
+	Write( CHR( ORD('A') + v-10));
+FI;
+		    OD;
+WriteLine();
+		OD;
+
+Strategy( bar, 1, 0);
+Strategy( solutions, 1, 0);
+#Strategy( puzzle, 1, 0);
+FOR cpu IN 0 .. NCPUS()-1 DO
+    Strategy( q[cpu], 0, cpu);
+OD;
+Strategy( q[NCPUS()], 1, 0);
+		bar$init( NCPUS());
+		FOR cpu IN 1 .. NCPUS()-1 DO
+		    FORK Worker( q, threshold, bar, solutions, puzzle) ON cpu;
+		OD;
+		sync(bar);			# all workers ready? GO
+		start := SysMilli();
+		bound := j.distance;
+		REPEAT
+WriteLine( "Try bound ", bound);
+			bound_event.event( record:{bound});
+			j.bound := bound;
+			DJQ.AddJob(q, j);
+			DoWorker( q, threshold, solutions, puzzle);
+			bound +:= 2;		# Property of 15-puzzle and
+						# Manhattan distance
+		UNTIL solutions$value() > 0;
+		stop := SysMilli();
+		WriteLine( "Found ", solutions$value(),
+			   " minimal solutions of ", j.bound, " steps");
+		PrintTime("ida", stop - start);
+		Finish();
+	END;
+END;

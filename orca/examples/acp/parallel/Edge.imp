@@ -1,0 +1,64 @@
+#=======================================================================
+#==== Edge.imp : Edge function definitions      		    ====
+#==                                                                   ==
+MODULE IMPLEMENTATION Edge;
+
+#=======================================================================
+# == functions                                                        ==
+#=======================================================================
+
+FUNCTION compare_edges(                       
+	edge1 : edge_info_t;			# first edge to compare
+	edge2 : edge_info_t			# second edge
+) : integer;                                	# Out: equal or not 
+
+BEGIN	
+	IF (edge1.my_index = edge2.my_index) AND
+	   (edge1.combinator = edge2.combinator) AND
+	
+	   (edge1.lc_index = edge2.lc_index) AND
+	   (edge1.lc_combinator = edge2.lc_combinator) AND
+	
+	   (edge1.rc_index = edge2.rc_index) AND
+           (edge1.rc_combinator = edge2.rc_combinator) AND
+           (edge1.rc_src_node = edge2.rc_src_node) AND
+
+           (edge1.from_node = edge2.from_node) AND
+           (edge1.to_node   = edge2.to_node) AND
+           (edge1.symbol_name =  edge2.symbol_name) AND
+	   (edge1.word = edge2.word) THEN
+ 		RETURN 0;
+	ELSE
+		RETURN -1;
+	FI;
+END;
+
+
+
+#
+# copy_edge() : copy an edge_info record
+#
+
+FUNCTION copy_edge(
+	dest : 	OUT edge_info_t;		# dest edge
+	src :  	edge_info_t			# src edge
+);
+
+BEGIN
+	dest.from_node := src.from_node;
+	dest.to_node := src.to_node;
+	dest.symbol_name := src.symbol_name;
+	dest.word := src.word;
+	
+	dest.my_index := src.my_index;
+	dest.combinator := src.combinator;
+
+	dest.lc_index := src.lc_index;
+	dest.lc_combinator := src.lc_combinator;
+
+	dest.rc_index := src.rc_index;
+	dest.rc_combinator := src.rc_combinator;
+	dest.rc_src_node := src.rc_src_node;
+END;
+
+END;

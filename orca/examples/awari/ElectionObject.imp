@@ -1,0 +1,96 @@
+#-----------------------------------------------#
+# Author : E.J.J. de Waal			#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+
+OBJECT IMPLEMENTATION ElectionObject;
+
+cleared:	integer;	# all polls up till "cleared" return "no"
+FinalIter:	integer;	# poll "FinalIter" (if > 0) returns "yes"
+nr_voters:	integer;	# total number of voters
+total_votes:	integer;	# total number of votes counted
+nr_dbpart_objects: integer; 	# total number of DB parts
+total_registered:  integer;	# number of registered workers
+total_waiting:	integer;	# number of waiting workers
+voting_round:	integer;	# number of round voting for
+
+
+
+OPERATION Init(nr_dbp_objects: IN integer);
+  # Init these fields
+BEGIN
+    cleared := 0;
+    FinalIter:= 0;
+    total_votes := 0;
+    nr_voters := nr_dbp_objects;
+    total_registered := 0;
+    total_waiting := 0;
+    voting_round := 0;
+END;
+
+
+
+OPERATION Register(round: IN integer);
+  # Before one can vote, one has to be registered for the right round
+BEGIN
+    GUARD (round = (voting_round + 1))
+    DO
+	IF (total_registered = 0) THEN
+	    total_waiting := 0;
+	FI;
+	total_registered +:= 1;
+    OD;
+END;
+
+
+OPERATION Await_To_Vote();
+  # Wait for the right moment to vote
+BEGIN
+    GUARD (total_registered = nr_voters)
+    DO
+	total_waiting +:= 1;
+	IF (total_waiting = nr_voters) THEN
+	    total_registered := 0;
+	    voting_round +:= 1;
+	FI;
+    OD;
+END;
+
+
+OPERATION Vote(round: IN integer; YesOrNo: IN boolean);
+ # "Your votes please..."
+BEGIN
+  ASSERT(round <= cleared+1);
+  IF round = cleared+1 THEN
+     IF YesOrNo THEN
+	total_votes +:= 1;
+	IF total_votes = nr_voters THEN
+	   ASSERT(FinalIter = 0);
+	   FinalIter := round;
+	   total_votes := 0;
+	FI;
+     ELSE
+	cleared +:= 1;
+	total_votes := 0;
+     FI;
+  FI;
+END;
+
+
+
+OPERATION AwaitDecision(round: IN integer): boolean;
+  # In the end, we all want to know the results...
+BEGIN
+    GUARD FinalIter = round
+    DO
+	RETURN true;
+    OD;
+    GUARD cleared >= round
+    DO
+	RETURN false;
+    OD;
+END;
+
+
+END; # ElectionObject

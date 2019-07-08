@@ -1,0 +1,121 @@
+ ## ===========================================================================
+ ##
+ ##    File:    worm_go.spf
+ ##    Type:    generic object specification
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ GENERIC( TYPE item_pt )
+ OBJECT SPECIFICATION worm_go ;
+
+ ##
+ ##  The  instantiated  module implements an object `worm_go' that is intented
+ ##  for transient storage of data items of type  `item_pt'  in  a  write-one-
+ ##  read-many fashion.  The object is to be used in situations where multiple
+ ##  processes are all  executing  the  same  iterative  loop  which  at  each
+ ##  iteration has only a single process sending data to all others.
+ ##
+ ##  Because  the  object will almost certainly be replicated, it is vital for
+ ##  an efficient implementation that retrieving operations do not  alter  the
+ ##  state of the object, i.e. a read must be "pure".
+ ##
+ ##  However, the object must still ensure that:
+ ##
+ ##  - a  `get' operation performed during a particular iteration blocks until
+ ##    the data item of that iteration is actually available.
+ ##  - a  `put'  operation  does not re-use storage inside the object which is
+ ##    still occupied by a previously put in data item that has not  yet  been
+ ##    retrieved by all processes concerned.
+ ##    
+ ##  These  requirements  can  be met, provided that a sliding window of say N
+ ##  consecutive iterations  can  be  identified  in  which  each  process  is
+ ##  guaranteed to have performed at least one put operation.  In most cases N 
+ ##  will equal the number of processes involved because  the  processes  will
+ ##  each  perform  a  put operation in turn. In the ulimate case N will equal
+ ##  the number of iterations.
+ ##    
+ ##  If  this latter option is practical is questionable, because to implement
+ ##  the requirements above, the object  will  buffer  N  iterations  of  data
+ ##  items.
+ ##
+ ##  Because  of the buffering, put and get operations should be provided with
+ ##  an integer iteration identifier in order to  communicate the  right  data
+ ##  item  for  each  iteration.  The iteration identifier is required to be a
+ ##  positive integer that increments by one at each iteration.
+ ##
+
+ ## ===========================================================================
+ ## 
+ ##  Exported Modules and Types:
+ ## 
+ ## ---------------------------------------------------------------------------
+
+ MODULE item_array_m = NEW array_gm( item_pt );
+ TYPE   item_array   = item_array_m.array_gt ;
+
+
+ ## ===========================================================================
+ ## 
+ ##  Exported Operations:
+ ## 
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ init         - Initialize the object to handle
+ ##
+ ##    n : integer  - windowsize `n'
+ ##
+
+ OPERATION init( n : integer );
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ put             - Store
+ ##
+ ##    item : item_pt  - the data `item'
+ ##      id : integer  - of iteration `id'
+ ##
+
+ OPERATION put( item : item_pt 
+              ;   id : integer 
+             );
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ get             - Retrieve
+ ##
+ ##    item : item_pt  - the data `item'
+ ##      id : integer  - of iteration `id'
+ ##
+
+ OPERATION get( item : OUT item_pt
+              ;   id :     integer
+             );
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  The more data items that are buffered the more iterations a process could
+ ##  "run behind"  on  others.  To  retrieve all data items from the requested
+ ##  iteration up to and including the most recently stored, use `mget'.
+ ##
+ ##  @ mget                - Retrieve
+ ##
+ ##    items : item_array  - all currently available data `items'
+ ##       id : integer     - starting with that of iteration `id' onward
+ ##
+ ##  The `items' array can be indexed by iteration identifier. The lower bound
+ ##  will  equal  `id' and the upper bound will equal the iteration identifier
+ ##  of the most recently stored data item. It will at least equal `id' and at
+ ##  most  equal  `id + N -1' (Because in that case, iteration `id + N' is yet
+ ##  be provided by the process now performing the `mget' operation).
+ ##
+
+ OPERATION mget( items : OUT item_array
+               ;    id :     integer
+              );
+
+ ## ===========================================================================
+
+ END
+ GENERIC ;

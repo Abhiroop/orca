@@ -1,0 +1,86 @@
+# $Id: RowCollect.imp,v 1.1 1997/05/27 13:08:57 ceriel Exp $
+
+OBJECT IMPLEMENTATION RowCollection; 
+FROM InOut  IMPORT WriteString, WriteInt;
+
+	TYPE collection = ARRAY[integer] OF RowType;
+	CONST Infinity = 32000;
+
+	tab: collection;
+
+	OPERATION init(size: integer);
+		tmp: collection[1..size];
+		initialRow, thisRow: RowType[1..size];
+                
+	BEGIN
+		tab := tmp;
+		FOR i IN 1..size DO
+			initialRow[i]:=Infinity;
+		OD;
+		FOR i IN 1..size DO
+			thisRow := initialRow;
+			thisRow[i] := 0;
+			SELF$AddRow(i, thisRow);
+		OD;
+	END;
+
+	OPERATION AddRow(iter: integer; R: RowType);
+	BEGIN
+		tab[iter] := R;
+	END;
+
+	OPERATION AwaitRow(iter: integer): RowType;
+	BEGIN
+		# wait until row "iter" is defined
+		GUARD (LB(tab[iter]) <= UB(tab[iter])) DO
+			RETURN tab[iter];
+		OD;
+	END;
+
+        OPERATION at(row, column: integer): integer;
+	BEGIN
+		RETURN(tab[row][column]);
+	END;
+
+        OPERATION rowAt(row : integer) : RowType;
+	BEGIN
+		RETURN(tab[row]);
+	END;
+
+
+
+        OPERATION atPut(i,j: integer; k : integer);
+	BEGIN
+		tab[i][j] := k;
+	END;
+
+	OPERATION printIt();
+	BEGIN
+		FOR i IN LB(tab)..UB(tab) DO
+			WriteString("(");
+      			FOR j IN LB(tab)..UB(tab) DO
+				WriteInt(SELF$at(i,j));
+        			WriteString(" ");
+      			OD;
+      			WriteString(")");
+      			WriteLine();
+    		OD;
+	END;
+
+	OPERATION printItA();
+        # distance 0 -> "A" , distance infinity -> "*"
+	CONST a = 65;
+	CONST asterisk = 42 - a;
+	d : integer;
+	BEGIN
+		FOR i IN LB(tab)..UB(tab) DO
+      			FOR j IN LB(tab)..UB(tab) DO
+				d := SELF$at(i,j);
+				IF d > 127-a THEN d := asterisk; FI;
+        			Write(CHR(d+a));
+      			OD;
+      			WriteLine();
+    		OD;
+	END;
+
+END;

@@ -1,0 +1,149 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+#ifndef __PAN_MCAST_BUF_CI__
+#define __PAN_MCAST_BUF_CI__
+
+
+#ifndef RELIABLE_NETWORK
+
+
+/* Fifo message buffer implementation.
+ *
+ * Two varieties of many functions:
+ *  1 really implements it
+ *  2 locks the buffer, calls 1, unlocks the buffer
+ */
+
+#include <stdio.h>
+
+#include "pan_sys_msg.h"
+
+#include "pan_sync.h"			/* Use macros */
+
+#include "pan_mcast_header.h"
+#include "pan_mcast_buf.h"
+
+
+
+#ifndef STATIC_CI
+#  define STATIC_CI	static
+#endif
+
+
+
+/* Circular message buffer implementation.
+ *
+ * The implementation increases the size to a power of two for cheap MOD
+ * operations.
+ *
+ * Interface:
+ *	get()/put() to enter a new entry/to delete the oldest entry
+ *	get() waits if the buffer is full until a put() signals it.
+ * Semantics:
+ *	last indicates the oldest living entry
+ *	next indicates the next free entry
+ */
+
+
+
+
+/* Initialisation, termination */
+
+pan_buf_p
+pan_buf_create(int size, pan_mutex_p lock)
+{
+    pan_buf_p     buf;
+    int           i;
+    unsigned int  two_power;
+
+    buf = pan_malloc(sizeof(pan_buf_t));
+
+    two_power = 1;
+    while (two_power < size) {
+	two_power *= 2;
+    }
+    buf->buf = pan_malloc(two_power * sizeof(void *));
+
+    buf->size = two_power;
+    for (i = 0; i < two_power; i++) {
+	buf->buf[i]= NULL;
+    }
+    buf->last = 0;
+    buf->next = 0;
+
+    buf->lock     = lock;
+    buf->non_full = pan_cond_create(lock);
+    buf->waiters  = 0;
+
+    return buf;
+}
+
+
+int
+pan_buf_clear(pan_buf_p buf, void (*msg_clear)(pan_msg_p msg))
+{
+    int i;
+    int n;
+
+    pan_cond_clear(buf->non_full);
+
+    n = buf->next - buf->last;
+    for (i = buf->last; i < buf->next; i++) {
+	msg_clear(BUF(buf, i));
+    }
+
+    pan_free(buf->buf);
+
+    pan_free(buf);
+
+    return n;
+}
+
+
+STATIC_CI pan_msg_p
+pan_buf_get(pan_buf_p buf)
+{
+    pan_msg_p msg;
+
+    msg = BUF(buf, buf->last);
+#ifndef NDEBUG
+    BUF(buf, buf->last) = NULL;
+#endif
+    ++buf->last;
+    if (buf->waiters > 0) {
+	pan_cond_signal(buf->non_full);
+    }
+
+    return msg;
+}
+
+
+STATIC_CI void
+pan_buf_put(pan_buf_p buf, pan_msg_p msg)
+{
+    if (buf->next - buf->last >= buf->size) {
+	++buf->waiters;
+	while (buf->next - buf->last >= buf->size) {
+	    pan_cond_wait(buf->non_full);
+	}
+	--buf->waiters;
+    }
+
+    assert(BUF(buf, buf->next) == NULL);
+    BUF(buf, buf->next) = msg;
+    ++buf->next;
+
+    if (buf->waiters > 0 && buf->next - buf->last < buf->size) {
+	pan_cond_signal(buf->non_full);
+    }
+}
+
+
+#endif
+
+
+#endif

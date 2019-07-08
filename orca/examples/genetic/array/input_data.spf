@@ -1,0 +1,11 @@
+MODULE SPECIFICATION input_data;
+
+FROM GenTypes IMPORT configuration;
+FROM BoolVector IMPORT BoolMatrix;
+FUNCTION read_configuration (config: SHARED configuration): boolean;
+FUNCTION read_matrix (matrix_file: string; nb_nodes: OUT integer; 
+			maxdegree: OUT integer; G: SHARED BoolMatrix): boolean;
+FUNCTION print_matrix (nb_nodes: integer; G: BoolMatrix);
+FUNCTION print_configuration (config: configuration);
+
+END;

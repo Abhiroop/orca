@@ -1,0 +1,41 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION FloatVector;
+
+# TYPE FloatVector = ARRAY[integer] OF real;
+# TYPE FloatMatrix = ARRAY[integer] OF FloatVector;
+
+FUNCTION DynFloatVector(N : integer) : FloatVector;
+
+a_dyn : FloatVector[1 .. N];
+
+BEGIN
+    RETURN a_dyn;
+END;
+
+
+FUNCTION DynFloatMatrix(Nrow : integer;
+			Ncol : integer) : FloatMatrix;
+
+a_dyn : FloatMatrix[1 .. Nrow][1 .. Ncol];
+# a_dyn : ARRAY[integer 1 .. Nrow] OF FloatVector[integer 1 .. Ncol];
+
+BEGIN
+    RETURN a_dyn;
+END;
+
+
+FUNCTION DynFloatMatrix3(Nx : integer;
+			 Ny : integer;
+			 Nz : integer) : FloatMatrix3;
+
+a_dyn : FloatMatrix3[1 .. Nx][1 .. Ny][1 .. Nz];
+# a_dyn : ARRAY[integer 1 .. Nrow] OF FloatVector[integer 1 .. Ncol];
+
+BEGIN
+    RETURN a_dyn;
+END;
+
+END;

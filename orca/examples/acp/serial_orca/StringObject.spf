@@ -1,0 +1,40 @@
+# ========================================================================
+# == File:      StringObject.spf 					==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  string object operations. 				==
+# ========================================================================
+
+MODULE SPECIFICATION StringObject;
+
+#=========================================================================
+# == operation declarations						==
+#=========================================================================
+
+#
+# compare-string() : return {-1, 0, 1} if string S1 is
+#		     lexicographically {smaller, equal, larger} than string S2
+#
+
+FUNCTION compare_string(
+	string1 : string;			# first string
+	string2	: string			# second string
+) : integer;					# smaller, equal or greater
+
+
+#
+# length_string() : return length of a string
+# 
+
+FUNCTION length_string(
+	str :	string				# the string
+) : integer;					# length of the string
+
+
+
+END;
+
+
+
+
+

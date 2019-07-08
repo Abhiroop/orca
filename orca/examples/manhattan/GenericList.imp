@@ -1,0 +1,181 @@
+GENERIC OBJECT IMPLEMENTATION GenericList;
+
+FROM InOut IMPORT
+	WriteString,
+	WriteLn;
+
+TheList : ListType;
+
+OPERATION Insert (el : string; inf : T);
+	n : NodeType;
+BEGIN
+	n := ADDNODE (TheList);
+	TheList[n].id := el;
+	TheList[n].info := inf;
+	IF TheList.root /= NIL THEN
+		TheList[n].next := TheList.root;
+		TheList[n].prev := TheList[TheList.root].prev;
+		TheList[TheList[TheList.root].prev].next := n;
+		TheList[TheList.root].prev := n;
+	ELSE
+		TheList.root := n;
+		TheList[n].next := n;
+		TheList[n].prev := n;
+	FI;
+
+	TheList.nr +:= 1;	
+END;
+
+
+
+# Update
+#
+# PRE: SELF$Exists (el) == TRUE
+# POST: 
+OPERATION Update (el : string; inf : T);
+	n,
+	last : NodeType;
+BEGIN
+	IF TheList.root = NIL THEN
+		RETURN;
+	FI;
+	n := SELF$First ();
+	last := SELF$Last ();
+
+	WHILE n /= last DO
+		IF el = TheList[n].id THEN
+			TheList[n].info := inf;
+			RETURN;
+		FI;
+		n := SELF$Next (n);
+	OD;
+	IF el = TheList[n].id THEN
+		TheList[n].info := inf;
+	FI;
+	RETURN;
+END;
+
+
+	
+OPERATION Exists (el : string) : boolean;
+	n,
+	last : NodeType;
+BEGIN
+	IF TheList.root = NIL THEN
+		RETURN false;
+	FI;
+
+	n := SELF$First ();
+	last := SELF$Last ();
+
+	WHILE n /= last DO
+		IF TheList[n].id = el THEN
+			RETURN true;
+		FI;
+		n := SELF$Next (n);
+	OD;
+	IF TheList[last].id  = el THEN
+		RETURN true;
+	FI;
+	RETURN false;
+END;
+
+
+
+OPERATION Info (el : string) : T;
+	n,
+	last : NodeType;
+	dummy : T;
+BEGIN
+	IF TheList.root = NIL THEN
+		RETURN dummy;
+	FI;
+
+	n := SELF$First ();
+	last := SELF$Last ();
+
+	WHILE n /= last DO
+		IF TheList[n].id = el THEN
+			RETURN TheList[n].info;
+		FI;
+		n := SELF$Next (n);
+	OD;
+	IF TheList[last].id = el THEN
+		RETURN TheList[last].info;
+	FI;
+	RETURN dummy;
+END;
+
+
+
+
+OPERATION First () : NodeType;
+BEGIN
+	RETURN TheList.root;
+END;
+
+
+OPERATION Last () : NodeType;
+BEGIN
+	RETURN TheList[TheList.root].prev;
+END;
+
+
+
+OPERATION Next (n : NodeType) : NodeType;
+BEGIN
+	RETURN TheList[n].next;
+END;
+
+
+OPERATION Previous (n : NodeType) : NodeType;
+BEGIN
+	RETURN TheList[n].prev;
+END;
+
+
+OPERATION Size () : integer;
+BEGIN
+	RETURN TheList.nr;
+END;
+
+
+OPERATION Name (n : NodeType) : string;
+BEGIN
+	IF n = NIL THEN 
+		RETURN "";
+	ELSE
+		RETURN TheList[n].id;
+	FI;
+END;
+
+
+OPERATION Print (foo : PrintFunType);
+	s : integer;
+	n : NodeType;
+	name : string;
+	info : T;
+BEGIN
+	s := SELF$Size ();
+	IF s /= 0 THEN n := SELF$First (); FI;
+	WHILE s /= 0 DO
+		name := SELF$Name (n);
+		WriteString (name);
+		WriteString (" ;");
+		WriteLn ();
+		info := SELF$Info (name);
+		foo (info);
+		s -:= 1;
+		IF s /= 0 THEN
+			n := SELF$Next (n);
+		FI;
+	OD;
+	
+END;
+
+
+BEGIN
+	TheList.nr := 0;
+	TheList.root := NIL;
+END;
+

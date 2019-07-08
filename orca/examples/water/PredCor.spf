@@ -1,0 +1,40 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE SPECIFICATION PredCor;
+
+IMPORT	LongRealObject;
+FROM	GlobalType	IMPORT	GlobalObject;
+FROM	Common		IMPORT	PCC_Type, TLC_Type;
+FROM	VarObject	IMPORT	VarType;
+
+
+### Predicts new values for displacement and its five derivatives
+### NORDER must be 7 for a sixth-order method
+#
+FUNCTION Predict(Data           : SHARED GlobalObject;
+		 NORDER, NrMols : integer;
+		 TLC            : TLC_Type);
+
+FUNCTION DoPredict(Atom         : SHARED VarType;
+                 NORDER, NrMols : integer;
+                 TLC            : TLC_Type);
+
+
+### Corrects the predicted values, based on forces etc.
+### NORDER must be 7 for a sixth-order method
+#
+FUNCTION CorrectBoundary(Data           : SHARED GlobalObject;
+			 TKIN, Total    : SHARED LongRealObject;
+			 NORDER, NrMols : integer;
+			 PCC            : PCC_Type;
+			 BOXL           : longreal);
+
+FUNCTION DoCorrectBoundary(Atom           : SHARED VarType;
+                         NORDER, NrMols : integer;
+                         PCC            : PCC_Type;
+                         BOXL           : longreal;
+                         KinEnergy      : OUT longreal);
+
+END;

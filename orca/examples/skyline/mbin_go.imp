@@ -1,0 +1,126 @@
+ ## ===========================================================================
+ ##
+ ##    File:    mbin_go.imp
+ ##    Type:    generic object implementation
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ GENERIC
+ OBJECT IMPLEMENTATION mbin_go ;
+
+ ## ===========================================================================
+ ##
+ ##  Data Fields
+ ##
+ ## ---------------------------------------------------------------------------
+
+ ITEM : item_pt ;   #  Data item to store.
+ C    : integer ;   #  Countdown of get operations performed.
+ N    : integer ;   #  Nr of reads required before object is tagged empty.
+
+                    #  Needed for tget & tput set of operations:
+ ID   : integer ;   #  store current transaction id.
+
+
+ ## ===========================================================================
+ ##
+ ##  Exported Operations:
+ ##
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ init        - Initialize the object to allow 
+ ##
+ ##    n : integer - `n' `get' operations per `put' operation. The object will
+ ##                  be empty. 
+ ##
+
+ OPERATION init( n : integer );
+
+ BEGIN C := 0 ;
+       N := n ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ put             - Store
+ ##
+ ##    item : item_pt  - the data `item' if the object is empty.
+ ##                      Block otherwise. 
+ ##
+
+ OPERATION put( item : item_pt );
+
+ BEGIN GUARD C = 0
+       DO    ITEM := item ;
+             C    := N    ;
+       OD    ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ get             - Retrieve
+ ##
+ ##    item : item_pt  - the data `item' if the object  is  not  empty.
+ ##                      Block otherwise. 
+ ##
+ ##  After  a  total of n get operation have been performed on a filled object,
+ ##  the object will be emptied.
+ ##
+
+ OPERATION get( item : OUT item_pt );
+
+ BEGIN GUARD C > 0
+       DO    item := ITEM ;
+             C   -:= 1    ;
+       OD    ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ tput            - Store
+ ##
+ ##    item : item_pt  - the data `item' if the object is empty and
+ ##    id   : integer  - include its transaction identifier. Block otherwise.
+ ##
+
+ OPERATION tput( item : item_pt
+	       ;   id : integer
+              );
+
+ BEGIN GUARD C = 0
+       DO    ITEM := item ;
+             ID   := id   ;
+             C    := N    ;
+       OD    ;
+ END   ;
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ tget            - Retrieve
+ ##
+ ##    item : item_pt  - the data `item' if the object is not empty and
+ ##    id   : integer  - its current transaction identifier matches `id'.
+ ##                      Block otherwise.
+ ##
+
+ OPERATION tget( item : OUT item_pt
+               ;   id :     integer
+  	      );
+
+ BEGIN GUARD ( C > 0 ) AND ( ID = id )
+       DO    item := ITEM ;
+             C   -:= 1    ;
+       OD    ;
+ END   ;
+
+
+ ## ===========================================================================
+
+ END
+ GENERIC;

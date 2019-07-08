@@ -1,0 +1,161 @@
+MODULE IMPLEMENTATION MoCaWorker;
+
+IMPORT	Barrier;
+IMPORT  IntObject;
+IMPORT  VarObject;
+IMPORT  RandObject;
+FROM	Common	IMPORT	NFIELD, NTRACK,
+			IntKinsType, RealKinsType, RealTableType,
+			IntKind2Type, RealKind2Type, CombiType,
+			IntRecordType, RealRecordType, ConstType;
+FROM	SetUp	IMPORT	TrackInit, DoInit;
+FROM	Ions	IMPORT	MoveIons, CheckR;
+FROM	Result	IMPORT	Remove, Result;
+FROM	Barrier	IMPORT	Sync;
+
+
+PROCESS	MoCaWorker(GLOB             : SHARED VarObject;
+		   BARRIER, CATCHER : SHARED Barrier;
+		   RAND             : SHARED RandObject;
+		   CNST             : ConstType;
+		   WorkersAlive     : SHARED IntObject);
+
+	STOP, OUT1, OUT2                                    : boolean;
+	MyCPU, SEED, NRP, NRE, IDX,
+	NRREAC, FLOATALL, FLOATCPU, ISER                    : integer;
+	AD, FEXM, T, TDT, ESCC, SUMES, SUMESSQ, pteav, sfav : real;
+
+	FEX       : RealTableType;
+	IKIN      : IntKinsType;
+	INT       : IntKind2Type;
+	AKT, SUMK : RealKinsType;
+	AT, SUM   : RealKind2Type;
+	PR        : CombiType;
+	NRECORD   : IntRecordType[1 .. 2, 1 .. CNST.MAX / 2];
+	TRECORD   : RealRecordType[1 .. 2, 1 .. CNST.MAX / 2];
+
+BEGIN
+ 
+    ###	Enforce piggybacked acknowledgement of FORK, to survive copying
+    ###	of large objects to numerous processes. Hack!!!
+ 
+	WorkersAlive$inc();
+
+	FOR i IN 1 .. 3 DO
+	    FEX[i] := 0.0;
+	OD;
+
+	MyCPU := MYCPU();
+
+	IF MyCPU = 0 THEN
+	    OUT1 := true;	# Used to see if data need to be written
+	FI;
+
+
+    ### Loop over all electric fields.
+
+	FOR ifield IN 1 .. NFIELD DO
+
+	    FEXM   := CNST.EFIELD[ifield] * 1.0E+5;
+	    FEX[1] := FEXM;
+
+	    IF MyCPU = 0 THEN
+		OUT2  := true;
+		pteav := 0.0;	# Esc. probability averaged over tracks
+		sfav  := 0.0;	# Singlet fraction averaged over tracks
+	    FI;
+
+
+	### Loop over all tracks.
+
+	    FOR itrack IN 1 .. NTRACK DO
+
+		### Initialize/reset global variables.
+
+		TrackInit(CNST, itrack, ISER, AD, ESCC,
+			  SUMES, SUMESSQ, PR, IKIN, INT, SUMK, SUM);
+ 
+
+		### Main loop over clusters.
+
+		FOR irep IN 1 .. CNST.NREP DO
+
+		    ### Reset the initial structure.
+
+		    FLOATALL := CNST.DAT[itrack].Nion0;
+		    FLOATCPU := CNST.NCPUS;
+		    NRREAC   := 0;
+		    T        := 0.0;
+		    STOP     := false;
+
+		    DoInit(GLOB, CNST, FLOATALL,
+			   itrack, NRP, NRE, IDX, SEED, RAND);
+
+
+		### Loop over time steps (T < CNST.TMAX).
+
+		    WHILE true DO
+
+			### Check if any reactions occur.
+
+			IF NOT CheckR(GLOB, BARRIER, CNST, T, FLOATALL,
+				      FLOATCPU, NRREAC, NRP, NRE, IDX,
+				      STOP, IKIN, NRECORD, TRECORD) THEN
+			    RETURN;
+			FI;
+
+
+			### Exit this loop if no more elements are left
+			### or if the time period (CNST.TMAX) is over.
+			### If a CPU-reduction has occurred, catch the
+			### processes that are no longer needed during
+			### this iteration.
+
+			IF (STOP) OR (T >= CNST.TMAX) OR
+				     (MyCPU >= FLOATCPU) THEN
+			    Sync(CATCHER, CNST.NCPUS);
+			    EXIT;
+			ELSE
+
+
+			### NOTE: GetTime contains integrated
+			###       synchronization.
+
+			    TDT := GLOB$GetTime(FLOATCPU);
+			    T  +:= TDT;
+			FI;
+
+
+			### Replace all elements according to the
+			### new electric fields calculated in CheckR.
+
+			MoveIons(GLOB, CNST, TDT,
+				 NRP, NRE, FLOATCPU, FEX, SEED, RAND);
+		    OD;
+
+
+		    IF MyCPU = 0 THEN
+
+			### Remove elements that exist after TMAX secs.
+
+			IF NOT STOP THEN
+			    Remove(GLOB, CNST, CNST.DAT[itrack].Nion0,
+				   FLOATCPU, FEXM, NRREAC, ESCC,
+				   FEX, NRECORD, TRECORD);
+			FI;
+
+			### All elements reacted; produce some results.
+
+			Result(CNST, ifield, irep, itrack,
+			       AD, SEED, NRREAC, ISER, ESCC,
+			       SUMES, SUMESSQ, pteav, sfav, FEX,
+			       NRECORD, TRECORD, PR, IKIN, INT,
+			       AKT, SUMK, AT, SUM, OUT1, OUT2, RAND);
+		    FI;
+		OD;
+	    OD;
+	OD;
+END;
+
+
+END;

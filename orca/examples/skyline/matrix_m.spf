@@ -1,0 +1,90 @@
+ ## ===========================================================================
+ ##
+ ##    File:    matrix_m.spf
+ ##    Type:    module specification
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ MODULE SPECIFICATION matrix_m ;
+
+ ## ===========================================================================
+ ##
+ ##  Exported Modules and Types:
+ ##
+ ## ---------------------------------------------------------------------------
+
+ MODULE intvec_m  = NEW array_gm( integer );
+ TYPE   intvec    =  intvec_m.array_gt ;
+
+ MODULE intvecs_m = NEW array_gm( intvec  );
+ TYPE   intvecs   = intvecs_m.array_gt ;
+
+ MODULE vector_m  = NEW array_gm( real    );
+ TYPE   vector    =  vector_m.array_gt ;
+
+ MODULE vectors_m = NEW array_gm( vector  );
+ TYPE   vectors   = vectors_m.array_gt ;
+
+ TYPE   matrix    = RECORD N   : integer ;
+                           U   : vectors ;  ## supra-diagonal (incl.) entries.
+                           L   : vectors ;  ##   sub-diagonal (excl.) entries.
+                    END    ;
+
+ TYPE   intmtx    = RECORD N   : integer ;
+                           U   : intvecs ;
+                           L   : intvecs ;
+                    END    ;
+
+
+ ## ===========================================================================
+ ##
+ ##  Exported Functions:
+ ##
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ getreal         - Transform an
+ ##
+ ##    iv : intvector  - `integer' vector
+ ##    ov : vector     - into an identical `real' vector
+ ##
+
+ FUNCTION getreal( iv :     intvec
+		 ; ov : OUT vector[ LB( iv )..UB( iv )]
+		);
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ vv_prod         - Determine inner product
+ ##
+ ##    from : integer  - over a specified
+ ##      to : integer  - common range,
+ ##      v1 : vector   - of two
+ ##      v2 : vector   - vectors
+ ##
+ ##         : real     - and return the result.
+ ##
+ 
+ FUNCTION vv_prod( from : integer
+		 ;   to : integer
+		 ;   v1 : vector
+		 ;   v2 : vector
+	        )       : real ; 
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ mv_prod     - Perform multiplication of
+ ##
+ ##    M : matrix  - a matrix
+ ##    x : vector  - and a vector
+ ##    y : vector  - return the resulting vector.
+ ##
+
+ FUNCTION  mv_prod( M :     matrix             ;
+	 	    x :     vector             ;
+		    y : OUT vector[ 1 .. M.N ]);
+
+ ## ===========================================================================
+
+ END ;

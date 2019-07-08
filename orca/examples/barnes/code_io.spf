@@ -1,0 +1,18 @@
+MODULE SPECIFICATION code_io;
+
+FROM LocalMemory IMPORT LocalMemoryType;
+FROM GlobalMemory IMPORT GlobalMemory;
+IMPORT Node;
+FROM barrier IMPORT barrier;
+
+FUNCTION initoutput(allnodes: SHARED Node);
+FUNCTION output(Local:SHARED LocalMemoryType;
+		allbodies:SHARED Node;
+                Global:SHARED GlobalMemory;
+                b:SHARED barrier);
+FUNCTION diagnostics(allbodies:SHARED Node;
+                     Local:SHARED LocalMemoryType);
+
+END;
+
+

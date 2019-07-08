@@ -1,0 +1,9 @@
+OBJECT SPECIFICATION AckQueue;
+	TYPE Ack_T = RECORD
+		start: integer;
+		time: integer;
+	END;
+
+	OPERATION Add(time: IN Ack_T);
+	OPERATION Get(time: OUT Ack_T);
+END;

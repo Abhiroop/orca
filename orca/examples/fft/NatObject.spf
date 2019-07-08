@@ -1,0 +1,9 @@
+OBJECT SPECIFICATION NatObject;
+	OPERATION dummy();  # used for benchmarks
+	OPERATION value(): integer;
+	OPERATION assign(v: integer);
+	OPERATION min(v: integer);
+	OPERATION inc();
+	OPERATION dec();
+	OPERATION AwaitValue(v: integer): integer;
+END;

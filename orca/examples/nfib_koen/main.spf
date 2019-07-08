@@ -1,0 +1,5 @@
+MODULE SPECIFICATION main;
+
+PROCESS OrcaMain();
+
+END;

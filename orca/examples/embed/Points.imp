@@ -1,0 +1,50 @@
+MODULE IMPLEMENTATION Points;
+	FROM InOut IMPORT WriteString, WriteLongReal;
+	FROM Math IMPORT sqrt;
+ 
+	FUNCTION distanceBetween( p: Point; q: Point) : longreal;
+	  # the euclidean distance
+	  d: longreal;
+	BEGIN
+	  d := 0.0;
+	  FOR i IN 1..SIZE(p) DO
+	    d := d + (p[i]-q[i]) * (p[i]-q[i]);
+	  OD;
+	  RETURN(sqrt(d));
+	END;
+
+	FUNCTION length( p: Point) : longreal;
+	  # the euclidean length
+	  d: longreal;
+	BEGIN
+	  d := 0.0;
+	  FOR i IN 1..SIZE(p) DO
+	    d := d + p[i] * p[i];
+	  OD;
+	  RETURN(sqrt(d));
+	END;
+
+	FUNCTION normalized(p : Point) : Point;
+	z : Point;
+	l : longreal;
+   	BEGIN
+          FOR i IN 1..SIZE(p) DO z[i] := 0.0; OD;
+	  l := length(p);
+	  IF ABS(l) <= 0.000001 THEN RETURN z; FI;
+	  FOR i IN 1..SIZE(p) DO
+	    p[i]:= p[i] / l;
+	  OD;
+	RETURN(p);
+	END;
+
+	FUNCTION printIt( p: Point);
+	BEGIN
+	  WriteString("{");
+	  FOR i IN 1..SIZE(p)-1 DO 
+	    WriteLongReal(p[i]); 
+	    WriteString(", ");
+	  OD;
+	  WriteLongReal(p[SIZE(p)]);
+	  WriteString("}");
+	END;
+END;

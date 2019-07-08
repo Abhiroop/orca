@@ -1,0 +1,92 @@
+MODULE IMPLEMENTATION TspOpt;
+
+
+IMPORT Random;
+IMPORT IntObject;
+IMPORT SpecificationObject;
+IMPORT TourObject;
+
+FROM Time IMPORT 
+	SysMilli;
+FROM TspTypes IMPORT
+	NodeSubset;
+
+
+CONST MaxConsecutiveBadSwaps = 1000;
+
+
+
+PROCESS Worker (t : TourObject;
+		best : SHARED TourObject;
+		spec : SpecificationObject;
+		limit : integer;	# Time limit of execution (seconds)
+		working : SHARED IntObject);
+	rand : Random;
+	rtemp : Random;
+	temp : TourObject;	# Used for checking value regarding to best
+	terminate : boolean;
+	start_t : integer;
+	bad_swaps : integer;	# Number of swaps since last improvement
+BEGIN
+	bad_swaps := 0;
+	start_t := SysMilli ();
+	temp$Initialize (t$Nodes_Set (), spec);
+	rtemp$init (SysMilli ());
+	rand$init (TRUNC(rtemp$val01 () * FLOAT (MAX(integer))));
+	terminate := false;
+
+	WHILE NOT terminate DO
+		t$SwapRandom (rand);
+		temp$Clear ();
+		temp$BestInsertArray (t$Nodes_Array ());
+		IF temp$Value () < best$Value () THEN
+			best := temp;
+			bad_swaps := 0;
+		ELSE
+			bad_swaps +:= 1;
+			IF bad_swaps > MaxConsecutiveBadSwaps THEN
+				bad_swaps := 0;
+			FI;
+		FI;
+		terminate := (((SysMilli () - start_t) ) > limit); 
+	OD;
+	working$dec ();
+END;
+
+
+
+PROCESS TspProcess (t : SHARED TourObject;
+			nodes : NodeSubset;
+			spec : SpecificationObject;
+			firstCpu : integer;
+			lastCpu : integer;
+			working : SHARED IntObject;
+			value : integer);
+	w : IntObject;
+	best : TourObject;
+BEGIN
+	t$Initialize (nodes, spec);
+	t$Clear ();
+	t$BestInsert (nodes);
+	best := t;
+
+	w$assign (0);
+	FOR i IN firstCpu..lastCpu DO
+		w$inc ();
+		FORK Worker (t, best, spec, value, w) ON (i);
+	OD;
+	w$AwaitValue (0);
+	t := best;
+	working$dec ();
+END;
+
+
+END;
+
+
+
+
+
+
+
+

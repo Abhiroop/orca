@@ -1,0 +1,8 @@
+OBJECT SPECIFICATION Matrix[integer];
+
+FUNCTION DepsForComp(A: SHARED Matrix; kl1: integer; nparts: integer);
+OPERATION Initial_A(fn: string): boolean;
+OPERATION A_computation(kl1: integer);
+OPERATION Get_Print_A(n: integer);
+
+END;

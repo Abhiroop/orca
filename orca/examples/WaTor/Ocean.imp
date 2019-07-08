@@ -1,0 +1,186 @@
+# For June solution
+
+
+OBJECT IMPLEMENTATION Ocean;
+FROM ConTypes IMPORT elem_o, elem_l_m, ListaPFish, ModList, OPER, entry_ocean ;
+FROM Finish IMPORT Finish;
+
+
+x : MatOcean;
+
+
+FUNCTION Afiseaza(lung, lat : integer; x : MatOcean);
+BEGIN
+  WriteLine(MYCPU(), " Afiseaza Ocean ");
+  Write("    ");
+  FOR iy IN 0 .. lat -1 DO
+   Write(iy % 10);
+  OD;
+  WriteLine();
+  FOR ix IN 0 .. lung - 1 DO
+     IF ix < 10 THEN
+        Write(ix, "   ");
+     ELSE
+        Write(ix, "  ");
+     FI;
+     FOR iy IN 0 .. lat - 1 DO
+            CASE x[ix][iy].what OF
+              FISH  => 
+                        Write("F");
+            | FISHT =>
+                        Write("T");
+            | SHARK => 
+                        Write("S");
+            | SHARKT =>
+                        Write("T");
+            | EMPTY => 
+                        Write(" ");
+            | REUSABLE =>
+                        Write("X" );
+            | RBUSY =>
+                        Write("R");
+            | BUSY  =>
+                        Write("B");
+            ELSE WriteLine(); WriteLine("Progarm error "); Finish();
+           ESAC;
+        OD;
+      WriteLine();
+  OD;
+END;
+
+OPERATION init(lat, lung, nf, ns :integer; fish, shark : ListaPFish);
+  tmp : MatOcean[0 ..lung-1][0 ..lat-1];
+  BEGIN
+   FOR i IN 0 .. lung - 1 DO
+     FOR j IN 0 .. lat - 1 DO
+        tmp[i][j].what := EMPTY;
+        tmp[i][j].age := 0;
+        tmp[i][j].eat := 0;
+     OD;
+   OD;
+   FOR i IN 0 .. nf -1 DO;
+    tmp[fish[i].wherex][fish[i].wherey].what := FISH;
+    tmp[fish[i].wherex][fish[i].wherey].age  := 0;
+    tmp[fish[i].wherex][fish[i].wherey].eat  := 0;
+   OD;
+   FOR i IN 0 .. ns -1 DO;
+    tmp[shark[i].wherex][shark[i].wherey].what := SHARK;
+    tmp[shark[i].wherex][shark[i].wherey].age := 0;
+    tmp[shark[i].wherex][shark[i].wherey].eat := 0;
+   OD;
+   x := tmp;
+  END;
+
+OPERATION GetValue() : MatOcean;
+BEGIN
+  RETURN x;
+END;
+
+
+OPERATION change(lista_m : ModList; nr : integer);
+
+m : elem_l_m;
+BEGIN
+  FOR i IN 0 .. nr - 1 DO
+    m := lista_m[i];
+# for target
+    IF (m.operation = MOVE) OR (m.operation = EAT)
+      THEN
+        CASE x[m.wherex][m.wherey].what OF
+          RBUSY, REUSABLE => IF m.tip = FISH  THEN m.tip := FISHT;
+                                        ELSE m.tip := SHARKT;
+                             FI;
+          |BUSY, EMPTY, FISH, SHARK =>;
+          |FISHT => m.tip := FISH;
+          |SHARKT => m.tip := SHARK;
+        ESAC;
+    FI;
+    IF m.operation = DEL
+      THEN
+        IF x[m.wherex][m.wherey].what = FISHT
+          THEN m.tip := FISH;
+        FI;
+        IF x[m.wherex][m.wherey].what = SHARKT
+          THEN m.tip := SHARK;
+        FI;
+    FI;
+    x[m.wherex][m.wherey].what := m.tip;
+    x[m.wherex][m.wherey].age := m.age;
+    x[m.wherex][m.wherey].eat := m.eat;
+# for source
+    IF (m.operation = MOVE) OR (m.operation = EAT) OR (m.operation = DEL)
+      THEN
+        CASE x[m.fromx][m.fromy].what OF
+            REUSABLE    => x[m.fromx][m.fromy].what := EMPTY;
+          | RBUSY   => x[m.fromx][m.fromy].what := BUSY;
+          | FISHT   => x[m.fromx][m.fromy].what := FISH;
+          | SHARKT  => x[m.fromx][m.fromy].what := SHARK;
+          | FISH    => x[m.fromx][m.fromy].what := EMPTY;
+          | SHARK    =>x[m.fromx][m.fromy].what := EMPTY;
+          | EMPTY    => WriteLine(" a gasit EMPTY", m.fromx, " ",m.fromy) ;
+          ELSE;
+       ESAC;
+    FI;
+  OD;
+
+ END;
+
+
+OPERATION  AfiseazaOcean(lung, lat : integer);
+BEGIN
+  Afiseaza(lung, lat, x);
+END;
+
+
+OPERATION Busy(lista_m : ModList; nr : integer);
+m : elem_l_m;
+BEGIN
+  FOR i IN 0 .. nr - 1 DO
+    m := lista_m[i];
+    IF (m.operation = MOVE) 
+      THEN 
+        IF (x[m.wherex][m.wherey].what = REUSABLE) OR 
+           (x[m.wherex][m.wherey].what = FISH) OR
+           (x[m.wherex][m.wherey].what = SHARK)
+          THEN
+            x[m.wherex][m.wherey].what := RBUSY;
+          ELSE
+            x[m.wherex][m.wherey].what := BUSY;
+        FI;
+    FI;
+    IF (m.operation = EAT)
+      THEN 
+        IF (x[m.wherex][m.wherey].what = REUSABLE) 
+          THEN
+            x[m.wherex][m.wherey].what := RBUSY;
+          ELSE
+            x[m.wherex][m.wherey].what := BUSY;
+        FI;
+    FI;
+
+    IF m.operation = NOU
+      THEN
+        x[m.wherex][m.wherey].what := RBUSY;
+    FI;
+    IF (m.operation = MOVE) OR (m.operation = EAT) OR (m.operation = DEL)
+      THEN
+        x[m.fromx][m.fromy]. what := REUSABLE;
+    FI;
+  OD;
+END;
+
+OPERATION value(xn, yn : integer) : entry_ocean;
+BEGIN
+  RETURN x[xn][yn];
+END;
+
+
+END;
+
+
+
+
+
+
+
+

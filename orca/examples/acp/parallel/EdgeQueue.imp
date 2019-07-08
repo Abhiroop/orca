@@ -1,0 +1,143 @@
+# ========================================================================
+# == File:      EdgeQueue.imp  						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  implementation of Queue of pending edges		==
+# ========================================================================
+OBJECT IMPLEMENTATION EdgeQueue;
+
+FROM Edge IMPORT edge_info_t, copy_edge;
+
+TYPE Edge_queue_elt_p = NODENAME OF queue;
+
+TYPE queue =
+	GRAPH
+		head, tail : Edge_queue_elt_p;	# head and tail of the queue
+		num_elts   : integer;		# nr of elements in the queue
+        NODES
+                next: Edge_queue_elt_p;		# pointer to next element
+		data : edge_info_t;
+        END;
+
+# ========================================================================
+# == global data 							==
+# ========================================================================
+
+done: boolean;  	# set to true if no_more_edges() has been invoked.
+Q: queue;  		# the queue itself
+
+
+
+# ========================================================================
+# == operations								==
+# ========================================================================
+
+#
+# create() : create the queue
+#
+OPERATION create(
+) : boolean;					# succes?
+
+BEGIN
+	Q.head := NIL;
+	Q.tail := NIL;
+	Q.num_elts := 0;
+
+	RETURN true;
+END;
+
+
+#
+# delete() : delete the queue
+#
+
+OPERATION delete(
+);
+
+        old_elt : Edge_queue_elt_p;		# pointer to element to be deleted
+BEGIN
+        FOR i IN 1..Q.num_elts DO
+                old_elt := Q.head;
+                Q.head := Q[Q.head].next;
+                DELETENODE(Q, old_elt);
+        OD;
+END;
+
+
+
+#
+# add_edge() : add an edge to the tail of the queue
+#
+
+OPERATION add_edge(					
+	info : 	edge_info_t	# edge info
+) : boolean;					# succes?
+
+	p : Edge_queue_elt_p;
+BEGIN
+	p := ADDNODE(Q);  # add a new node to Q, return its name in p
+	copy_edge(Q[p].data, info);
+
+        IF Q.head = NIL THEN  # Is it the first node?
+		Q.head := p;  # yes; assign it to global data field
+        ELSE
+                Q[Q.tail].next := p; # no; set its next field
+        FI;
+        Q.tail := p;  # Assign to "tail" global data field
+	Q.num_elts +:= 1;
+	RETURN true;
+END;
+  	
+
+#
+# num_elts() : return number of elements in the queue
+#
+OPERATION num_elts(					
+) : integer;					# nr of elements in the queue
+
+BEGIN
+	RETURN Q.num_elts;
+END;
+
+
+#
+# get_edge() : get first element of the queue. Elt itself is not
+# deleted, but head is updated.
+#
+
+OPERATION get_edge(
+	info : OUT edge_info_t   # edge info
+) : boolean;					# true if queue is non-empty. 
+						# false else	
+
+	p: Edge_queue_elt_p;			# pointer to element
+
+BEGIN   # Try to fetch a job from the queue
+	IF (Q.head /= NIL) THEN
+        	p := Q.head;  
+                Q.head := Q[p].next;
+                IF Q.head = NIL THEN 
+			Q.tail := NIL; 
+		FI;
+		copy_edge(info, Q[p].data);
+		Q.num_elts -:= 1;
+
+                RETURN true;
+	ELSE
+		RETURN false;
+	FI;
+END;
+
+
+#
+# no_more_edges() : set flag that no more edges will be added
+#
+OPERATION no_more_edges();
+
+BEGIN
+	done := true;
+END;
+
+END;
+
+

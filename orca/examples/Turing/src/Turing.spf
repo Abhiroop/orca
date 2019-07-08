@@ -1,0 +1,68 @@
+#===============================================================
+#=======        Turing.spf: A Turing ring program       ========
+#===                                                        ====
+MODULE SPECIFICATION Turing;
+
+
+IMPORT Random;
+FROM InOut IMPORT ReadString, ReadInt, Eoln, Eof, ReadReal;
+
+CONST MaxNOCells = 10000;
+
+TYPE CellType =
+        RECORD
+                PredPop: integer;
+                PreyPop: integer;
+        END;
+
+TYPE RingType = ARRAY [integer 1..MaxNOCells] OF CellType;
+TYPE WorldType =
+        RECORD
+                Ring: ARRAY [integer 0 .. 1] OF RingType;	# current and 
+								# next ring
+                Current: integer;	# Ring we're working on
+                Next: integer;		# Ring to copy to
+		Lower: integer;		# First cell in our segment
+		Upper: integer;		# Last cell in our segment
+		NOCells: integer;	# Total possible cells
+                Exploded: boolean;	# Has population explosion occured?
+		NOAnimals: integer;	# Number of preds/preys we work on
+        END;
+TYPE ParamsType =
+	RECORD
+		CritPop: integer;
+		DisplayFreq: integer;
+		NOCells: integer;
+		NOIterations: integer;
+		RandomSeed: integer;
+		TimeStep: real;
+		Scale: real;
+		Explode: integer;
+
+		PredPopInit: integer;
+		PredDeathA: real;
+		PredDeathB: real;
+		PredBirth: real;
+		PredMigrate: real;
+
+		PreyPopInit: integer;
+		PreyDeathA: real;
+		PreyDeathB: real;
+		PreyBirth: real;
+		PreyMigrate: real;
+	END;
+
+
+        PROCESS OrcaMain();
+        FUNCTION ReadParams(Params: OUT ParamsType);
+        FUNCTION Generate(World: SHARED WorldType; Params: IN ParamsType;
+                        Rand: SHARED Random);
+        FUNCTION Migrate(World: SHARED WorldType; Params: IN ParamsType;
+                        Rand: SHARED Random; ToDn, ToUp: OUT CellType);
+        FUNCTION Display(World: IN WorldType; Params: IN ParamsType;
+                        iteration: IN integer);
+END;
+
+#===                                                        ====
+#=======        Turing.spf                              ========
+#===============================================================

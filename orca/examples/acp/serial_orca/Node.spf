@@ -1,0 +1,22 @@
+# ========================================================================
+# == File:      Node.spf   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  data structure for a node				==
+# ========================================================================
+MODULE SPECIFICATION Node;
+
+FROM Edgelist IMPORT edgelist_t;
+
+# ========================================================================
+# == types								==
+# ========================================================================
+
+TYPE node_t = 
+	RECORD
+		node_nr : 	integer;
+		incoming_edges: edgelist_t;
+		outgoing_edges: edgelist_t;
+	END;
+END;
+

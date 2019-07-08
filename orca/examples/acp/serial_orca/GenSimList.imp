@@ -1,0 +1,179 @@
+# ========================================================================
+# == File:      GenSimList.imp  					==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Implementation of Generic simple list. See 		==
+# ==		GenSimList.spf						==
+# ========================================================================
+GENERIC
+OBJECT IMPLEMENTATION GenSimList;
+
+# ========================================================================
+# == types								==
+# ========================================================================
+
+TYPE	simlist_elt_t = NODENAME OF simlist_t;
+TYPE	simlist_t =
+		GRAPH
+			head, tail : simlist_elt_t;	# head and tail of the list
+			nr_elts    : integer;		# nr of elts of the list
+		NODES
+			key  :  Key_t;			# the data
+			next : 	simlist_elt_t;		# pointer to next element
+		END;
+
+simlist : simlist_t;		# the list itself
+
+# ========================================================================
+# == operations								==
+# ========================================================================
+
+
+#
+# create() : create the list
+#
+OPERATION create(
+) : boolean;					# succes?
+
+BEGIN
+	simlist.head := NIL;
+	simlist.tail := NIL;
+	simlist.nr_elts := 0;
+	RETURN true;
+END;
+
+
+#
+# delete() : delete the list
+#
+OPERATION delete(
+);
+	old_elt : simlist_elt_t;		# element to be deleted
+BEGIN
+	FOR i IN 1..simlist.nr_elts DO
+		old_elt := simlist.head;
+		simlist.head := simlist[simlist.head].next;
+		DELETENODE(simlist, old_elt);
+	OD;
+END;
+
+
+#
+# insert_key() : insert element in the list
+#
+OPERATION insert_elt(				
+	key : Key_t				# key to be inserted
+) : boolean;					# succes?
+
+	new_elt, ptr : simlist_elt_t;		# pointers to elements 
+BEGIN
+	new_elt := ADDNODE(simlist);
+	simlist[new_elt].next := NIL;
+	simlist[new_elt].key := key;
+	
+	# is the list empty 
+	IF simlist.nr_elts = 0 THEN
+		simlist.head := new_elt;
+		simlist.tail := new_elt;
+		simlist[simlist.tail].next := NIL;
+		simlist.nr_elts +:= 1;
+		RETURN true;
+	FI;
+
+	ptr := simlist.head;
+
+	# should we insert as first element?
+	IF (Comp_func(simlist[ptr].key, key) >= 0) THEN
+		simlist[new_elt].next := simlist.head;
+		simlist.head := new_elt;
+		simlist.nr_elts +:= 1;
+		RETURN true;
+	FI;
+
+	# insert at correct position
+	WHILE (simlist[ptr].next /= NIL) DO
+		IF (Comp_func(simlist[simlist[ptr].next].key, key) >= 0) THEN
+			simlist[new_elt].next := simlist[ptr].next;
+			simlist[ptr].next := new_elt;
+			simlist.nr_elts +:= 1;
+                	RETURN true;
+		FI;
+		ptr := simlist[ptr].next;
+        OD;
+	
+	# insert as new tail
+	simlist[simlist.tail].next := new_elt;
+	simlist.tail := new_elt;
+	simlist.nr_elts +:= 1;
+
+	RETURN true;
+END;
+
+
+#
+# num_elts() : return number of elements in the list
+#
+OPERATION num_elts(				
+) : integer;					# nr of elements in list
+
+BEGIN
+	RETURN simlist.nr_elts;
+END;
+
+
+#
+# give_ith_elt() : return info on ith element in the list
+#
+OPERATION give_ith_elt(
+	index : integer; 			# index in the list
+	key   : OUT Key_t			# key on position i
+) : boolean;
+
+	ptr : simlist_elt_t;			# pointer to element 
+BEGIN
+	IF ((index < 1) OR (index > simlist.nr_elts)) THEN
+		RETURN false;
+	FI;
+	
+	ptr := simlist.head;
+	
+	FOR i IN 1..(index-1) DO
+		ptr := simlist[ptr].next;
+	OD;
+	
+	key := simlist[ptr].key;
+	RETURN true;
+END;
+	
+
+#
+# is_in() : check is an element is in the list
+#
+OPERATION is_in_list(
+	key   : Key_t; 				# is this key in the list
+	index : OUT integer			# position in the list
+) : boolean;					# is in list or not?
+
+	ptr : simlist_elt_t;			# pointer to element
+	cmp : integer;				# result of comparison
+BEGIN
+	ptr := simlist.head;
+
+	FOR i IN 1.. simlist.nr_elts DO
+		cmp := Comp_func(simlist[ptr].key, key);
+
+		#list is sorted, so check if we can break
+		IF (cmp > 0) THEN
+			RETURN false;
+		FI;
+	
+		IF (cmp = 0) THEN
+			index := i;
+			RETURN true;
+		FI;
+		ptr := simlist[ptr].next;
+	OD;
+	RETURN false;
+END;
+		
+END GENERIC;

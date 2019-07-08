@@ -1,0 +1,4 @@
+This directory contains the following subdirectories:
+
+src		All source files of the test programs
+<architecture>	Architecture dependent binaries of the test programs

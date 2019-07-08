@@ -1,0 +1,459 @@
+# The module Misc contains miscellaneous functions.
+
+MODULE IMPLEMENTATION Misc;
+ 
+FROM InOut IMPORT WriteInt,WriteChar,WriteString;
+FROM Types IMPORT DataRecord,BoardType,SaveType,Path,MoveNode,MoveArray;
+FROM Keys IMPORT NewKey;
+FROM Const IMPORT BLACK,WHITE,PAWN,KNIGHT,BISHOP,ROOK,QUEEN,KING,MATE,
+		  PAWNVAL,KNIGHTVAL,BISHOPVAL,ROOKVAL,QUEENVAL;
+FROM Problem IMPORT TTABLE;
+
+CONST ERROR = -1; 
+
+	FUNCTION Abs(x : integer) : integer;
+	BEGIN
+		IF x < 0 THEN RETURN -x; FI;
+		RETURN x;
+	END;
+
+	FUNCTION Exist(b : SHARED BoardType; color : integer; piece : integer;
+		       x : integer; y : integer) : boolean;
+	FUNCTION KnightCheck(b : SHARED BoardType; color : integer;
+			     x : integer; y : integer) : boolean;
+	FUNCTION DoCheck(b : SHARED BoardType; color : integer;
+			   x : integer; y : integer;
+			   xt : integer; yt : integer;
+			   piece : integer) : boolean;
+	FUNCTION OpenLine(b : SHARED BoardType; color : integer;
+			  x,y : integer; xt,yt : integer) : boolean;
+
+	# The function ThinkMove() makes a move after saving all needed 
+	# information in a record for later restore.
+	FUNCTION ThinkMove(dr : SHARED DataRecord;
+			   color : integer; move : integer;
+			   save : SHARED SaveType);
+	  xfrom,yfrom : integer;
+	  xto,yto : integer;
+	  factor : integer;
+	  special : integer;
+	  piece : integer;
+	BEGIN
+		IF color = WHITE THEN factor := 1; ELSE factor := -1; FI;
+		yto := move & 7;
+		move >>:= 3;
+		xto := move & 7;
+		move >>:= 3;
+		yfrom := move & 7;
+		move >>:= 3;
+		xfrom := move & 7;
+		special := move >> 3;
+		# Save old position.
+		save.xfrom := xfrom;
+		save.yfrom := yfrom;
+		save.fromval := dr.b[xfrom][yfrom];
+		save.xto := xto;
+		save.yto := yto;
+		save.toval := dr.b[xto][yto];
+		IF save.toval & 7 /= 0 THEN
+		  # There's been a capture.
+		  dr.bval +:= factor * Val(save.toval & 7);
+		FI;
+		IF TTABLE THEN
+		  # Find new key for new position.
+		  dr.key := NewKey(dr,color,xfrom+8*yfrom,save.fromval);
+		  IF save.toval /= 0 THEN
+		    dr.key := NewKey(dr,Other(color),xto+8*yto,save.toval);
+		  FI;
+		  dr.key := NewKey(dr,color,xto+8*yto,save.fromval);
+		FI;
+		IF dr.b[xfrom][yfrom] & 7 = KING THEN
+		  dr.kpos[color] := 8 * xto + yto;
+		FI;
+		# Make changes to board.
+		dr.b[xto][yto] := dr.b[xfrom][yfrom];
+		dr.b[xfrom][yfrom] := 0;
+		# Check for promotions.
+		IF special & 7 /= 0 THEN
+		  CASE special & 3 OF
+		    0 => piece := QUEEN; |
+		    1 => piece := ROOK; |
+		    2 => piece := BISHOP; |
+		    3 => piece := KNIGHT;
+		  ESAC;
+		  dr.bval +:= factor * (Val(piece) - PAWNVAL);
+		  dr.b[xto][yto] := (dr.b[xto][yto] >> 3) * 8 + piece;
+		  save.promotion := true;
+		  IF TTABLE THEN
+		    dr.key := NewKey(dr,color,xto+8*yto,save.fromval);
+		    dr.key := NewKey(dr,color,xto+8*yto,piece);
+		  FI;
+		 ELSE save.promotion := false;
+		FI;
+		special >>:= 3;
+		# Check for en passant move.
+		IF special & 1 /= 0 THEN
+		  dr.b[xto][yfrom] := 0;
+		  dr.bval +:= factor * PAWNVAL;
+		  save.enpassant := true;
+		 ELSE save.enpassant := false;
+		FI;
+		special >>:= 1;
+		# Check for castling move.
+		IF special /= 0 THEN
+		  IF special = 2 THEN
+		    dr.b[5][yfrom] := dr.b[7][yfrom];
+		    dr.b[7][yfrom] := 0;
+		  FI;
+		  IF special = 3 THEN
+		    dr.b[3][yfrom] := dr.b[0][yfrom];
+		    dr.b[0][yfrom] := 0;
+		  FI;
+		  save.castle := true;
+		 ELSE save.castle := false;
+		FI;
+	END;
+
+	# The function UnthinkMove() restores a position by extracting 
+	# information from the record 'save'.
+	FUNCTION UnthinkMove(dr : SHARED DataRecord;
+			     color : integer; save : SaveType);
+	  xfrom,yfrom : integer;
+	  xto,yto : integer;
+	  factor : integer;
+	BEGIN
+		IF color = WHITE THEN factor := 1; ELSE factor := -1; FI;
+		xfrom := save.xfrom; yfrom := save.yfrom;
+		xto := save.xto; yto := save.yto;
+		IF save.promotion THEN
+		  dr.bval -:= factor * (Val(dr.b[xto][yto] & 7) - PAWNVAL);
+		  IF TTABLE THEN
+		    dr.key := NewKey(dr,color,xto+8*yto,dr.b[xto][yto] & 7);
+		    dr.key := NewKey(dr,color,xto+8*yto,save.fromval);
+		  FI;
+		  dr.b[xto][yto] := (dr.b[xto][yto] >> 3) * 8 + PAWN;
+		FI;
+		IF save.enpassant THEN
+		  dr.b[xto][yfrom] := PAWN + 8*color;
+		  dr.bval -:= factor * PAWNVAL;
+		FI;
+		IF save.castle THEN
+		  IF xto > xfrom THEN	# Short Castling
+		    dr.b[7][yfrom] := dr.b[5][yfrom];
+		    dr.b[5][yfrom] := 0;
+		   ELSE
+		    dr.b[0][yfrom] := dr.b[3][yfrom];
+		    dr.b[3][yfrom] := 0;
+		  FI;
+		FI;
+		IF TTABLE THEN
+		  # Restore old key : XOR(XOR(value)) = value !
+		  dr.key := NewKey(dr,color,xto+8*yto,save.fromval);
+		  IF save.toval /= 0 THEN
+		    dr.key := NewKey(dr,Other(color),xto+8*yto,save.toval);
+		  FI;
+		  dr.key := NewKey(dr,color,xfrom+8*yfrom,save.fromval);
+		FI;
+		IF dr.b[xto][yto] & 7 = KING THEN
+		  dr.kpos[color] := 8 * xfrom + yfrom;
+		FI;
+		# Restore old position.
+		dr.b[xfrom][yfrom] := save.fromval;
+		dr.b[xto][yto] := save.toval;
+		dr.bval -:= factor * Val(save.toval & 7);
+	END;
+
+	FUNCTION Val(piece : integer) : integer;
+	BEGIN
+		CASE piece OF
+		  PAWN	=>	RETURN PAWNVAL;   |
+		  KNIGHT=>	RETURN KNIGHTVAL; |
+		  BISHOP=>	RETURN BISHOPVAL; |
+		  ROOK	=>	RETURN ROOKVAL;   |
+		  QUEEN	=>	RETURN QUEENVAL;  |
+		  KING  =>	RETURN MATE;
+		 ELSE RETURN 0;
+		ESAC;
+	END;
+
+	# Print all moves.
+	FUNCTION PrintMoves(movelist,vallist : SHARED MoveArray);
+	  i : integer;
+	BEGIN
+		i := 1;
+		WriteLine("Moves :");
+		WHILE movelist[i] /= 0 DO
+		  ShowMove(movelist[i]); WriteLine(" ",vallist[i]);
+		  i +:= 1;
+		OD;
+	END;
+
+	FUNCTION ToLetter(x : integer) : char;
+	BEGIN
+		CASE x OF
+		  0	=> RETURN 'a'; |
+		  1	=> RETURN 'b'; |
+		  2	=> RETURN 'c'; |
+		  3	=> RETURN 'd'; |
+		  4	=> RETURN 'e'; |
+		  5	=> RETURN 'f'; |
+		  6	=> RETURN 'g'; |
+		  7	=> RETURN 'h';
+		  ELSE RETURN 'q';
+		ESAC;
+	END;
+
+	# Decode move.
+	FUNCTION ShowMove(move : integer);
+	  xfrom,yfrom : integer;
+	  xto,yto : integer;
+	BEGIN
+		IF move >> 16 /= 0 THEN
+		  IF (move >>  16) & 1 = 0 THEN
+		    WriteString("O - O");
+		   ELSE
+		    WriteString("O-O-O");
+		  FI;
+		  RETURN;
+		FI;
+		yto := move & 7;
+		move >>:= 3;
+		xto := move & 7;
+		move >>:= 3;
+		yfrom := move & 7;
+		move >>:= 3;
+		xfrom := move & 7;
+		move >>:= 3;
+		WriteChar(ToLetter(xfrom));
+		WriteInt(yfrom+1);
+		WriteChar('-');
+		WriteChar(ToLetter(xto));
+		WriteInt(yto+1);
+		IF move & 7 /= 0 THEN
+		  CASE move & 3 OF
+		    0	=>	WriteString(" -> queen"); |
+		    1	=>	WriteString(" -> rook"); |
+		    2	=>	WriteString(" -> bishop"); |
+		    3	=>	WriteString(" -> knight");
+		  ESAC;
+		FI;
+		move >>:= 3;
+		IF move & 1 /= 0 THEN WriteString(" e.p."); FI;
+	END;
+
+	# Return the owner of a field.
+	FUNCTION Owner(field : integer) : integer;
+	BEGIN
+		IF field & 7 = 0 THEN RETURN ERROR; FI;
+		RETURN (field >> 3) & 1;
+	END;	
+
+	# Check whether the field is on the board.
+	FUNCTION OnBoard(x : integer; y : integer) : boolean;
+	BEGIN
+		RETURN (x >= 0) AND (x <= 7) AND (y >= 0) AND (y <= 7);
+	END;
+
+	# Return the opponent.
+	FUNCTION Other(color : integer) : integer;
+	BEGIN
+		IF color = BLACK THEN RETURN WHITE;
+		 ELSE RETURN BLACK;
+ 		FI;
+	END;
+
+	# Transform a move to an unique integer.
+	FUNCTION MoveCode(castle,ep,prom: integer;
+			  xfrom,yfrom,xto,yto : integer) : integer;
+	BEGIN
+		RETURN 65536*castle + 32768*ep + 4096*prom +
+		       512*xfrom + 64*yfrom + 8*xto + yto;
+	END;
+
+	# The function Check() tests whether the player is checked.
+	FUNCTION Check(dr : SHARED DataRecord; color : integer) : boolean;
+	  xk,yk : integer;
+	  factor : integer;
+	  opponent : integer;
+	BEGIN
+		opponent := Other(color);
+		IF color = WHITE THEN factor := 1;
+		 ELSE factor := -1;
+		FI;
+		xk := dr.kpos[color] >> 3;
+		yk := dr.kpos[color] & 7;
+		IF Exist(dr.b,opponent,PAWN,xk-1,yk+factor) OR
+		   Exist(dr.b,opponent,PAWN,xk+1,yk+factor) THEN
+		  RETURN true;	# checked by pawn
+		FI;
+		IF (Abs(xk - (dr.kpos[opponent] >> 3)) < 2) AND
+		   (Abs(yk - (dr.kpos[opponent] & 7)) < 2) THEN
+			RETURN true;  # checked by king
+		FI;
+		IF KnightCheck(dr.b,color,xk,yk) THEN
+		  RETURN true;	#checked by knight
+		FI;
+		IF DoCheck(dr.b,color,xk,yk,0,1,ROOK) OR
+		   DoCheck(dr.b,color,xk,yk,0,-1,ROOK) OR
+		   DoCheck(dr.b,color,xk,yk,1,0,ROOK) OR
+		   DoCheck(dr.b,color,xk,yk,-1,0,ROOK) THEN
+		  RETURN true;	#checked on line;
+		FI;
+		IF DoCheck(dr.b,color,xk,yk,1,1,BISHOP) OR
+		   DoCheck(dr.b,color,xk,yk,1,-1,BISHOP) OR
+		   DoCheck(dr.b,color,xk,yk,-1,1,BISHOP) OR
+		   DoCheck(dr.b,color,xk,yk,-1,-1,BISHOP) THEN
+		  RETURN true;	#checked on diagonal
+		FI;
+		RETURN false;	#not checked
+	END;
+
+	# The function Pinned() tests whether a piece is pinned.
+	FUNCTION Pinned(dr : SHARED DataRecord; color : integer;
+			x,y : integer; px,py : OUT integer) : boolean;
+	  dx,dy : integer;
+	  adx,ady : integer;
+	  xt,yt : integer;
+	BEGIN
+		dx := (dr.kpos[color] >> 3) - x;
+		dy := (dr.kpos[color] & 7) - y;
+		IF dx /= 0 THEN px := dx / Abs(dx); ELSE px := 0; FI;
+		IF dy /= 0 THEN py := dy / Abs(dy); ELSE py := 0; FI;
+		adx := Abs(dx); ady := Abs(dy);
+		IF (adx /= ady) AND (dx /= 0) AND (dy /= 0) THEN
+		  RETURN false;
+		FI;
+		IF (adx = ady) THEN
+		  xt := dx / adx; yt := dy / ady;
+		  IF NOT(DoCheck(dr.b,color,x,y,-xt,-yt,BISHOP)) OR
+		     NOT(OpenLine(dr.b,color,x,y,xt,yt)) THEN
+			RETURN false;
+		  FI;
+		  RETURN true;
+		FI;
+		IF (dx = 0) THEN
+		  xt := 0; yt := dy / ady;
+		 ELSE xt := dx / adx; yt := 0;
+		FI;
+		IF NOT(DoCheck(dr.b,color,x,y,-xt,-yt,ROOK)) OR
+		   NOT(OpenLine(dr.b,color,x,y,xt,yt)) THEN
+			RETURN false;
+		FI;
+		RETURN true;
+	END;
+
+	# Test whether the line between the piece and the king is empty.
+	FUNCTION OpenLine(b : SHARED BoardType; color : integer;
+			  x,y : integer; xt,yt : integer) : boolean;
+	 txt,tyt : integer;
+	BEGIN
+		txt := xt; tyt := yt;
+		WHILE OnBoard(x+txt,y+tyt) AND (b[x+txt][y+tyt] & 7 = 0) DO
+		  txt +:= xt; tyt +:= yt;
+		OD;
+		IF OnBoard(x+txt,y+tyt) AND
+		   (b[x+txt][y+tyt] & 7 = KING) AND
+		   (Owner(b[x+txt][y+tyt]) = color) THEN
+			RETURN true;
+		FI;
+		RETURN false;
+	END;
+
+	FUNCTION Exist(b : SHARED BoardType; color : integer; piece : integer;
+		       x : integer; y : integer) : boolean;
+	BEGIN
+		RETURN OnBoard(x,y) AND (b[x][y] & 7 = piece) AND
+		       (Owner(b[x][y]) = color);
+	END;
+
+	FUNCTION KnightCheck(b : SHARED BoardType; color : integer;
+			     x : integer; y : integer) : boolean;
+	  opponent : integer;
+	BEGIN
+		opponent := Other(color);
+		RETURN Exist(b,opponent,KNIGHT,x-2,y-1) OR
+		       Exist(b,opponent,KNIGHT,x-2,y+1) OR
+		       Exist(b,opponent,KNIGHT,x+2,y-1) OR
+		       Exist(b,opponent,KNIGHT,x+2,y+1) OR
+		       Exist(b,opponent,KNIGHT,x-1,y-2) OR
+		       Exist(b,opponent,KNIGHT,x-1,y+2) OR
+		       Exist(b,opponent,KNIGHT,x+1,y-2) OR
+		       Exist(b,opponent,KNIGHT,x+1,y+2);
+	END;
+
+	FUNCTION DoCheck(b : SHARED BoardType; color : integer;
+			   x : integer; y : integer;
+			   xt : integer; yt : integer;
+			   piece : integer) : boolean;
+	  txt,tyt : integer;
+	  opponent : integer;
+	BEGIN
+		opponent := Other(color);
+		txt := xt; tyt := yt;
+		WHILE OnBoard(x+txt,y+tyt) DO
+		  IF Owner(b[x+txt][y+tyt]) = color THEN
+		    RETURN false;
+		  FI;
+		  IF (b[x+txt][y+tyt] & 7 = piece) OR
+		     (b[x+txt][y+tyt] & 7 = QUEEN) THEN
+		    RETURN true;
+		  FI;
+		  IF Owner(b[x+txt][y+tyt]) = opponent THEN
+		    RETURN false;
+		  FI;
+		  txt +:= xt; tyt +:= yt;
+		OD;
+		RETURN false;
+	END;
+
+	FUNCTION SearchKing(b : SHARED BoardType; color : integer;
+			    x : OUT integer; y : OUT integer);
+	  owner : integer;
+	BEGIN
+		FOR xx IN 0 .. 7 DO
+		  FOR yy IN 0 .. 7 DO
+		    owner := (b[xx][yy] >> 3) & 1;
+		    IF (b[xx][yy] & 7 = KING) AND (color = owner) THEN
+			x := xx;
+			y := yy;
+			RETURN;
+		    FI;
+		  OD;
+		OD;
+	END;
+
+	FUNCTION AddMove(move : integer; path : Path) : Path;
+	  cell : MoveNode;
+	BEGIN
+		cell := ADDNODE(path);
+		path[cell].move := move;
+		path[cell].next := path.first;
+		path.first := cell;
+		RETURN path;
+	END;
+
+	FUNCTION AllocMove(move : integer) : Path;
+	  cell : MoveNode;
+	  path : Path;
+	BEGIN
+		cell := ADDNODE(path);
+		path.first := cell;
+		path.len := 0;
+		path[cell].move := move;
+		path[cell].next := NIL;
+		RETURN path;
+	END;
+
+	FUNCTION Min(op1,op2 : integer) : integer;
+	BEGIN
+		IF op1 <= op2 THEN RETURN op1; FI;
+		RETURN op2;
+	END;
+
+	FUNCTION Max(op1,op2 : integer) : integer;
+	BEGIN
+		IF op1 >= op2 THEN RETURN op1; FI;
+		RETURN op2;
+	END;
+
+END;

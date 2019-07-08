@@ -1,0 +1,61 @@
+ ###############################################################################
+ ######  P.BoxModule.spf                                                  ######
+ ###                                                                         ###
+
+MODULE SPECIFICATION BoxModule;
+
+TYPE Coordinate = 
+    RECORD
+        x: integer;
+        y: integer;
+    END; # Coordinate
+
+TYPE Box =
+    RECORD
+        corner1: Coordinate;
+        corner3: Coordinate;
+
+#	ifdef SURFACE
+	    surface: integer;
+#	endif
+
+    END; # Box
+
+
+FUNCTION isEqualBox(
+    checkBox:   IN Box;
+    againstBox: IN Box
+): boolean;
+
+FUNCTION readBox(
+    box: OUT Box
+): boolean;
+
+FUNCTION writeBox(
+    box: IN Box # Box to be written to output.
+);
+
+
+#ifdef SURFACE
+
+    FUNCTION noMoreBoxSurface(
+        box: IN Box
+    ): boolean;
+
+    FUNCTION overlayBoxes(
+        aBox:      IN  Box; # To be overlayed with bBox.
+        bBox:      IN  Box; # Going to overlay aBox.
+        resultBox: OUT Box  # Result from overlaying aBox by bBox.
+    ): boolean;            # Did we find a proper overlay?
+
+    FUNCTION substractBoxSurface(
+	box:      SHARED Box; # box.surface := box.surface - minusBox.surface.
+	minusBox: IN     Box
+    );
+#endif
+
+END; # BoxModule
+ 
+ ###                                                                         ###
+ ######  P.BoxModule.spf                                                  ######
+ ###############################################################################

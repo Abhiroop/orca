@@ -1,0 +1,30 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: RowCollect.imp,v 1.4 1995/07/31 09:03:26 ceriel Exp $
+
+OBJECT IMPLEMENTATION RowCollection;
+	TYPE collection = ARRAY[integer] OF RowType;
+
+	tab: collection;
+
+	OPERATION init(size: integer);
+		tmp: collection[1..size];
+	BEGIN
+		tab := tmp;
+	END;
+
+	OPERATION AddRow(iter: integer; R: RowType);
+	BEGIN
+		tab[iter] := R;
+	END;
+
+	OPERATION AwaitRow(iter: integer): RowType;
+	BEGIN
+		# wait until row "iter" is defined
+		GUARD (LB(tab[iter]) <= UB(tab[iter])) DO
+			RETURN tab[iter];
+		OD;
+	END;
+END;

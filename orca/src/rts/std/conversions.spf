@@ -1,0 +1,31 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+# $Id: conversions.spf,v 1.2 1995/07/31 09:03:59 ceriel Exp $
+
+MODULE SPECIFICATION conversions;
+
+  # The StringToXxx routines convert the string s. After completion,
+  # 'eaten' indicates the number of characters actually used in the conversion,
+  # including leading spaces. Leading spaces are skipped, but the count
+  # is included in 'eaten'. If the conversion fails, 'eaten' is set to 0
+  # and 0 is returned.
+
+  FUNCTION StringToReal(s: string; eaten: OUT integer): longreal;
+  # Accepts an optional sign, then a string of digits optionally containing
+  # a decimal point ".", then an optional exponent part consisting of an
+  # "e" or "E" followed by an optional sign, followed by an integer.
+
+  FUNCTION StringToInt(s: string; eaten: OUT integer): longint;
+  # Accepts an optional sign, then a string of digits.
+
+  FUNCTION RealToString(r: longreal; p: integer): string;
+  # The real "r" is converted to a string. The precision "p" indicates the
+  # number of significant digits. If it is <= 0, it is taken as 1. The style
+  # used in the conversion depends on the value converted. The exponent style
+  # will be used if the exponent is less than -4 or greater than or equal to
+  # the precision.
+
+  FUNCTION IntToString(i: longint): string;
+END;

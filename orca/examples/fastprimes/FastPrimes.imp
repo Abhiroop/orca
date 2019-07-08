@@ -1,0 +1,73 @@
+MODULE IMPLEMENTATION FastPrimes;
+
+	TYPE table = ARRAY[integer] OF integer;
+	CONST N = 15;  # square root of number of primes to be computed
+
+	FUNCTION IsPrime(tab: SHARED table; x: integer): boolean;
+		i, p: integer;
+	BEGIN
+		i := 1;
+		DO
+			p := tab[i];
+			IF p*p > x THEN
+				RETURN true;
+			ELSIF x % p = 0 THEN
+				RETURN false;
+			FI;
+			i +:= 1;
+		OD;
+	END;
+
+	FUNCTION ComputeInitialPrimes(upto: integer): table;
+		i: integer;
+		tab: table[1..upto];
+	BEGIN
+		tab[1] := 2;  # first prime number
+		i := 2;
+		FOR x IN 3 .. upto DO
+			IF IsPrime(tab, x) THEN
+				WriteLine(x);
+				tab[i] := x;
+				i +:= 1;
+			FI;
+		OD;
+		tab[i] := N+1;
+		RETURN tab;
+	END;
+
+	PROCESS worker(t: table; lb, ub: integer);
+
+	PROCESS OrcaMain();
+		t: table;
+		lb, grain: integer;
+		nworkers: integer;
+	BEGIN
+		t := ComputeInitialPrimes(N);
+		IF NCPUS() > N*N THEN
+			nworkers := N*N;
+		ELSE
+			nworkers := NCPUS();
+		FI;
+		grain := (N*N) / nworkers;
+		lb := N+1;
+		FOR i IN 1 .. nworkers - 1 DO
+			FORK worker(t, lb, lb+grain-1) ON(i);
+			lb +:= grain;
+		OD;
+		FORK worker(t, lb, N*N) ON(0);
+	END;
+
+	PROCESS worker(t: table; lb, ub: integer);
+		cnt: integer;
+	BEGIN
+		WriteLine("Worker started: lb = ", lb, " ub = ", ub);
+		cnt := 0;
+		FOR x IN lb .. ub DO
+			IF IsPrime(t, x) THEN
+				WriteLine(x);
+				cnt +:= 1;
+			FI;
+		OD;
+		#WriteLine("Hello ", MYCPU(), "cnt = ", cnt);
+	END;
+END;

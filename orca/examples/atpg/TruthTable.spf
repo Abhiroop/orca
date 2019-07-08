@@ -1,0 +1,54 @@
+MODULE SPECIFICATION TruthTable;
+
+	FROM AtpgTypes IMPORT GateType,Logic_Value,AND_G,XOR_G;
+
+	FROM iscas IMPORT MAX_FANIN;
+
+        CONST PDCTABLESIZE = 25;
+
+	TYPE Input_Values = ARRAY [integer 1..MAX_FANIN] OF Logic_Value;
+
+	# The type Row_x indicates a row from a truthtable
+	# with x entries.
+
+        TYPE Row_3    = ARRAY [integer 1..3] OF Logic_Value;
+
+	TYPE PDC_Table_2 = ARRAY[integer 1..PDCTABLESIZE] OF Row_3;
+
+
+	TYPE PDC_Table = ARRAY [integer AND_G..XOR_G] OF PDC_Table_2;
+
+	TYPE Truth_Table = RECORD
+				pdctable: PDC_Table;
+			   END;
+
+	FUNCTION Init_PDC_Table(table:SHARED Truth_Table);
+
+	# Initialize the table. It contains the propagation D-cubes of a fault
+	# for the buffer-, inverter-, fanoutbranch-, input-, AND-, OR- and
+	# XOR-gates.
+	# The table contains the PDCF-tables for the AND-,OR- and XOR-gates
+	# with a fanout between 2 and 5.
+
+        FUNCTION Get_PDC_Value(gatetype:GateType; table:Truth_Table;
+                                input_value:Input_Values;fanin:integer;
+                                output:OUT Logic_Value):boolean;
+
+        # The appropriate table is scanned until the row with the specified
+        # input values is encountered. The corresponding output is returned.
+        # The output for a gate with a fanin > 2 is calculated using the
+        # truthtable for a two-input gate by using an equivalent circuit
+        # consisting solely of two-input gates.
+
+        FUNCTION Init_Input_Values(input_value:SHARED Input_Values);
+
+        # Assign DONT_CARE to all the elements from input_values
+
+        FUNCTION Invert(value:Logic_Value;output:OUT Logic_Value);
+
+	# invert value and return the result in output
+
+# DEBUG
+        FUNCTION Print_Values(input_value:Input_Values;fanin:integer);
+# END DEBUG
+END; # MODULE SPECIFICATION TruthTable

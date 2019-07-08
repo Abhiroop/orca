@@ -1,0 +1,139 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+MODULE IMPLEMENTATION PredCor;
+
+IMPORT	LongRealObject;
+FROM	GlobalType	IMPORT	GlobalObject;
+FROM	Consts		IMPORT	OMAS, HMAS;
+FROM	Common		IMPORT	OrderType, DirectionType, AtomType,
+				PCC_Type, TLC_Type;
+FROM	VarObject	IMPORT	VarType;
+
+
+FUNCTION Predict(Data           : SHARED GlobalObject;
+		 NORDER, NrMols : integer;
+		 TLC            : TLC_Type);
+
+BEGIN
+	Data[MYCPU()]$CallPredict(NORDER, NrMols, TLC);
+END;
+
+
+FUNCTION DoPredict(Atom         : SHARED VarType;
+		 NORDER, NrMols : integer;
+		 TLC            : TLC_Type);
+
+    ### Predicts new values for displacement and its five derivatives
+    ### NORDER must be 7 for a sixth-order method
+
+        JIZ, JI : integer;
+        Sum     : longreal;
+BEGIN
+
+    ### This routine calculates predicted F(X), F'(X), F''(X), ...
+
+	JIZ := 2;
+ 
+
+    ### Loop over F(X), F'(X), F''(X), .....
+ 
+	FOR func IN DISP .. VAL(OrderType, NORDER - 1) DO
+	    FOR mol IN 0 .. NrMols DO
+		FOR dir IN XDIR .. ZDIR DO
+		    FOR atom IN H1 .. H2 DO
+			JI := JIZ;
+
+		    ### Sum over Taylor Series
+
+			Sum := 0.0D;
+
+			FOR i IN VAL(OrderType,ORD(func)+1) .. VAL(OrderType,NORDER) DO
+			    Sum +:= TLC[JI] * Atom[mol,i][dir,atom];
+			    JI +:= 1;
+			OD;
+
+			Atom[mol,func][dir,atom] +:= Sum;
+		    OD;
+		OD;
+	    OD;
+
+            JIZ +:= NORDER + 1;
+        OD;
+END;
+
+
+
+FUNCTION CorrectBoundary(Data           : SHARED GlobalObject;
+			 TKIN, Total    : SHARED LongRealObject;
+			 NORDER, NrMols : integer;
+			 PCC            : PCC_Type;
+			 BOXL           : longreal);
+
+	KinEnergy : longreal;
+BEGIN
+	Data[MYCPU()]$CallCorrectBoundary(NORDER, NrMols, PCC, BOXL, KinEnergy);
+
+	TKIN$IncVal(KinEnergy);
+	Total$IncVal(KinEnergy);
+END;
+
+
+FUNCTION DoCorrectBoundary(Atom           : SHARED VarType;
+			 NORDER, NrMols : integer;
+			 PCC            : PCC_Type;
+			 BOXL           : longreal;
+			 KinEnergy      : OUT longreal);
+
+    ### Corrects the predicted values, based on forces etc.
+    ### NORDER must be 7 for a sixth-order method
+
+        Val: longreal;
+BEGIN
+
+    ### This routine calculates corrected F(X), F'(X), F"(X), ....
+    ### from corrected F(X) = predicted F(X) + PCC(1)*(FR-SD)
+    ### where SD is predicted accl. F"(X) and FR is computed
+    ### accl. (force/mass) at predicted position
+
+	KinEnergy := 0.0D;
+
+	FOR mol IN 0 .. NrMols DO
+	    FOR dir IN XDIR .. ZDIR DO
+		FOR atom IN H1 .. H2 DO
+		    Val := Atom[mol,FORCES][dir,atom] -
+			   Atom[mol,ACC][dir,atom];
+
+		    FOR func IN DISP .. VAL(OrderType, NORDER) DO
+			Atom[mol,func][dir,atom] +:= PCC[func] * Val;
+		    OD;
+		OD;
+
+
+	    ### Put molecule back inside box if it is out
+
+		Val := Atom[mol,DISP][dir,O];
+
+		IF Val < 0.0D THEN
+		    FOR atom IN H1 .. H2 DO
+			Atom[mol,DISP][dir,atom] +:= BOXL;
+		    OD;
+		ELSIF Val > BOXL THEN
+		    FOR atom IN H1 .. H2 DO
+			Atom[mol,DISP][dir,atom] -:= BOXL;
+		    OD;
+		FI;
+
+
+	    ### Compute kinetic energy
+
+		KinEnergy +:= (Atom[mol,VEL][dir,H1] * Atom[mol,VEL][dir,H1] +
+			       Atom[mol,VEL][dir,H2] * Atom[mol,VEL][dir,H2]) * HMAS +
+			       Atom[mol,VEL][dir,O] * Atom[mol,VEL][dir,O] * OMAS;
+	    OD;
+	OD;
+END;
+
+
+END;

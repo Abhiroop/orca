@@ -1,0 +1,141 @@
+CONF_ROOT = /usr/proj/amwork/conf/amoeba/sparc.gnu-2;
+SRC_ROOT = /usr/proj/amwork/src;
+RTS_ROOT= ../../../rts;
+FM_ROOT= /usr/proj/orca/Networks/myrinet-4.1/FM-1.1-am;
+ARCH = sparc;
+LIB_AMOEBA = $CONF_ROOT/lib/amoeba/libamoeba.a;
+LIB_AJAX = $CONF_ROOT/lib/ajax/libajax.a;
+LIB_AMOEBA_DEBUG = /usr/proj/amwork/conf0/amoeba/sparc.gnu-2/lib/amoeba.maldb/libamoeba.a;
+LIB_AJAX_DEBUG = /usr/proj/amwork/conf0/amoeba/sparc.gnu-2/lib/ajax.maldb/libajax.a;
+ 
+INCLUDES = {
+        -I$SRC_ROOT/h,
+        -I$SRC_ROOT/h/class,
+        -I$SRC_ROOT/h/ajax,
+        -I$SRC_ROOT/h/server,
+        -I$SRC_ROOT/h/posix,
+        -I$SRC_ROOT/h/posix/machdep/$ARCH,
+        -I$SRC_ROOT/h/machdep/arch/$ARCH,
+        -I$SRC_ROOT/h/machdep/dev,
+        -I$SRC_ROOT/h/module,
+	-I$FM_ROOT/include,
+	-I$RTS_ROOT/include,
+	-I$RTS_ROOT/include/communication,
+	-I$RTS_ROOT/include/synchronization,
+	-I$RTS_ROOT/include/util,
+	-I$RTS_ROOT/include/po,
+        -I.,
+	-I/net/panda/panda2.0/latest_greatest/include,
+};
+ 
+DEFINES = {
+#       '-DDEBUG',
+#	'-D__MAL_DEBUG',
+#       '-g',
+#      	'-O0',
+#      	'-DPROTO_DEBUG',
+#      	'-DPRECONDITION_TRACE',
+#        '-DAT_TIMER',
+       	'-mv8',
+      	'-ansi',
+      	'-Wall',
+};
+ 
+%include $CONF_ROOT/toolset/amoeba.bin;
+%include $SRC_ROOT/Amakelib/gnu-2/cxx-c.amk;
+ 
+AMCOLL_LIBS = {
+        '-lg++',
+        '-lgcc2',
+        $LIB_AJAX,
+        $LIB_AMOEBA,
+};
+ 
+AJ_LINTLIBS = {
+        $LINT_AJAX,
+        $LINT_AMOEBA,
+};
+ 
+U_PO_C = {
+	$RTS_ROOT/po/consistency.c,
+	$RTS_ROOT/po/history.c,
+	$RTS_ROOT/po/instance.c,
+	$RTS_ROOT/po/po_invocation.c,
+	$RTS_ROOT/po/partition.c,
+	$RTS_ROOT/po/po_marshall.c,
+	$RTS_ROOT/po/pdg.c,
+	$RTS_ROOT/po/po.c,
+	$RTS_ROOT/po/po_rts_object.c,
+};
+ 
+%cluster PO {
+%targets libpo.a[type = archive];
+%sources $U_PO_C;
+};
+ 
+U_COLLECTION_C = {
+	$RTS_ROOT/collection/channel.c,
+	$RTS_ROOT/collection/collection.c,
+	$RTS_ROOT/collection/combine_data.c,
+	$RTS_ROOT/collection/distribution.c,
+	$RTS_ROOT/collection/forest.c,
+	$RTS_ROOT/collection/marshall.c,
+	$RTS_ROOT/collection/message_handler.c,
+	$RTS_ROOT/collection/reduction_function.c,
+	$RTS_ROOT/collection/send_data.c,
+	$RTS_ROOT/collection/timers.c,
+};
+ 
+%cluster COLLECTION {
+%targets libcollection.a[type = archive];
+%sources $U_COLLECTION_C;
+};
+
+FM_U_COMMUNICATION_C = {
+	$RTS_ROOT/communication/fm/demultiplex.c,
+	$RTS_ROOT/communication/fm/pipe.c,
+	$RTS_ROOT/communication/fm/message.c,
+	$RTS_ROOT/communication/fm/mp_channel.c,
+	$RTS_ROOT/communication/fm/grp_channel.c,
+	$RTS_ROOT/communication/fm/rts_init.c,
+};
+
+%cluster COMMUNICATION_FM {
+%targets libcommunication.a[type=archive];
+%sources $FM_U_COMMUNICATION_C;
+};
+
+U_UTIL_C = {
+	$RTS_ROOT/util/map.c,
+	$RTS_ROOT/util/misc.c,
+	$RTS_ROOT/util/set.c,
+	$RTS_ROOT/util/error.c,
+	$RTS_ROOT/util/graph.c,
+};
+ 
+%cluster UTIL{
+%targets libutil.a[type = archive];
+%sources $U_UTIL_C;
+};
+
+AMOEBA_U_SYNCHRONIZATION_C = {
+	$RTS_ROOT/synchronization/amoeba/atomic_int.c,
+	$RTS_ROOT/synchronization/amoeba/lock.c,
+	$RTS_ROOT/synchronization/amoeba/po_timer.c,
+	$RTS_ROOT/synchronization/amoeba/condition.c,
+};
+ 
+%cluster SYNCHRONIZATION_AMOEBA {
+%targets libsynchronization.a[type = archive];
+%sources $AMOEBA_U_SYNCHRONIZATION_C;
+};
+
+DEFAULT_LIST = {
+	SYNCHRONIZATION_AMOEBA,
+	COMMUNICATION_FM,
+	COLLECTION,
+	UTIL,
+	PO,
+};
+
+%default $DEFAULT_LIST;

@@ -1,0 +1,57 @@
+OBJECT SPECIFICATION buffer;
+	FROM AwariTypes IMPORT GoedelNr, GTV;
+
+	TYPE buffers = ARRAY[integer] OF buffer;	# array of buffer objects
+	TYPE GoedelArray = ARRAY[integer] OF integer;
+	TYPE GTVarray = ARRAY[integer] OF char;
+
+	TYPE buftype =
+	   RECORD
+		ga: GoedelArray;
+		va: GTVarray;
+	   END;
+
+	OPERATION InitBuffer(p: integer);
+		# initialize buffer
+
+	OPERATION SetPhase(p: integer);
+	OPERATION GetLoad(load: OUT integer): boolean;
+
+	OPERATION InPut(msgs: buftype; fromcpu, load: integer);
+		# blocking put on input buffer with >=1 messages
+		# piggyback load
+
+	OPERATION InSinglePut(g:GoedelNr; value: GTV);
+		# blocking put on input buffer
+
+	OPERATION InTryGet(g: OUT GoedelNr; value: OUT GTV;
+			   optimal: OUT boolean; do_go: OUT boolean) :boolean;
+	
+	OPERATION OutPut(g: GoedelNr; value: GTV; optimal: boolean;
+			 cpu: integer): boolean;
+		#blocking put on output buffer
+
+
+	OPERATION TryOutGet(res: OUT buftype; cpu: OUT integer;ok: OUT boolean;
+			load: OUT integer): boolean;
+		# blocking get on output buffer
+		# returns false if communication thread must terminate
+		# else, returns an array of 1 or more messages for same cpu
+
+
+	OPERATION InputIsEmpty(): boolean;
+		# check if input buffer is empty
+
+	OPERATION AwaitInNonemptyOrOutEmpty();
+		# block until at least one of the following conditions it true
+		#  (1) the input queue is not empty, or
+		#  (2) the output queue is empty
+	OPERATION TerminateCommunicationThread();
+		# Tell communication thread to terminate
+
+	OPERATION CheckOutEmpty();
+		# This operation is called by the communication thread after
+		# it has delivered one or more items to other cpus.
+
+	OPERATION PrintStatistics();
+END;

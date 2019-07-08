@@ -1,0 +1,28 @@
+OBJECT SPECIFICATION GlobalMemory;
+
+FROM vectmath IMPORT Vectmath, matrix;
+FROM LocalMemory IMPORT LocalMemoryType;
+
+TYPE GlobalMemoryType = RECORD # all this info is for the whole system 
+    n2bcalc : integer;	  # total number of body/cell interactions  
+    nbccalc : integer;	  # total number of body/body interactions  
+    selfint : integer;	  # number of self interactions             
+    mtot : real;		  # total mass of N-body system             
+    etot : ARRAY[integer 0..2] OF real;  # binding, kinetic, potential energy 
+    keten : matrix;	  # kinetic energy tensor        
+    peten : matrix;	  #  potential energy tensor                
+    cmphase : ARRAY[integer 0..1] OF Vectmath;	 # center of mass coordinates
+                                                 #  and velocity 
+    amvec : Vectmath;	  # angular momentum vector                 
+                     END;
+
+OPERATION operwrite( l: LocalMemoryType);
+OPERATION operread( nttot, nbavg, ncavg: OUT integer);
+OPERATION write_lock();
+OPERATION write_unlock();
+OPERATION read_lock();
+OPERATION read_unlock();
+
+OPERATION print(verbose: integer);
+
+END;

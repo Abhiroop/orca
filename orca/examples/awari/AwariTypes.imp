@@ -1,0 +1,94 @@
+#-----------------------------------------------#
+# Author : H. Staalman 				#
+# Date	 : August 1994				#
+# Version: 1.0					#
+#-----------------------------------------------#
+#
+# <SUPERFLUOUS> Not needed anymore...
+
+MODULE IMPLEMENTATION AwariTypes;
+
+
+FUNCTION Ord(pit: IN PitName):integer;
+  # ORD already exists..
+BEGIN
+  CASE (pit) OF
+    A => RETURN(1);|
+    B => RETURN(2);|
+    C => RETURN(3);|
+    D => RETURN(4);|
+    E => RETURN(5);|
+    F => RETURN(6);|
+    a => RETURN(7);|
+    b => RETURN(8);|
+    c => RETURN(9);|
+    d => RETURN(10);|
+    e => RETURN(11);|
+    f => RETURN(12);|
+    ELSE WriteLine("Sirius bug: Illegal pit[PitName] in 'Ord()'");
+  ESAC;
+END;
+
+
+FUNCTION Pred(pit: IN PitName):PitName;
+BEGIN
+  CASE (pit) OF
+    A => RETURN(f);|
+    B => RETURN(A);|
+    C => RETURN(B);|
+    D => RETURN(C);|
+    E => RETURN(D);|
+    F => RETURN(E);|
+    a => RETURN(F);|
+    b => RETURN(a);|
+    c => RETURN(b);|
+    d => RETURN(c);|
+    e => RETURN(d);|
+    f => RETURN(e);|
+    ELSE WriteLine("Sirius bug: Illegal pit[PitName] in 'Pred()'");
+  ESAC;
+END;
+
+
+FUNCTION Succ(pit: IN PitName):PitName;
+BEGIN
+  CASE (pit) OF
+    A => RETURN(B);|
+    B => RETURN(C);|
+    C => RETURN(D);|
+    D => RETURN(E);|
+    E => RETURN(F);|
+    F => RETURN(a);|
+    a => RETURN(b);|
+    b => RETURN(c);|
+    c => RETURN(d);|
+    d => RETURN(e);|
+    e => RETURN(f);|
+    f => RETURN(A);|
+    ELSE WriteLine("Sirius bug: Illegal pit[PitName] in 'Succ()'");
+  ESAC;
+END;
+
+
+FUNCTION EnumName(pit: IN PitName):string;
+BEGIN
+  CASE (pit) OF
+    A => RETURN("A");|
+    B => RETURN("B");|
+    C => RETURN("C");|
+    D => RETURN("D");|
+    E => RETURN("E");|
+    F => RETURN("F");|
+    a => RETURN("a");|
+    b => RETURN("b");|
+    c => RETURN("c");|
+    d => RETURN("d");|
+    e => RETURN("e");|
+    f => RETURN("f");|
+    ELSE WriteLine("Sirius bug: Illegal pit[PitName] in 'EnumName()'");
+  ESAC;
+END;
+
+
+
+END; # AwariTypes

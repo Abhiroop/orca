@@ -1,0 +1,51 @@
+#
+# The CVS Modules File
+#
+# "@(#): $Id: modules,v 1.31 1996/03/14 14:28:29 tim Exp $"
+#
+# Three different line formats are valid:
+#	key	-a    aliases...
+#	key [options] directory
+#	key [options] directory files...
+#
+# Where "options" are composed of:
+#	-i prog		Run "prog" on "cvs commit" from top-level of module.
+#	-o prog		Run "prog" on "cvs checkout" of module.
+#	-t prog		Run "prog" on "cvs rtag" of module.
+#	-u prog		Run "prog" on "cvs update" of module.
+#	-d dir		Place module in directory "dir" instead of module name.
+#	-l		Top-level directory only -- do not recurse.
+#
+# And "directory" is a path to a directory relative to $CVSROOT.
+#
+# The "-a" option specifies an alias.  An alias is interpreted as if
+# everything on the right of the "-a" had been typed on the command line.
+#
+# You can encode a module within a module by using the special '&'
+# character to interpose another module into the current module.  This
+# can be useful for creating a module that consists of many directories
+# spread out over the entire source repository.
+#
+
+
+# Convenient aliases
+world		-a .
+
+# CVSROOT support
+#M	 CVSROOT	The Complete CVS Administration Directory
+CVSROOT		-i /usr/proj/orca/bin/mkmodules CVSROOT
+
+#M	 modules	The modules database
+modules		-i /usr/proj/orca/bin/mkmodules CVSROOT modules
+#M	loginfo	post-commit command file
+loginfo		-i /usr/proj/orca/bin/mkmodules CVSROOT loginfo
+#M	 commitinfo	 pre-commit command file
+commitinfo	-i /usr/proj/orca/bin/mkmodules CVSROOT commitinfo
+#M	rcsinfo	RCS log template
+rcsinfo		-i /usr/proj/orca/bin/mkmodules CVSROOT rcsinfo
+#M	editinfo	CVS log template
+editinfo        -i mkmodules CVSROOT editinfo
+
+
+# Add more modules here 
+#

@@ -1,0 +1,140 @@
+MODULE IMPLEMENTATION main;
+
+FROM Finish          IMPORT Finish;
+FROM task_graph_obj  IMPORT task_graph_obj, task_t;
+FROM task_stack      IMPORT task_descr;
+FROM action_list_obj IMPORT action_specifier, action_list_obj,
+			    send_create, send_fork, send_finished;
+FROM ParamRes        IMPORT param_t, result_t, WriteParam, WriteResult;
+FROM scheduler       IMPORT scheduler;
+FROM semaphore       IMPORT semaphore;
+
+FROM Time            IMPORT GetTime;
+
+FROM conversions     IMPORT StringToInt;
+FROM args            IMPORT Argc, Argv;
+
+
+CONST Verbose   = false;
+
+
+FUNCTION nfib_seq(n : integer) : integer;
+BEGIN
+    IF n <= 1 THEN
+	RETURN 1;
+    ELSE
+	RETURN (1 + nfib_seq(n - 1) + nfib_seq(n - 2));
+    FI;
+END;
+
+
+PROCESS worker(task        : task_descr;
+	       task_graph  : SHARED task_graph_obj;
+	       action_list : SHARED action_list_obj;
+	       print_sema  : SHARED semaphore);
+
+n      : integer;
+task_id : integer;
+par    : param_t;
+res0   : result_t;
+res1   : result_t;
+res    : result_t;
+
+BEGIN
+    n := task.params.nfib_val;
+    task_id := task.task_id;
+    IF Verbose THEN
+	print_sema$P();
+	WriteLine("fork of task", task_id, " on cpu ", MYCPU(),
+		  " to compute f(", n, ")");
+	print_sema$V();
+    FI;
+			# Work during forking stage; if no forks, this is all.
+    IF n <= 1 THEN
+	res := 1;
+    ELSIF n <= task.params.threshold THEN
+	res := nfib_seq(n);
+    ELSE		# A fork is done:
+	par := param_t:{n - 1, task.params.threshold};
+	send_create(task_graph, action_list, 0, task.task, par);
+	par := param_t:{n - 2, task.params.threshold};
+	send_create(task_graph, action_list, 1, task.task, par);
+	send_fork(action_list, task.task);
+			# ... and initiate awaiting the result
+	task_graph$await(task.task);
+	# print_sema$P();
+	# WriteLine("resume of Worker task", task_id, " on cpu ", MYCPU());
+	# print_sema$V();
+	task_graph$child_result(task.task, 0, res0);
+	# Write("    child #0: result = "); WriteResult(res0); WriteLine();
+	task_graph$child_result(task.task, 1, res1);
+	# Write("    child #1: result = "); WriteResult(res1); WriteLine();
+	# Continue with the join part.
+	res := 1 + res0 + res1;
+    FI;
+    send_finished(task_graph, action_list, task.task, task.parent, res);
+    IF Verbose THEN
+	print_sema$P();
+	WriteLine("f (", n, ") = ", res, " computed by task", task_id,
+		  " on cpu ", MYCPU());
+	print_sema$V();
+    FI;
+END;
+
+
+PROCESS OrcaMain();
+
+task_graph  : task_graph_obj;
+action_list : action_list_obj;
+
+root_task   : task_t;
+res         : result_t;
+par         : param_t;
+print_sema  : semaphore;
+start, stop : integer;
+Nfibval     : integer;
+Threshold   : integer;
+dummy       : integer;
+
+BEGIN
+    IF Argc() /= 3 THEN
+	WriteLine("Usage: ", Argv(0), " <nfib-val> <threshold>");
+	RETURN;
+    FI;
+    Nfibval := StringToInt(Argv(1), dummy);
+    Threshold := StringToInt(Argv(2), dummy);
+
+
+			# Set up scheduler
+    FORK scheduler(task_graph, action_list, NCPUS(), print_sema);
+    IF Verbose THEN
+	WriteLine("scheduler forked");
+    FI;
+			# create parent descriptor for the main task
+    task_graph$mkroot(root_task, MYCPU());
+    par := param_t:{Nfibval, Threshold};
+			# send a first task to the scheduler
+    start := GetTime();
+    send_create(task_graph, action_list, 0, root_task, par);
+			# await its termination
+    task_graph$await(root_task);
+    stop := GetTime();
+    IF Verbose THEN
+	print_sema$P();
+	WriteLine("root task finish arrived...");
+	print_sema$V();
+    FI;
+			# fetch the result
+			# (forget about the child task descriptor here)
+    task_graph$child_result(root_task, 0, res);
+    print_sema$P();
+    Write("nfib(", Nfibval, ") = ");
+    WriteResult(res);
+    WriteLine(" on ", NCPUS(), " cpus.");
+    WriteLine("t = ", FLOAT(stop - start) / 10.0, " s.");
+    print_sema$V();
+    action_list$finish();
+    Finish();
+END;
+
+END;

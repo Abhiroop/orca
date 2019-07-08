@@ -1,0 +1,14 @@
+OBJECT SPECIFICATION Work;
+  FROM Types IMPORT Vali, BoolArray, IntMatrix, ConMatrix, RelationIndex;
+        OPERATION init_const(max_rel: RelationIndex; nr_connections,
+		nr_vars: integer; seed: integer);
+        OPERATION get_const() : ConMatrix;
+        OPERATION init(n, nslaves : integer ; YesOrNo : boolean);
+        OPERATION Vote(i : integer; YesOrNo: boolean);
+        OPERATION lista_work(N, cpu : integer; processor : Vali) : BoolArray;
+	OPERATION Announce(i, n : integer) ;
+        OPERATION Work_for(N, cpu : integer; processor : Vali): boolean;
+	OPERATION Ready();	# Has to be called prior to Work_for :-(
+        OPERATION Test(i : integer) : boolean;
+        OPERATION GetValue(): BoolArray;
+END;

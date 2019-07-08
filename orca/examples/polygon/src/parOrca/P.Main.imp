@@ -1,0 +1,2166 @@
+ ###############################################################################
+ #####  P.Main.imp:    par*Overlay                                        ######
+ ##                                                                          ###
+
+MODULE IMPLEMENTATION Main;
+
+ ##-----------------------------------------------------------------------------
+ ## CPP defines:
+ ##-----------------------------------------------------------------------------
+
+#ifdef DEBUG
+#    define DEBUGWriteLine(A)	WriteLine(A)
+#    define DEBUGWrite(A)	Write(A)
+#else
+#    define DEBUGWriteLine(A)
+#    define DEBUGWrite(A)
+#endif
+
+ ##-----------------------------------------------------------------------------
+ ## Standard Imports:
+ ##-----------------------------------------------------------------------------
+
+FROM Finish IMPORT
+    Finish
+;
+IMPORT IntObject
+;
+FROM InOut IMPORT
+    CloseInput,
+    CloseOutput,
+    Eof,
+    Eoln,
+    Flush,
+    OpenInputFile,
+    OpenOutputFile,
+    ReadInt,
+    ReadString,
+    WriteInt,
+    WriteString,
+    WriteLn
+;
+
+#if TIMING_ESSENTIAL || TIMING_FULL
+    FROM Time IMPORT
+        SysMilli
+    ;
+#endif
+
+ ##-----------------------------------------------------------------------------
+ ## Local imports:
+ ##-----------------------------------------------------------------------------
+
+FROM BoxModule IMPORT
+    Box,
+    isEqualBox,
+    readBox
+;
+FROM BoxListModule IMPORT
+    BoxList,
+    BoxListNode,
+    addToBoxList,
+    returnEmptyBoxList
+;
+
+#if (! NO_OUTPUT) || DEBUG
+    FROM BoxModule IMPORT
+        writeBox
+    ;
+#endif
+
+#ifdef DUPLICATE_FILTER
+    FROM BoxListModule IMPORT
+	delFirstFromBoxList
+    ;
+#endif
+
+#if (DIVIDE && LSD) || ONCE_INPUT
+    FROM BoxListModule IMPORT
+        insertBoxInList
+    ;
+#endif
+
+#ifdef LSD
+    FROM BoxModule IMPORT
+        noMoreBoxSurface,
+#       define noMoreBoxSurface(box)   (box.surface <= 0)
+        overlayBoxes,
+        substractBoxSurface
+    ;
+    FROM BoxListModule IMPORT
+          delNextBoxFromList
+    ;
+#endif
+
+#ifdef MERGESORT
+    FROM BoxListModule IMPORT
+	length,
+        mSortBoxListCorner1X
+    ;
+#endif
+
+#ifdef QUICKSORT
+    FROM BoxListModule IMPORT
+	length,
+        qSortBoxListCorner1X
+    ;
+#endif
+
+ ##-----------------------------------------------------------------------------
+ ## Types & Objects.
+ ##-----------------------------------------------------------------------------
+ 
+TYPE MesgRecord =
+    RECORD
+        list: BoxList;
+        last: boolean;
+    END;
+
+TYPE BoxListArray = ARRAY[integer] OF MesgRecord;
+
+OBJECT TransportQueue = NEW GenericJobQueue(MesgRecord);
+
+TYPE ListQArray = ARRAY[integer] OF TransportQueue;
+
+TYPE CpuBag = BAG OF integer;
+
+#ifdef BROADCAST
+    TYPE IntObjectArray = ARRAY [integer] OF IntObject;
+    OBJECT ListBinBCast = NEW GenericBinMultiple(MesgRecord);
+#endif
+
+#ifdef PATCH
+    TYPE Bounds = ARRAY[integer] OF integer;
+
+    TYPE SizeArray = ARRAY[integer] OF integer;
+#endif
+
+#ifdef TIMING_TRACE
+    MODULE timeMasterStart =
+	NEW trace_gen(integer, "TimeMasterStart", "", TRACE_LEVEL)
+    ;
+    MODULE timeMasterAfterDealingA =
+	NEW trace_gen(integer, "timeMasterAfterDealingA", "", TRACE_LEVEL)
+    ;
+    MODULE timeMasterStartSortBPart =
+	NEW trace_gen(integer, "timeMasterStartSortBPart", "", TRACE_LEVEL)
+    ;
+    MODULE timeMasterSortedBPart =
+	NEW trace_gen(integer, "timeMasterSortedBPart", "", TRACE_LEVEL)
+    ;
+    MODULE timeMasterAfterDealingB =
+	NEW trace_gen(integer, "timeMasterAfterDealingB", "", TRACE_LEVEL)
+    ;
+    MODULE timeMasterEnd =
+	NEW trace_gen(integer, "TimeMasterEnd", "", TRACE_LEVEL)
+    ;
+
+    MODULE timeWorkerGotA =
+	NEW trace_gen(integer, "timeWorkerGotA", "# packets = %d", TRACE_LEVEL)
+    ;
+    MODULE timeWorkerSortedA =
+	NEW trace_gen(integer, "timeWorkerSortedA", "", TRACE_LEVEL)
+    ;
+    MODULE timeWorkerGotB =
+	NEW trace_gen(integer, "timeWorkerGotB", "# packets = %d", TRACE_LEVEL)
+    ;
+    MODULE timeWorkerSortedB =
+	NEW trace_gen(integer, "timeWorkerSortedB", "", TRACE_LEVEL)
+    ;
+    MODULE timeWorkerEnd =
+	NEW trace_gen(integer, "timeWorkerEnd", "# packets = %d", TRACE_LEVEL)
+    ;
+#endif
+
+#ifdef WAIT
+    TYPE listOfMesgNode = NODENAME OF listOfMesg;
+ 
+    TYPE listOfMesg =
+        GRAPH
+            head: listOfMesgNode;
+        NODES
+            mesg: MesgRecord;     # Information field.
+            next: listOfMesgNode; # List 'pointer'.
+        END; # BoxList
+#endif
+
+ ##-----------------------------------------------------------------------------
+ ## Local process prototypes.
+ ##-----------------------------------------------------------------------------
+
+PROCESS overlayWorker(
+    syncPoint:     SHARED IntObject;      # For synchronization.
+    listQueue:     SHARED TransportQueue; # To get data from master.
+#   ifdef BROADCAST
+        count:     SHARED IntObject;      # For broadcast synchronization.
+	listBCast: SHARED ListBinBCast;   # To get broadcasts from master.
+#   endif
+    answerQueue:   SHARED TransportQueue; # To give data to master.
+    reserveMB:     IN integer;            # Reseve MB per worker.
+    maxListSize:   IN integer             # Max size of lists to send to master.
+);
+
+ ##-----------------------------------------------------------------------------
+ ## Local function prototypes.
+ ##-----------------------------------------------------------------------------
+
+FUNCTION getInputValues(
+    aFile:          OUT string;  # Name aFile to be read from stdin.
+    bFile:          OUT string;  # Name bFile to be read from stdin.
+    resultFile:     OUT string;  # Name resultFile to be read from stdin.
+    mainBox:        OUT Box;     # Contains the outer box sizes.
+    resMBOnWorker:  OUT integer; # Reserve MB's on each worker.
+    bcastBufSize:   OUT integer; # Size of the buffer used during BCasts.
+    initSendSize:   OUT integer; # Initial size of lists to send to Worker.
+    maxSendSize:    OUT integer; # Maximum size of lists to send to Worker.
+    maxReceiveSize: OUT integer; # Maximum size of lists to receive from Worker.
+    qOnWorkers:     OUT boolean; # Strategy : listQueues on Workers or Master.
+    workerOnMaster: OUT boolean; # Put worker on master if true else don't.
+    tries:          OUT integer; # Number of repetetions.
+    pNumbers:       OUT CpuBag   # Numbers of proccesors to run on.
+);
+ 
+FUNCTION newListQArray(
+    from:     IN  integer;
+    to:       IN  integer;
+    newArray: OUT ListQArray[from .. to]
+);
+
+FUNCTION overlayMaster(
+#   ifdef ONCE_INPUT
+        aFile:     IN BoxList;            # List contains all polygons of aFile
+        bFile:     IN BoxList;            # List contains all polygons of bFile
+#   else
+        aFile:     IN string;             # Name of file to read polygons from.
+        bFile:     IN string;             # Name of file to read polygons from.
+#   endif
+    resultFile:    IN string;             # Name of file to write results to.
+    listQArray:    SHARED ListQArray;     # To send boxLists trough.
+#   ifdef BROADCAST
+	count:     SHARED IntObjectArray; # To know: all has been received.
+        listBCast: SHARED ListBinBCast;   # To broadcast with.
+#   endif
+    answerQueue:   SHARED TransportQueue; # Receives resulting boxes.
+    bcastBufSize:  IN integer;            # Size of buffer used during BCasts.
+    initSendSize:  IN integer;            # Initial size of lists to send to W.
+    maxSendSize:   IN integer;            # Max size of lists to send to Worker.
+    firstW:        IN integer;            # CPU number of first worker (0 or 1)
+    lastW:         IN integer;            # CPU number of last worker.
+    mainBox:       IN Box                 # Contains the outer box.
+);
+
+FUNCTION reserveMegaBytes(
+    n: integer
+);
+
+
+#ifndef NO_OUTPUT
+
+    FUNCTION writeBoxList(
+        list: IN BoxList
+    );
+#endif
+
+
+#ifdef DIVIDE
+
+    FUNCTION getDivideSendALists(
+#       ifdef ONCE_INPUT
+            aFileList: SHARED BoxList;   # Contains all polygons from aFile.
+#       else
+            aFile:     IN string;        # Name of file to read polygons from.
+#       endif
+        firstW:        IN integer;       # First worker number.
+        lastW:         IN integer;       # Last worker number.
+        maxListSize:   IN integer;       # Max number of items per list.
+        listQArray:    SHARED ListQArray # Send chanel to the workers.
+    );
+
+    FUNCTION getDivideSendBList(
+#       ifdef ONCE_INPUT
+            bFileList:  SHARED BoxList;     # Contains all polygons from bFile.
+#       else
+            bFile:      IN string;          # File to read polygons from.
+#       endif
+        firstW:         IN integer;         # First worker number.
+        lastW:          IN integer;         # Last worker number.
+        initSendSize:   IN integer;         # Initial list-size to send to W.
+        maxSendSize:    IN integer;         # Max list-size to send to Workers.
+#       ifdef BROADCAST
+            count:      SHARED IntObjectArray; # To know: all has been received.
+	    bcastBufSize : integer;
+            listBCast:  SHARED ListBinBCast # Broadcast channel to workers.
+#       else
+            listQArray: SHARED ListQArray   # Send chanels to the workers.
+#       endif
+    );
+#endif
+
+#if DIVIDE && LSD
+
+    FUNCTION mergeBoxListCorner1X(
+        intoList:  SHARED BoxList; # To merge mergList into.
+        mergeList: IN     BoxList  # To merge into intoList.
+    );
+#endif
+
+#ifdef LSD
+
+    FUNCTION calcOverlayLSD(
+        aList:             SHARED MesgRecord;
+        bList:             SHARED MesgRecord;
+        answerQueue:       SHARED TransportQueue; # To give data to master.
+#       ifdef DUPLICATE_FILTER
+	    workerBorder1X: IN integer;           # To filter out doubles.
+	    workerBorder3X: IN integer;           # To filter out doubles.
+#       endif
+        maxListSize:       IN integer             # Max size of lists to send.
+    );
+
+#else
+
+    FUNCTION calcOverlay(
+        aList:             SHARED MesgRecord;
+        bList:             SHARED MesgRecord;
+        answerQueue:       SHARED TransportQueue; # To give data to master.
+#       ifdef DUPLICATE_FILTER
+	    workerBorderX: IN integer;            # To filter out doubles.
+#       endif
+        maxListSize:       IN integer             # Max size of lists to send.
+    );
+#endif
+
+#ifdef ONCE_INPUT
+
+    FUNCTION readABFiles(
+	aFile:     IN  string;  # Contains polygons from the A map.
+	bFile:     IN  string;  # Contains polygons from the B map.
+	aFileList: OUT BoxList; # Will contain all poygons of the A map.
+	bFileList: OUT BoxList  # Will contain all poygons of the B map.
+    );
+#endif
+
+#ifdef PATCH
+
+    FUNCTION getPatchSendALists(
+#       ifdef ONCE_INPUT
+	    aFileList: SHARED BoxList;   # Contains all polygons of aFile.
+#       else
+            aFile:     IN string;        # File to read polygons from.
+#       endif
+        firstW:        IN integer;       # First Worker number.
+        lastW:         IN integer;       # Last Worker number.
+        maxListSize:   IN integer;       # Max numbr of items per list.
+#       ifdef DUPLICATE_FILTER
+            firstTime: IN boolean;       # First Worker number.
+#       endif
+#       if !DUPLICATE_FILTER || LSD
+            bounds1:        SHARED Bounds;   # Left B patch bound per worker.
+#       endif
+#       ifndef DUPLICATE_FILTER
+            bounds3:    SHARED Bounds;   # Right B patch bound per worker.
+#       endif
+        listQArray:    SHARED ListQArray # Send channel to workers.
+    );
+#endif
+
+#if PATCH && !DUPLICATE_FILTER
+
+    FUNCTION getPatchSendBLists(
+#       ifdef ONCE_INPUT
+            bFileList: SHARED BoxList;   # Contains all polygons of bFile.
+#       else
+            bFile:     IN string;        # File to read polygons from.
+#       endif
+        firstW:        IN integer;       # First Worker number.
+        lastW:         IN integer;       # Last Worker number.
+        maxListSize:   IN integer;       # Max number of items per list.
+        bounds1:       SHARED Bounds;    # Left B patch bound per worker.
+        bounds3:       SHARED Bounds;    # Right B patch bound per worker.
+        listQArray:    SHARED ListQArray # Send channel to workers.
+    );
+#endif
+
+ ##-----------------------------------------------------------------------------
+ ## Inline OwnMath
+ ##-----------------------------------------------------------------------------
+ 
+FUNCTION maxInt(
+    a: IN integer;
+    b: IN integer
+): integer;
+BEGIN
+    IF a > b THEN
+        RETURN a ;
+    ELSE
+        RETURN b ;
+    FI;
+END; # maxInt
+ 
+#if !LSD || MOST_AREA || DIVIDE
+    FUNCTION minInt(
+        a: IN integer;
+        b: IN integer
+    ): integer;
+    BEGIN
+        IF a < b THEN
+            RETURN a;
+        ELSE
+            RETURN b;
+        FI;
+    END; # minInt
+#endif
+
+ ##-----------------------------------------------------------------------------
+ ## OrcaMain()
+ ##-----------------------------------------------------------------------------
+
+ PROCESS OrcaMain(
+ );
+     aFile:          string;         # Name of file to read polygons from.
+     answerQueue:    TransportQueue; # Receives resulting boxes.
+     bcastBufSize:   integer;        # Size of the buffer used during BCasts.
+     bFile:          string;         # Name of file to read polygons from.
+     firstWorker:    integer;        # Can be 0 or 1.
+     initSendSize:   integer;        # Initial size of lists to send to Worker.
+     lastWorker:     integer;        # Minus firstWorker = # proc.s. to run on.
+     listQArray:     ListQArray;     # To send boxLists trough.
+     mainBox:        Box;            # Contains the outer box.
+     maxReceiveSize: integer;        # Max size of lists to receive from Worker.
+     maxSendSize:    integer;        # Maximum size of lists to send to Worker.
+     pNumbers:       CpuBag;         # Numbrs of proc.s to run on.
+     qOnWorkers:     boolean;        # Strategy for listQueues.
+     resultFile:     string;         # Name of file where to write results to.
+     syncPoint:      IntObject;      # Synchronize before start.
+     tries:          integer;        # Number of repetions.
+     workerOnMaster: boolean;        # Put worker on master if true else don't.
+     processor:      integer;        # CPU number to put a worker on.
+     resMBOnWorker:  integer;        # Reserve MB on worker.
+#    ifdef BROADCAST
+         count:      IntObjectArray[0..NCPUS()]; # To synchronize broadcasts.
+         listBCast:  ListBinBCast;   # To broadcast with to all workers.
+#    endif
+#    ifdef ONCE_INPUT
+	 aFileList:  BoxList;        # Contains all the polygons from the aFile.
+	 bFileList:  BoxList;        # Contains all the polygons from the bFile.
+#    endif
+ BEGIN
+     getInputValues(aFile, bFile, resultFile, mainBox, resMBOnWorker,
+                    bcastBufSize, initSendSize, maxSendSize, maxReceiveSize,
+		    qOnWorkers, workerOnMaster, tries, pNumbers);
+
+#    ifdef DEBUG
+         WriteLine("Main: Got input values.");
+         WriteLine("Main:    aFile= ", aFile);
+         WriteLine("Main:    bFile= ", bFile);
+         WriteLine("Main:    resultFile= ", resultFile);
+         WriteString("Main:    mainBox= "); writeBox(mainBox);
+         WriteLine("Main:    resMBOnWorker= ", resMBOnWorker);
+         WriteLine("Main:    bcastBufSize= ", bcastBufSize);
+         WriteLine("Main:    initSendSize= ", initSendSize);
+         WriteLine("Main:    maxSendSize= ", maxSendSize);
+         WriteLine("Main:    maxReceiveSize= ", maxReceiveSize);
+         WriteString("Main:    qOnWorkers= ");
+             IF qOnWorkers THEN
+                 WriteLine("Yes.");
+             ELSE
+                 WriteLine("No.");
+             FI;
+         WriteString("Main:    workerOnMaster= ");
+             IF workerOnMaster THEN
+                 WriteLine("Yes.");
+             ELSE
+                 WriteLine("No.");
+             FI;
+         WriteLine("Main:    tries= ", tries);
+         WriteString("Main:    pNumbers=");
+             FOR cpuNum IN pNumbers DO
+                 WriteString(" ");
+                 WriteInt(cpuNum);
+             OD;
+         WriteLine(".");
+#    endif
+
+ ## Initialize variables.
+     lastWorker := 0;
+     FOR cpuNum IN pNumbers DO
+         lastWorker := maxInt(lastWorker, cpuNum - 1);
+     OD;
+
+     IF workerOnMaster THEN
+         firstWorker := 0; # Everything can run on 1 processor.
+     ELSE
+         firstWorker := 1;
+     FI;
+
+     newListQArray(firstWorker, lastWorker, listQArray); 
+
+ ## Set syncPoint to total number of workers.
+     syncPoint$assign(lastWorker - firstWorker + 1);
+
+ ## Put answerQueue on master.
+     Strategy(answerQueue, 0, 0);
+
+ ## Start workers.
+#    ifdef DEBUG
+         WriteLine("Main: Fork ", lastWorker - firstWorker + 1," workers on ",
+                   NCPUS(), " processors");
+#    endif
+
+#    ifdef BROADCAST
+         Strategy(listBCast, 1, 0);
+#    endif
+
+     FOR p IN firstWorker .. lastWorker DO
+         IF workerOnMaster THEN
+	     processor := p % NCPUS();
+	 ELSE
+	     processor := ((p-1) % (NCPUS()-1)) + 1;
+	 FI;
+
+         ## Put the listQueues on the desired processors.
+         IF qOnWorkers THEN
+             ## Put listQArray[p] on processor where worker p is planned.
+             Strategy(listQArray[p], 0, processor);
+         ELSE
+             ## Put listQArray[p] on Master.
+             Strategy(listQArray[p], 0, 0);
+         FI;
+#        ifdef BROADCAST
+	     Strategy(count[p], 0, 0);
+#        endif
+
+         ## Fork the workers on the desired processors.
+         FORK overlayWorker(syncPoint, listQArray[p],
+#                           ifdef BROADCAST
+                                count[p],
+				listBCast,
+#                           endif
+			    answerQueue, resMBOnWorker, maxReceiveSize)
+         ON processor;
+     OD;
+
+#    ifdef ONCE_INPUT
+	 readABFiles(aFile, bFile, aFileList, bFileList);
+#    endif
+
+     ## Synchronize (Wait for all workers to be ready.).
+     syncPoint$AwaitValue(0);
+
+     ## Do work 'tries' time on number of processors discribed in 'pNumbers'.
+     FOR t IN 1 .. tries DO
+         FOR cpuNum IN pNumbers DO
+             lastWorker := cpuNum - 1;
+
+#            ifdef DEBUG
+                 WriteLine("Main: Run nr ", t," with workers ", firstWorker,
+                           " to ", lastWorker);
+#            endif
+
+             ## Set syncPoint to total number of workers which take part now.
+             syncPoint$assign(lastWorker - firstWorker + 1);
+
+             WriteString("NCPU = "); WriteInt(cpuNum);
+             WriteString(", try = "); WriteInt(t);
+
+             ## Do all master's work for one single run.
+	     overlayMaster(
+#                          ifdef ONCE_INPUT
+			       aFileList, bFileList,
+#                          else
+			       aFile, bFile,
+#                          endif
+			   resultFile, listQArray,
+#                          ifdef BROADCAST
+			       count,
+			       listBCast,
+#                          endif
+			   answerQueue, bcastBufSize, initSendSize, maxSendSize,
+			   firstWorker, lastWorker, mainBox);
+
+             ## Synchronize (Wait for all participating workers to be ready.)
+             syncPoint$AwaitValue(0);
+         OD;
+     OD;
+
+     ## Close standard output.
+     CloseOutput();
+
+     lastWorker := 0;
+     FOR cpuNum IN pNumbers DO
+	 lastWorker := maxInt(lastWorker, cpuNum - 1);
+     OD;
+
+     ## Set syncPoint to total number of total workers.
+     syncPoint$assign((lastWorker - firstWorker) + 1);
+ 
+     ## Signal to workers to exit.
+     FOR p IN firstWorker .. lastWorker DO
+         listQArray[p]$NoMoreJobs();
+     OD;
+
+     ## Wait for all workers to have signaled that they are exitting.
+     syncPoint$AwaitValue(0);
+ 
+     Finish();
+ END; # OrcaMain
+
+ ##-----------------------------------------------------------------------------
+ ## overlayWorker()
+ ##-----------------------------------------------------------------------------
+
+PROCESS overlayWorker(
+    syncPoint:     SHARED IntObject;      # For synchronization.
+    listQueue:     SHARED TransportQueue; # To get data from master.
+#   ifdef BROADCAST
+        count:     SHARED IntObject;      # For broadcast synchronization.
+	listBCast: SHARED ListBinBCast;   # To get broadcasts from master.
+#   endif
+    answerQueue:   SHARED TransportQueue; # To give data to master.
+    reserveMB:     IN integer;            # Reseve MB per worker.
+    maxListSize:   IN integer             # Max size of lists to send to master.
+ );
+    aList:             MesgRecord;
+    bList:             MesgRecord;
+    ignoreResult:      boolean;     # To ignore results
+    tempList:          MesgRecord;
+    tempNode:          BoxListNode;
+
+#   if BROADCAST || TIMING_TRACE
+        nbrOfPacket:   integer;     # Number of current packet.
+#   endif
+#   ifdef DUPLICATE_FILTER
+        workerBorder1X: integer;     # This Worker border, to be able filter.
+#   endif
+#   if DUPLICATE_FILTER && LSD
+        workerBorder3X: integer;     # This Worker border, to be able filter.
+#   endif
+#   ifdef MERGESORT
+	avoidAliasing: BoxListNode; # Avoid 2 times shared.
+#   endif
+
+BEGIN
+
+    ## Let master know this worker is ready.
+    reserveMegaBytes(reserveMB);
+
+   ## Let master know this worker is ready.
+    syncPoint$dec();
+
+ ## Start working.
+    ## Get partial aList..
+    WHILE listQueue$GetJob(aList) DO
+#       ifdef TIMING_TRACE
+            nbrOfPacket := 1;
+#       endif
+
+        IF NOT aList.last THEN
+            REPEAT
+#               ifdef TIMING_TRACE
+                    nbrOfPacket +:= 1;
+#               endif
+                ignoreResult := listQueue$GetJob(tempList);
+
+#               ifdef DUPLICATE_FILTER
+                    IF tempList.last THEN
+#                       ifdef LSD
+                            workerBorder3X := tempList.list[tempList.list.head]
+				 	     .box.corner1.x;
+	                    delFirstFromBoxList(tempList.list);
+#                       endif
+
+                        workerBorder1X := tempList.list[tempList.list.head]
+				 	 .box.corner1.x;
+	                delFirstFromBoxList(tempList.list);
+                        DEBUGWrite("overlayWorker[");
+                        DEBUGWrite(MYCPU());
+                        DEBUGWrite("]: workerBorderX a = ");
+	                DEBUGWrite(workerBorder1X);
+                        DEBUGWrite(", ");
+	                DEBUGWriteLine(workerBorder3X);
+		    FI;
+#               endif
+
+	     ## Add tempList to the aList.
+	        tempNode := tempList.list.head;
+	        WHILE NOT (tempNode = NIL) DO
+		    addToBoxList(aList.list, tempList.list[tempNode].box);
+		    tempNode := tempList.list[tempNode].next;
+	        OD;
+            UNTIL tempList.last;
+
+#       ifdef DUPLICATE_FILTER
+            ELSE
+#               ifdef LSD
+                    workerBorder3X := aList.list[aList.list.head].box.corner1.x;
+	            delFirstFromBoxList(aList.list);
+#               endif
+
+                workerBorder1X := aList.list[aList.list.head].box.corner1.x;
+	        delFirstFromBoxList(aList.list);
+                DEBUGWrite("overlayWorker[");
+                DEBUGWrite(MYCPU());
+                DEBUGWrite("]: workerBorderX a = ");
+	        DEBUGWrite(workerBorder1X);
+                DEBUGWrite(", ");
+	        DEBUGWriteLine(workerBorder3X);
+#       endif
+        FI;
+
+#       ifdef TIMING_TRACE
+            timeWorkerGotA.event(nbrOfPacket);
+#       endif
+
+#       ifdef QUICKSORT
+            ## Sort the aList.
+            qSortBoxListCorner1X(aList.list, aList.list.head,
+                                 length(aList.list));
+#           ifdef TIMING_TRACE
+                timeWorkerSortedA.event(0);
+#           endif
+#       endif
+
+#       ifdef MERGESORT
+            ## Sort the aList.
+            avoidAliasing := aList.list.head;
+            mSortBoxListCorner1X(aList.list, avoidAliasing,
+                                 length(aList.list));
+            aList.list.head := avoidAliasing;
+#           ifdef TIMING_TRACE
+                timeWorkerSortedA.event(0);
+#           endif
+#       endif
+
+     ## Get the bList.
+#       if BROADCAST || TIMING_TRACE
+            nbrOfPacket := 1;
+#       endif
+#       ifdef BROADCAST
+            bList := listBCast$get(nbrOfPacket);
+	    count$inc();
+            DEBUGWrite("overlayWorker[");
+            DEBUGWrite(MYCPU());
+            DEBUGWrite("]: got bList part ");
+            DEBUGWriteLine(nbrOfPacket);
+#       else
+            ignoreResult := listQueue$GetJob(bList);
+#       endif
+        IF NOT bList.last THEN
+            REPEAT
+#               if BROADCAST || TIMING_TRACE
+                    nbrOfPacket +:= 1;
+#               endif
+#               ifdef BROADCAST
+                    tempList := listBCast$get(nbrOfPacket);
+		    count$inc();
+                    DEBUGWrite("overlayWorker[");
+                    DEBUGWrite(MYCPU());
+                    DEBUGWrite("]: got bList part ");
+                    DEBUGWriteLine(nbrOfPacket);
+#               else
+                    ignoreResult := listQueue$GetJob(tempList);
+#               endif
+
+#       	if LSD && DIVIDE
+		    ## Get bList and sort it by merging sorted sublists.
+		    mergeBoxListCorner1X(bList.list, tempList.list);
+#               else
+                    ## Add tempList to the bList.
+                    tempNode := tempList.list.head;
+                    WHILE NOT (tempNode = NIL) DO
+                        addToBoxList(bList.list, tempList.list[tempNode].box);
+                        tempNode := tempList.list[tempNode].next;
+                    OD;
+#               endif
+
+            UNTIL tempList.last;
+        FI;
+
+#       ifdef BROADCAST
+            DEBUGWrite("overlayWorker[");
+            DEBUGWrite(MYCPU());
+            DEBUGWrite("]: got ");
+            DEBUGWrite(nbrOfPacket);
+            DEBUGWriteLine(" bList parts ");
+#       endif
+#       ifdef TIMING_TRACE
+            timeWorkerGotB.event(nbrOfPacket);
+#       endif
+
+#       if LSD && PATCH && QUICKSORT
+            ## Sort the bList.
+            qSortBoxListCorner1X(bList.list, bList.list.head,
+                                 length(bList.list));
+#           ifdef TIMING_TRACE
+                timeWorkerSortedB.event(0);
+#           endif
+#       endif
+
+#       if LSD && PATCH && MERGESORT
+            ## Sort the bList.
+            avoidAliasing := bList.list.head;
+            mSortBoxListCorner1X(bList.list, avoidAliasing,
+				 length(bList.list));
+            bList.list.head := avoidAliasing;
+#           ifdef TIMING_TRACE
+                timeWorkerSortedB.event(0);
+#           endif
+#       endif
+
+
+        ## Calculate overlays and give them back to the master-process.
+#       ifdef LSD
+	    calcOverlayLSD(aList, bList, answerQueue,
+#                          ifdef DUPLICATE_FILTER
+	                       workerBorder1X,
+#                              ifdef LSD
+	                           workerBorder3X,
+#                              endif
+#                          endif
+	                   maxListSize);
+#	else
+	    calcOverlay(aList, bList, answerQueue,
+#                       ifdef DUPLICATE_FILTER
+	                    workerBorder1X,
+#                       endif
+	                maxListSize);
+#	endif
+        DEBUGWrite("overlayWorker[");
+        DEBUGWrite(MYCPU());
+        DEBUGWriteLine("]: Work done. ");
+
+        ## Let master know this worker is ready.
+        syncPoint$dec();
+    OD;
+
+    ## Let master know this worker is exitting.
+    syncPoint$dec();
+END; # overlayWorker()
+
+ ##-----------------------------------------------------------------------------
+ ## getInputValues()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION getInputValues(
+    aFile:          OUT string;  # Name aFile to be read from stdin.
+    bFile:          OUT string;  # Name bFile to be read from stdin.
+    resultFile:     OUT string;  # Name resultFile to be read from stdin.
+    mainBox:        OUT Box;     # Contains the outer box sizes.
+    resMBOnWorker:  OUT integer; # Reserve MB's on each worker.
+    bcastBufSize:   OUT integer; # Size of the buffer used durring BCasts.
+    initSendSize:   OUT integer; # Initial size of lists to send to Worker.
+    maxSendSize:    OUT integer; # Maximum size of lists to send to Worker.
+    maxReceiveSize: OUT integer; # Maximum size of lists to receive from Worker.
+    qOnWorkers:     OUT boolean; # Strategy : listQueues on Workers or Master.
+    workerOnMaster: OUT boolean; # Put worker on master if true else don't.
+    tries:          OUT integer; # Number of repetetions.
+    pNumbers:       OUT CpuBag   # Numbers of proccesors to run on.
+);
+    resMBOnMaster: integer; # Maximum size of the lists to be send.
+    p:             integer; # A process number that has been read.
+    strat:         string;  # To decide what strategy (->qOnWorkers).
+    testBox:       Box;     # To test against mainBox.
+    workerOnM:     string;  # To decide wether to put a worker on master.
+BEGIN
+    ReadString(aFile);
+    ReadString(bFile);
+    ReadString(resultFile);
+    ReadInt(resMBOnMaster);
+    ReadInt(resMBOnWorker);
+    ReadInt(bcastBufSize);
+    ReadInt(initSendSize);
+    ReadInt(maxSendSize);
+    ReadInt(maxReceiveSize);
+    ReadString(strat);
+    ReadString(workerOnM);
+    ReadInt(tries);
+    WHILE (NOT Eoln()) AND (NOT Eof()) DO
+        ReadInt(p);
+        INSERT(p, pNumbers);
+    OD;
+
+    IF OpenInputFile(aFile) THEN
+        IF NOT readBox(mainBox) THEN
+            WriteString("Read error whilst reading file '");
+            WriteString(aFile); WriteString("'"); WriteLn();
+            Finish();
+        FI;
+        CloseInput();
+    ELSE
+	WriteString("Can't open file \"");
+        WriteString(aFile); WriteString("'"); WriteLn();
+        Finish();
+    FI;
+ 
+    IF OpenInputFile(bFile) THEN
+        IF NOT readBox(testBox) THEN
+            WriteString("Read error whilst reading file '");
+            WriteString(bFile); WriteString("'"); WriteLn();
+            Finish();
+        FI;
+        CloseInput();
+        IF NOT isEqualBox(mainBox, testBox) THEN
+            WriteString("Files '"); WriteString(aFile);
+            WriteString("' and '"); WriteString(bFile);
+            WriteString("' have different surounding boxes!"); WriteLn();
+            Finish();
+        FI;
+    ELSE
+        WriteString("Can't open file '");
+        WriteString(bFile);
+        WriteString("'");
+        WriteLn();
+        Finish();
+    FI;
+ 
+    IF NOT OpenOutputFile(resultFile) THEN
+        WriteString("Can't open file '");
+        WriteString(resultFile);
+        WriteString("'");
+        WriteLn();
+        Finish();
+    ELSE
+        CloseOutput();
+    FI;
+
+    reserveMegaBytes(resMBOnMaster);
+
+    ## If qOnWorkers contains 'M' this means that queues where workers get
+    ## their information from should be put on the Master otherwise they
+    ## should be put on the workers (which is proofed to be better).
+    qOnWorkers :=  strat[1] /= 'M';
+
+    ## If workerOnM contains 'M' then a worker is also forked on the master
+    ## that is processor 0, otherwise the master has it's private processor.
+    workerOnMaster := workerOnM[1] = 'M';
+
+    IF (NOT workerOnMaster) AND (1 IN pNumbers) THEN
+        WriteString("It isn't posible to run whith 1 processor if there ");
+        WriteString("is no worker on the first processor.");
+        WriteLn();
+        Finish();
+    FI;
+    IF (NOT workerOnMaster) AND (NCPUS() <= 1) THEN
+        WriteString("It aint possible to not put a worker on the master as ");
+        WriteString("there is only 1 processor available.");
+        WriteLn();
+        Finish();
+    FI;
+
+ END; # getInputValues()
+
+ ##-----------------------------------------------------------------------------
+ ## newListQArray()
+ ##-----------------------------------------------------------------------------
+
+ FUNCTION newListQArray(
+     from:     IN  integer;
+     to:       IN  integer;
+     newArray: OUT ListQArray[from .. to]
+ );
+ BEGIN
+ END; # newListQArray()
+
+#ifdef BROADCAST
+     ##-------------------------------------------------------------------------
+     ## init_count()
+     ##-------------------------------------------------------------------------
+
+    FUNCTION init_count(
+        N:      IN integer;
+        firstW: IN integer;
+        lastW:  IN integer;
+                count:  SHARED IntObjectArray
+    );
+    BEGIN
+	    FOR p IN firstW .. lastW DO
+		    count[p]$assign(N);
+	    OD;
+    END;
+
+     ##-------------------------------------------------------------------------
+     ## free_buf()
+     ##-------------------------------------------------------------------------
+
+    FUNCTION free_buf(
+        firstW: IN integer;
+        lastW:  IN integer;
+        count:  SHARED IntObjectArray
+    ) : integer;
+	    min : integer;
+    BEGIN
+	    min := 10000;	# infinity
+	    FOR p IN firstW .. lastW DO
+		    min := minInt( min, count[p]$AwaitBigger(0));
+		    count[p]$dec();
+	    OD;
+	    RETURN min;
+    END;
+#endif
+
+ ##-----------------------------------------------------------------------------
+ ## overlayMaster()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION overlayMaster(
+#   ifdef ONCE_INPUT
+        aFile:     IN BoxList;            # List contains all polygons of aFile
+        bFile:     IN BoxList;            # List contains all polygons of bFile
+#   else
+        aFile:     IN string;             # Name of file to read polygons from.
+        bFile:     IN string;             # Name of file to read polygons from.
+#   endif
+    resultFile:    IN string;             # Name of file to write results to.
+    listQArray:    SHARED ListQArray;     # To send boxLists trough.
+#   ifdef BROADCAST
+	count:     SHARED IntObjectArray; # To know: all has been received.
+        listBCast: SHARED ListBinBCast;   # To broadcast with.
+#   endif
+    answerQueue:   SHARED TransportQueue; # Receives resulting boxes.
+    bcastBufSize:  IN integer;            # Size of buffer used during BCasts.
+    initSendSize:  IN integer;            # Initial size of lists to send to W.
+    maxSendSize:   IN integer;            # Max size of lists to send to Worker.
+    firstW:        IN integer;            # CPU number of first worker (0 or 1)
+    lastW:         IN integer;            # CPU number of last worker.
+    mainBox:       IN Box                 # Contains the outer box.
+);
+    ignoreResult:       boolean;                  # To ignore results.
+    resultList:         MesgRecord;               # Contains resulting boxes.
+#   ifdef PATCH && !DUPLICATE_FILTER
+        workerBounds1:   Bounds[firstW .. lastW]; # Left border per worker.
+        workerBounds3:   Bounds[firstW .. lastW]; # Right border per worker.
+#   elif PATCH && DUPLICATE_FILTER && LSD
+        workerBounds1:   Bounds[firstW .. lastW]; # Left border per worker.
+#   endif
+
+#   if TIMING_ESSENTIAL || TIMING_FULL
+        tStart:         integer;                  # To keep track of duration.
+        tEnd:           integer;                  #              ,,
+        tAfterDealingA: integer;                  #              ,,
+        tAfterDealingB: integer;                  #              ,,
+#   endif
+
+BEGIN
+#   if TIMING_ESSENTIAL || TIMING_FULL
+        tStart := SysMilli();
+#   endif
+#   ifdef TIMING_TRACE
+        timeMasterStart.event(0);
+#   endif
+
+#   ifdef BROADCAST
+        ## Set value before any worker can decrement count.
+        init_count(bcastBufSize, firstW, lastW, count);
+
+        ## Set value before any worker can do get.
+        listBCast$reset(bcastBufSize);
+#   endif
+
+
+    DEBUGWriteLine(" ....");
+    DEBUGWriteLine("overlayMaster: Deal the aList.");
+
+    ## Give a different part of the aList to each worker.
+#   ifdef DIVIDE
+	getDivideSendALists(aFile, firstW, lastW, maxSendSize, listQArray);
+#   elif PATCH
+	getPatchSendALists(aFile, firstW, lastW, maxSendSize,
+#                          ifdef DUPLICATE_FILTER
+                               true,
+#                          endif
+#                          if !DUPLICATE_FILTER || LSD
+			       workerBounds1,
+#                          endif
+#                          ifndef DUPLICATE_FILTER
+			       workerBounds3,
+#                          endif
+	                   listQArray);
+#   endif
+
+#   if TIMING_ESSENTIAL || TIMING_FULL
+        tAfterDealingA := SysMilli();
+#   endif
+#   ifdef TIMING_TRACE
+        timeMasterAfterDealingA.event(0);
+#   endif
+
+    DEBUGWriteLine("overlayMaster: Deal the bList.");
+
+    ## Give all workers a peace of bList to check on posible overlaps.
+#   ifdef DIVIDE
+	getDivideSendBList(bFile, firstW, lastW, initSendSize, maxSendSize,
+#                          ifdef BROADCAST
+			       count,
+			       bcastBufSize,
+			       listBCast
+#                          else
+			       listQArray
+#                          endif
+	);
+#   elif PATCH
+#       ifdef DUPLICATE_FILTER
+	    ## Dealing the bList goes just the same as the aList.
+	    getPatchSendALists(bFile, firstW, lastW, maxSendSize,
+			       false,
+#                              ifdef LSD
+				   workerBounds1,
+#                              endif
+	                       listQArray);
+#       else
+	    getPatchSendBLists(bFile, firstW, lastW, maxSendSize,
+			       workerBounds1, workerBounds3, listQArray);
+#       endif
+#   endif
+
+#   if TIMING_ESSENTIAL || TIMING_FULL
+        tAfterDealingB := SysMilli();
+#   endif
+#   ifdef TIMING_TRACE
+        timeMasterAfterDealingB.event(0);
+#   endif
+
+    DEBUGWrite("overlayMaster: Both lists have been dealt.");
+    DEBUGWriteLine(" Waiting for answer.");
+    DEBUGWrite("... ");
+
+  ## Print all the found resulting boxes from the workers.
+#   ifdef NO_OUTPUT
+        FOR p IN firstW .. lastW DO
+            REPEAT
+                ignoreResult := answerQueue$GetJob(resultList);
+            UNTIL resultList.last;
+        OD;
+#   else
+        IF OpenOutputFile(resultFile) THEN
+            writeBox(mainBox);    # Write the surounding box.
+            FOR p IN firstW .. lastW DO
+                REPEAT
+                    ignoreResult := answerQueue$GetJob(resultList);
+                    writeBoxList(resultList.list);
+                UNTIL resultList.last;
+            OD;
+
+            CloseOutput();
+        ELSE
+	    WriteLn();
+	    WriteString("ERROR: overlayMaster: Can't open file \"");
+	    WriteString(resultFile);
+	    WriteString("\"");
+	    WriteLn();
+        FI;
+#   endif
+
+#   if TIMING_ESSENTIAL || TIMING_FULL
+        tEnd := SysMilli();
+#   endif
+#   ifdef TIMING_TRACE
+        timeMasterEnd.event(0);
+#   endif
+
+#   if TIMING_ESSENTIAL || TIMING_FULL
+        ## Print elapsed time.
+        WriteString(", time = "); WriteInt(tEnd - tStart);
+        WriteString(" = a:");
+        WriteInt(tAfterDealingA - tStart);
+        WriteString(" + b:"); 
+        WriteInt(tAfterDealingB - tAfterDealingA);
+        WriteString(" + "); 
+        WriteInt(tEnd - tAfterDealingB);
+        WriteString("(ms)"); WriteLn();
+        Flush();
+#   endif
+END; # overlayMaster()
+
+
+ ##-----------------------------------------------------------------------------
+ ## reserveMegaBytes()
+ ##-----------------------------------------------------------------------------
+
+FUNCTION reserveMegaBytes(
+    n: IN integer # Number of Mega bytes to reserve on the local heep.
+);
+    neverUsedArray: ARRAY[integer 1..(n * 1048576)] OF char;
+BEGIN
+END; # reserveMegaBytes()
+
+
+#ifndef NO_OUTPUT
+   ##---------------------------------------------------------------------------
+   ## writeBoxList()
+   ##---------------------------------------------------------------------------
+
+   FUNCTION writeBoxList(
+       list: IN BoxList
+   );
+       node: BoxListNode; # Walks trough the aList (double linked).
+   BEGIN
+       node := list.head;
+       WHILE NOT (node = NIL) DO
+           writeBox(list[node].box);
+           node := list[node].next;
+       OD;
+   END; # writeBoxList()
+#endif
+
+
+#if DIVIDE && LSD
+  ##----------------------------------------------------------------------------
+  ## mergeBoxListCorner1X()
+  ##----------------------------------------------------------------------------
+ 
+   FUNCTION mergeBoxListCorner1X(
+       intoList: SHARED BoxList; # List to merge mergList into.
+       mergList: IN BoxList      # List to merge into intoList.
+   );
+       iBackNode: BoxListNode; # To walk trough intoList 1 step behind iNode.
+       iNode: BoxListNode;     # To walk trough intoList.
+       mNode: BoxListNode;     # To walk trough mergList;
+   BEGIN
+       mNode := mergList.head;
+ 
+   ## Make sure no item will be inserted infront of the head, after this.
+       IF     NOT(mNode = NIL)
+          AND (    (intoList.head = NIL)
+                OR (mergList[mNode].box.corner1.x
+                    <= intoList[intoList.head].box.corner1.x)
+              )
+       THEN
+           addToBoxList(intoList, mergList[mNode].box);
+ 
+           mNode := mergList[mNode].next;
+       FI;
+ 
+       iBackNode := intoList.head;
+       iNode := intoList[iBackNode].next;
+ 
+   ## Merge as long as both lists have got an item at the node"pointer".
+       WHILE NOT(mNode = NIL) AND NOT(iNode = NIL) DO
+           IF mergList[mNode].box.corner1.x < intoList[iNode].box.corner1.x THEN
+               insertBoxInList(mergList[mNode].box, intoList, iBackNode);
+               iBackNode := intoList[iBackNode].next;
+ 
+               mNode := mergList[mNode].next;
+           ELSE
+               iBackNode := iNode;
+               iNode := intoList[iNode].next;
+           FI;
+       OD;
+         
+   ## Insert remains of mergList at the end of the intoList.
+       WHILE NOT(mNode = NIL) DO
+           insertBoxInList(mergList[mNode].box, intoList, iBackNode);
+           iBackNode := intoList[iBackNode].next;
+ 
+           mNode := mergList[mNode].next;
+       OD;
+ 
+   END; # mergeBoxListCorner1X()
+#endif
+
+#ifdef LSD
+ ##-----------------------------------------------------------------------------
+ ## calcOverlayLSD()
+ ##-----------------------------------------------------------------------------
+
+    FUNCTION calcOverlayLSD(
+        aList:             SHARED MesgRecord;
+        bList:             SHARED MesgRecord;
+        answerQueue:       SHARED TransportQueue; # To give data to master.
+#       ifdef DUPLICATE_FILTER
+	    workerBorder1X: IN integer;            # To filter out doubles.
+	    workerBorder3X: IN integer;            # To filter out doubles.
+#       endif
+        maxListSize:       IN integer             # Max size of lists to send.
+    );
+        aNode:            BoxListNode;
+        backNode:         BoxListNode;
+        bBox:             Box;
+        bNode:            BoxListNode;
+        len:              integer;        # Length of the resultList.
+        resultBox:        Box;
+        resultList:       MesgRecord;
+#       ifdef WAIT
+	    emptyMesgL:   listOfMesg;
+	    mesgList:     listOfMesg;
+	    mesgNode:     listOfMesgNode;
+#       endif
+#       ifdef TIMING_TRACE
+            nbrOfPackets: integer;
+#       endif
+
+    BEGIN
+
+#       ifdef WAIT
+            ## Init mesgNode.
+            mesgList.head := ADDNODE(mesgList);
+            mesgNode := mesgList.head;
+#       endif
+
+#       ifdef TIMING_TRACE
+            nbrOfPackets := 1;
+#       endif
+
+        len := 0;
+        bNode := bList.list.head;
+        WHILE bNode /= NIL DO
+            bBox := bList.list[bNode].box;
+    
+            aNode := aList.list.head;
+
+            backNode := NIL;
+            WHILE     (aNode /= NIL)
+#                 ifdef DUPLICATE_FILTER
+		      AND NOT noMoreBoxSurface(bBox)
+#                 else
+		      AND NOT noMoreBoxSurface(bBox)
+                      AND (bBox.corner3.x > aList.list[aNode].box.corner1.x)
+#                 endif
+            DO
+                IF overlayBoxes(aList.list[aNode].box, bBox, resultBox) THEN
+#                   ifdef DUPLICATE_FILTER
+                        IF resultBox.corner1.x < workerBorder1X THEN
+			    # Ajust surface resultbox.
+			    resultBox.surface -:= 
+				    (workerBorder1X - resultBox.corner1.x)
+				  * (resultBox.corner3.y - resultBox.corner1.y);
+		        FI;
+                        IF resultBox.corner1.x > workerBorder3X THEN
+			    # Ajust surface resultbox.
+			    resultBox.surface -:= 
+				    (resultBox.corner1.x - workerBorder3X)
+				  * (resultBox.corner3.y - resultBox.corner1.y);
+		        FI;
+
+                        IF   (aList.list[aNode].box.corner1.x >= workerBorder1X)
+                           OR (bBox.corner1.x >= workerBorder1X)
+                        THEN
+#                   endif
+
+                            addToBoxList(resultList.list, resultBox);
+                            len +:= 1;
+                            IF len >= maxListSize THEN
+                                resultList.last := false;
+
+#                               ifdef WAIT
+                                    mesgList[mesgNode].next :=ADDNODE(mesgList);
+                                    mesgNode := mesgList[mesgNode].next;
+                                    mesgList[mesgNode].mesg := resultList;
+
+#                                   ifdef TIMING_TRACE
+                                        nbrOfPackets +:= 1;
+#                                   endif
+#                               else
+                                    answerQueue$AddJob(resultList);
+
+#                                   ifdef TIMING_TRACE
+                                        nbrOfPackets +:= 1;
+#                                   endif
+#                               endif
+
+                                len := 0;
+                                resultList.list := returnEmptyBoxList();
+                            FI;
+#                   ifdef DUPLICATE_FILTER
+                        FI;
+#                   endif
+
+                    substractBoxSurface(bBox, resultBox);
+                    substractBoxSurface(aList.list[aNode].box,
+                                        resultBox);
+                    IF noMoreBoxSurface(aList.list[aNode].box) THEN
+                        delNextBoxFromList(aList.list, backNode);
+                        IF backNode = NIL THEN
+                            aNode := aList.list.head;
+                        ELSE
+                            aNode := aList.list[backNode].next;
+                        FI;
+                    ELSE
+                        backNode := aNode;
+                        aNode := aList.list[aNode].next;
+                    FI;
+
+                ELSE
+                    backNode := aNode;
+                    aNode := aList.list[aNode].next;
+                FI;
+            OD;
+
+            bNode := bList.list[bNode].next;
+        OD;
+
+#       ifdef WAIT
+          ## Send all found answers.
+            mesgNode := mesgList.head; # Head.mesg contains garbage.
+            WHILE mesgList[mesgNode].next /= NIL DO
+                mesgNode := mesgList[mesgNode].next;
+                answerQueue$AddJob(mesgList[mesgNode].mesg);
+            OD;
+#       endif
+
+        resultList.last := true;
+        answerQueue$AddJob(resultList);
+
+#       ifdef TIMING_TRACE
+            timeWorkerEnd.event(nbrOfPackets);
+#       endif
+
+    END; # calcOverlayLSD
+#endif
+
+#ifndef LSD
+ ##-----------------------------------------------------------------------------
+ ## calcOverlay()
+ ##-----------------------------------------------------------------------------
+
+    FUNCTION calcOverlay(
+        aList:             SHARED MesgRecord;
+        bList:             SHARED MesgRecord;
+        answerQueue:       SHARED TransportQueue; # To give data to master.
+#       ifdef DUPLICATE_FILTER
+	    workerBorderX: IN integer;            # To filter out doubles.
+#       endif
+        maxListSize:       IN integer             # Max size of lists to send.
+    );
+        aBox:           Box;
+        aNode:          BoxListNode;
+        bBox:           Box;
+        bNode:          BoxListNode;
+        len:            integer;        # Length of the resultList.
+        resultBox:      Box;
+        resultList:     MesgRecord;
+
+#       ifdef WAIT
+	    emptyMesgL: listOfMesg;
+	    mesgList:   listOfMesg;
+	    mesgNode:   listOfMesgNode;
+#       endif
+    BEGIN
+#       ifdef WAIT
+        ## Init mesgNode.
+            mesgList.head := ADDNODE(mesgList);
+            mesgNode := mesgList.head;
+#       endif
+
+        len := 0;
+        bNode := bList.list.head;
+        WHILE NOT(bNode = NIL) DO
+            bBox := bList.list[bNode].box;
+
+            aNode := aList.list.head;
+
+#           ifdef SORT
+                IF NOT(aNode = NIL) THEN
+                      aBox := aList.list[aNode].box;
+                FI;
+#           endif
+
+            WHILE     (NOT(aNode = NIL ))
+#                ifdef SORT
+                    AND (bBox.corner3.x > aBox.corner1.x)
+#                endif
+            DO
+                aBox := aList.list[aNode].box;
+
+                IF     (bBox.corner1.x < aBox.corner3.x)
+                   AND (bBox.corner3.x > aBox.corner1.x)
+                   AND (bBox.corner1.y < aBox.corner3.y)
+                   AND (bBox.corner3.y > aBox.corner1.y)
+#                  ifdef DUPLICATE_FILTER
+                       AND (   (aBox.corner1.x >= workerBorderX)
+                            OR (bBox.corner1.x >= workerBorderX)
+                           )
+#                  endif
+                THEN
+                    IF len >= maxListSize THEN
+                        resultList.last := false;
+
+#                       ifdef WAIT
+                            mesgList[mesgNode].next := ADDNODE(mesgList);
+                            mesgNode := mesgList[mesgNode].next;
+                            mesgList[mesgNode].mesg := resultList;
+#                       else
+                            answerQueue$AddJob(resultList);
+#                       endif
+
+                        len := 0;
+                        resultList.list := returnEmptyBoxList();
+                    FI;
+
+                    resultBox.corner1.x := maxInt(bBox.corner1.x,
+                                                  aBox.corner1.x);
+                    resultBox.corner1.y := maxInt(bBox.corner1.y,
+                                                  aBox.corner1.y);
+
+                    resultBox.corner3.x := minInt(bBox.corner3.x,
+                                                  aBox.corner3.x);
+                    resultBox.corner3.y := minInt(bBox.corner3.y,
+                                                  aBox.corner3.y);
+
+                    addToBoxList(resultList.list, resultBox);
+                    len +:= 1;
+                FI;
+
+                aNode := aList.list[aNode].next;
+            OD;
+
+            bNode := bList.list[bNode].next;
+        OD;
+
+#       ifdef WAIT
+          ## Send answers.
+            mesgNode := mesgList.head; # Head.mesg contains garbage.
+            WHILE mesgList[mesgNode].next /= NIL DO
+                mesgNode := mesgList[mesgNode].next;
+                answerQueue$AddJob(mesgList[mesgNode].mesg);
+            OD;
+#       endif
+
+        resultList.last := true;
+        answerQueue$AddJob(resultList);
+    END; # calcOverlay()
+#endif
+
+#ifdef DIVIDE 
+   ##---------------------------------------------------------------------------
+   ## getDivideSendALists()
+   ##---------------------------------------------------------------------------
+
+   FUNCTION getDivideSendALists(
+#      ifdef ONCE_INPUT
+           aFileList: SHARED BoxList;   # Contains all polygons from aFile.
+#      else
+           aFile:     IN string;        # Name of file to read polygons from.
+#      endif
+       firstW:        IN integer;       # First worker number.
+       lastW:         IN integer;       # Last worker number.
+       maxListSize:   IN integer;       # Max number of items per list.
+       listQArray:    SHARED ListQArray # Send chanels to the workers.
+   );
+       aLists:        BoxListArray[firstW .. lastW]; # To send the polygons to.
+       box:           Box;        # Read box that must be put in a list.
+       currSize:      integer;    # Current size to be filled of the read lists.
+       currW:         integer;    # Current worker number.
+
+#      ifdef ONCE_INPUT
+           aFileNode: BoxListNode; # Walks trough the aFileList.
+#      else
+           ignoreResult: boolean; # To ignore results.
+#      endif
+
+   BEGIN
+#      ifdef ONCE_INPUT
+           aFileNode := aFileList[aFileList.head].next; # Skip mainBox.
+#      else
+           IF NOT OpenInputFile(aFile) THEN
+	       WriteLn();
+	       WriteString("ERROR: getDivideSendALists: Can't open file \"");
+	       WriteString(aFile);
+	       WriteString("\"");
+	       WriteLn();
+
+	       RETURN;
+           FI;
+
+           ignoreResult := readBox(box); # Don't include the outer box
+#      endif
+
+       REPEAT
+	   ## Read in the partial lists for all workers.
+           currW := firstW;
+           currSize := maxListSize;
+           WHILE (currSize > 0) AND
+#              ifdef ONCE_INPUT
+                   (NOT (aFileNode = NIL))
+#              else
+                   readBox(box) 
+#              endif
+           DO
+#              ifdef ONCE_INPUT
+                   box := aFileList[aFileNode].box;
+                   aFileNode := aFileList[aFileNode].next;
+#              endif
+
+               addToBoxList(aLists[currW].list, box);
+ 
+               IF currW = lastW THEN
+                   currSize -:= 1;
+                   currW := firstW;
+               ELSE
+                   currW +:= 1;
+               FI;
+           OD;
+ 
+	   ## Mark if these where the last blocks of polygons.
+           FOR p IN firstW .. lastW DO
+               aLists[p].last := currSize > 0;
+           OD;
+
+	   ## Send the lists to the workers.
+           FOR p IN firstW .. lastW DO
+               listQArray[p]$AddJob(aLists[p]);
+
+	       ## Clean this list.
+ 	       aLists[p].list := returnEmptyBoxList();
+           OD;
+
+
+       UNTIL aLists[firstW].last;
+
+#      ifndef ONCE_INPUT
+           CloseInput();
+#      endif
+   END; # getDivideSendALists()
+
+
+   ##---------------------------------------------------------------------------
+   ## getDivideSendBList()
+   ##---------------------------------------------------------------------------
+
+    FUNCTION getDivideSendBList(
+#       ifdef ONCE_INPUT
+            bFileList:  SHARED BoxList;     # Contains all polygons from bFile.
+#       else
+            bFile:      IN string;          # File to read polygons from.
+#       endif
+        firstW:         IN integer;         # First worker number.
+        lastW:          IN integer;         # Last worker number.
+        initSendSize:   IN integer;         # Initial list-size to send to W.
+        maxSendSize:    IN integer;         # Max list-size to send to Workers.
+#       ifdef BROADCAST
+            count:      SHARED IntObjectArray; # To know: all has been received.
+	    bcastBufSize : integer;
+            listBCast:  SHARED ListBinBCast # Broadcast channel to workers.
+#       else
+            listQArray: SHARED ListQArray   # Send chanels to the workers.
+#       endif
+    );
+        bList:             MesgRecord;  # To send the polygons to.
+        box:               Box;         # Read box that must be put in a list.
+        currSize:          integer;     # Current size of lists to be filled
+        currWorkerSize:    integer;     # Current list-size at workers.
+	min_free :  integer;
+#       if DEBUG
+            nbrOfPacket: integer;
+#       endif
+#       ifdef MERGESORT
+            avoidAliasing: BoxListNode; # Avoid 2 times shared.
+#       endif
+#       ifdef ONCE_INPUT
+            bFileNode:     BoxListNode; # Walks trough the aFileList.
+#       else
+            ignoreResult:  boolean;     # To ignore results.
+#       endif
+
+   BEGIN
+#       ifdef ONCE_INPUT
+            bFileNode := bFileList[bFileList.head].next; # Skip mainBox.
+#       else
+            IF NOT OpenInputFile(bFile) THEN
+	        WriteLn();
+	        WriteString("ERROR: getDivideSendBList: Can't open file \"");
+	        WriteString(bFile);
+	        WriteString("\"");
+	        WriteLn();
+
+	        RETURN;
+            FI;
+
+            ignoreResult := readBox(box); # Don't include the outer box.
+#       endif
+
+#       if DEBUG
+            nbrOfPacket := 1;
+#       endif
+	currWorkerSize := 0;
+        REPEAT
+	    ## Adjust time to sort and send (master) to time to merge (workers).
+	    IF currWorkerSize = 0 THEN
+                currSize := initSendSize;
+	    ELSE
+                currSize := minInt(currWorkerSize, maxSendSize);
+	    FI;
+
+            ## Read a bList part.
+            WHILE (currSize > 0) AND
+#               ifdef ONCE_INPUT
+                    (NOT (bFileNode = NIL))
+#               else
+                    readBox(box) 
+#               endif
+            DO
+#               ifdef ONCE_INPUT
+                    box := bFileList[bFileNode].box;
+                    bFileNode := bFileList[bFileNode].next;
+#               endif
+
+                addToBoxList(bList.list, box);
+  
+                currSize -:= 1;
+            OD;
+            bList.last := currSize > 0;
+
+            ## Sort bList part if needed.
+#           ifdef LSD
+#               ifdef TIMING_TRACE
+                    timeMasterStartSortBPart.event(0);
+#               endif
+
+#               ifdef QUICKSORT
+                    ## Sort each sublist of the blist.
+                    qSortBoxListCorner1X(bList.list, bList.list.head,
+                                         length(bList.list));
+#               endif
+
+#               ifdef MERGESORT
+                    ## Sort each sublist of the blist.
+                    avoidAliasing := bList.list.head;
+                    mSortBoxListCorner1X(bList.list, avoidAliasing,
+                                         length(bList.list));
+                    bList.list.head := avoidAliasing;
+#               endif
+
+#               ifdef TIMING_TRACE
+                    timeMasterSortedBPart.event(0);
+#               endif
+#           endif
+
+	    ## Send bList part to all workers.
+#           ifdef BROADCAST
+		min_free := free_buf(firstW, lastW, count);
+                listBCast$put(bList);
+	        currWorkerSize := (bcastBufSize+1 - min_free) * initSendSize;
+#           else
+                FOR p IN firstW .. lastW DO
+                    listQArray[p]$AddJob(bList);
+                OD;
+#           endif
+#           if DEBUG
+                 DEBUGWrite("getDivideSendBList(): put bList part ");
+                 DEBUGWriteLine(nbrOfPacket);
+                 nbrOfPacket +:= 1;
+#           endif
+
+	    ## Clean bList.
+            bList.list := returnEmptyBoxList();
+        UNTIL bList.last;
+
+#       ifndef ONCE_INPUT
+            CloseInput();
+#       endif
+    END; # getDivideSendBList()
+#endif
+
+#ifdef ONCE_INPUT
+     ##-------------------------------------------------------------------------
+     ## readABFiles()
+     ##-------------------------------------------------------------------------
+
+     FUNCTION readABFiles(
+	 aFile:     IN  string;  # Contains polygons from the A map.
+	 bFile:     IN  string;  # Contains polygons from the B map.
+	 aFileList: OUT BoxList; # Will contain all poygons of the A map.
+	 bFileList: OUT BoxList  # Will contain all poygons of the B map.
+     );
+         box:  Box;         # To be read and put in a list.
+	 node: BoxListNode; # Node to insert the next box after.
+     BEGIN
+
+         IF OpenInputFile(aFile) THEN
+	     DEBUGWriteLine("readABFiles: read aFileList once");
+
+             IF readBox(box) THEN
+                 addToBoxList(aFileList, box); # Head.bos is mainBox.
+                 node := aFileList.head;
+	     FI;
+             WHILE readBox(box) DO
+                 insertBoxInList(box, aFileList, node);
+		 node := aFileList[node].next;
+             OD;
+
+             CloseInput();
+	 ELSE
+	     WriteLn();
+	     WriteString("ERROR: readABFiles: Can't open file \"");
+	     WriteString(aFile);
+	     WriteString("\"");
+	     WriteLn();
+
+	     RETURN;
+         FI;
+
+         IF OpenInputFile(bFile) THEN
+	     DEBUGWriteLine("readABFiles(): read bFileList once");
+
+             IF readBox(box) THEN
+                 addToBoxList(bFileList, box); # Head.bos is mainBox.
+                 node := bFileList.head;
+	     FI;
+             WHILE readBox(box) DO
+                 insertBoxInList(box, bFileList, node);
+		 node := bFileList[node].next;
+             OD;
+
+             CloseInput();
+	 ELSE
+	     WriteLn();
+	     WriteString("ERROR: readABFiles: Can't open file \"");
+	     WriteString(bFile);
+	     WriteString("\"");
+	     WriteLn();
+
+	     RETURN;
+         FI;
+
+	DEBUGWriteLine("readABFiles(): Done reading a- and bFileLists");
+     END; # readABFiles()
+#endif
+
+#ifdef PATCH 
+    ##--------------------------------------------------------------------------
+    ## getPatchSendALists()
+    ##--------------------------------------------------------------------------
+
+    FUNCTION getPatchSendALists(
+#       ifdef ONCE_INPUT
+	    aFileList: SHARED BoxList;   # Contains all polygons of aFile.
+#       else
+            aFile:     IN string;        # File to read polygons from.
+#       endif
+        firstW:        IN integer;       # First Worker number.
+        lastW:         IN integer;       # Last Worker number.
+        maxListSize:   IN integer;       # Max numbr of items per list.
+#       ifdef DUPLICATE_FILTER
+            firstTime: IN boolean;       # First Worker number.
+#       endif
+#       if !DUPLICATE_FILTER || LSD
+            bounds1:        SHARED Bounds;   # Left B patch bound per worker.
+#       endif
+#       ifndef DUPLICATE_FILTER
+            bounds3:    SHARED Bounds;   # Right B patch bound per worker.
+#       endif
+        listQArray:    SHARED ListQArray # Send channel to workers.
+    );
+        box:              Box;                      # Is read and put in a list.
+        mainBox:          Box;                      # To know its length.
+	hiDiv:            integer;                  # L/N + 1.
+	loDiv:            integer;                  # L/N.
+	modBorder:        integer;                  # (L % N) * hiDiv.
+	modNum:           integer;                  # L % N.
+        sizes:            SizeArray[firstW..lastW]; # Keep track of mesg-sizes.
+        aLists:           BoxListArray[0 .. lastW]; # Diff A parts for workers.
+#       ifdef DUPLICATE_FILTER
+            pp:           integer;                  # First proc nmbr to send to
+            qq:           integer;                  # Last proc numbr to send to
+#           ifndef LSD
+                bounds1:   Bounds[firstW .. lastW];
+#           endif
+#       else
+            p:            integer;                  # Workr proc nmbr to send to
+#       endif
+#       ifdef DEBUG
+	    counting:     SizeArray[firstW..lastW]; # Total msg sizes per patch.
+#       endif
+#       ifdef ONCE_INPUT
+            aFileNode:    BoxListNode;              # Walks trough the aFileList
+#       else
+            ignoreResult: boolean;                  # To ignore results.
+#       endif
+    BEGIN
+#       ifdef ONCE_INPUT
+	    mainBox := aFileList[aFileList.head].box;
+            aFileNode := aFileList[aFileList.head].next;
+#       else
+            IF NOT OpenInputFile(aFile) THEN
+	        WriteLn();
+	        WriteString("ERROR: getPatchSendALists: Can't open file \"");
+	        WriteString(aFile);
+	        WriteString("\"");
+	        WriteLn();
+
+	        RETURN;
+            FI;
+
+            ignoreResult := readBox(mainBox); # Don't include the outer box
+#       endif
+
+	hiDiv :=   (mainBox.corner3.x - mainBox.corner1.x)
+		 / ((lastW - firstW) + 1)
+		 + 1;
+	loDiv :=   (mainBox.corner3.x - mainBox.corner1.x)
+		 / ((lastW - firstW) + 1);
+	modNum :=   (mainBox.corner3.x - mainBox.corner1.x)
+		  % ((lastW - firstW) + 1);
+	modBorder := modNum * hiDiv;
+
+        FOR proc IN firstW .. lastW DO
+            sizes[proc] := 0;  # Initialize all lists-sizes (to-send) to 0;
+
+#	    ifdef DEBUG
+	        counting[proc] := 0;
+#	    endif
+
+#           ifdef DUPLICATE_FILTER
+                IF firstTime THEN
+		    IF (proc - firstW) < modNum THEN
+	                bounds1[proc] := (proc - firstW) * hiDiv
+                                       + mainBox.corner1.x;
+                    ELSE
+	                bounds1[proc] := (proc - firstW) * loDiv + modNum
+                                       + mainBox.corner1.x;
+                    FI;
+                FI;
+#	    elif MOST_AREA
+                bounds1[proc] := mainBox.corner3.x;
+                bounds3[proc] := mainBox.corner1.x;
+#           else
+		IF (proc - firstW) < modNum THEN
+	            bounds1[proc] := (proc - firstW) * hiDiv
+                                   + mainBox.corner1.x;
+                ELSE
+	            bounds1[proc] := (proc - firstW) * loDiv + modNum
+                                   + mainBox.corner1.x;
+                FI;
+                bounds3[proc] := mainBox.corner1.x;
+#	    endif
+        OD;
+
+        WHILE 
+#           ifdef ONCE_INPUT
+                NOT (aFileNode = NIL)
+#           else
+                readBox(box) 
+#           endif
+        DO
+#           ifdef ONCE_INPUT
+                box := aFileList[aFileNode].box;
+	        aFileNode := aFileList[aFileNode].next;
+#           endif
+
+#	    ifdef DUPLICATE_FILTER
+		IF (box.corner1.x - mainBox.corner1.x) < modBorder THEN
+                    pp := (box.corner1.x - mainBox.corner1.x) / hiDiv + firstW;
+		ELSE
+                    pp := (box.corner1.x - mainBox.corner1.x - modNum) / loDiv
+			  + firstW;
+		FI;
+		IF (box.corner3.x - 1 - mainBox.corner1.x) < modBorder THEN
+                    qq := (box.corner3.x - 1 - mainBox.corner1.x) / hiDiv
+			  + firstW;
+		ELSE
+                    qq :=   (box.corner3.x - 1 - mainBox.corner1.x - modNum)
+			  / loDiv + firstW;
+		FI;
+#	    elif MOST_AREA
+		IF (box.corner1.x - mainBox.corner1.x) < modBorder THEN
+                    p := (  (box.corner1.x + box.corner3.x) / 2
+			   - mainBox.corner1.x
+			 ) / hiDiv + firstW;
+		ELSE
+                    p := (  (box.corner1.x + box.corner3.x) / 2
+			   - mainBox.corner1.x - modNum
+			 ) / loDiv + firstW;
+		FI;
+#	    else
+		IF (box.corner1.x - mainBox.corner1.x) < modBorder THEN
+                    p := (box.corner1.x - mainBox.corner1.x) / hiDiv + firstW;
+		ELSE
+                    p := (box.corner1.x - mainBox.corner1.x - modNum) / loDiv
+			  + firstW;
+		FI;
+#	    endif
+         
+#           ifdef DUPLICATE_FILTER
+                FOR p IN pp .. qq DO
+#           endif
+
+                    IF sizes[p] >= maxListSize THEN
+#	                ifdef DEBUG
+		            counting[p] +:= sizes[p];
+#	                endif
+                        aLists[p].last := false;
+                        listQArray[p]$AddJob(aLists[p]);
+                        aLists[p].list := returnEmptyBoxList();
+                        sizes[p] := 0;
+                    FI;
+
+#                   if DUPLICATE_FILTER && LSD
+                        IF p > pp THEN
+			    ## Border polygon: ajust surface.
+			    box.surface -:=   (bounds1[p] - box.corner1.x)
+					    * (box.corner3.y - box.corner1.y);
+			    IF p < qq THEN
+                                DEBUGWrite("getPatchSendALists: ");
+	                        DEBUGWriteLine("cut surface on rigth border");
+			        box.surface -:= (box.corner3.x - bounds1[p+1])
+					      * (box.corner3.y - box.corner1.y);
+			    FI;
+			FI;
+#                   endif
+
+                    addToBoxList(aLists[p].list, box);
+                    sizes[p] +:= 1;
+#                   ifndef DUPLICATE_FILTER
+#                       ifdef MOST_AREA
+                            bounds1[p] := minInt(bounds1[p], box.corner1.x);
+                            bounds3[p] := maxInt(bounds3[p], box.corner3.x);
+#                       else
+                            bounds3[p] := maxInt(bounds3[p], box.corner3.x);
+#                       endif
+#	            endif
+
+#           ifdef DUPLICATE_FILTER
+	        OD;
+#	    endif
+
+        OD;
+
+        FOR proc IN firstW .. lastW DO
+#	    ifdef DEBUG
+	        WriteLine("readDivideSendALists(): ", proc, ".length = ",
+		          counting[proc] + sizes[proc]);
+#	    endif
+
+#           ifdef DUPLICATE_FILTER
+                IF firstTime THEN
+                    ## Send as first item of last list the left worker border.
+                    box.corner1.x := bounds1[proc];
+                    addToBoxList(aLists[proc].list, box);
+                    sizes[proc] +:= 1;
+                    DEBUGWrite("getPatchSendALists: workerBorderX ");
+                    DEBUGWrite(proc);
+                    DEBUGWrite(" = ");
+	            DEBUGWrite(box.corner1.x);
+#                   ifdef LSD
+                        IF proc = lastW THEN
+			    box.corner1.x := mainBox.corner3.x;
+			ELSE
+                            box.corner1.x := bounds1[proc + 1];
+			FI;
+                        addToBoxList(aLists[proc].list, box);
+                        sizes[proc] +:= 1;
+                        DEBUGWrite(", ");
+	                DEBUGWriteLine(box.corner1.x);
+#                   endif
+		FI;
+#           endif
+
+            aLists[proc].last := true;
+            listQArray[proc]$AddJob(aLists[proc]);
+        OD;
+
+#       ifndef ONCE_INPUT
+            CloseInput();
+#       endif
+    END; # getPatchSendALists()
+
+    ##--------------------------------------------------------------------------
+    ## getPatchSendBLists()
+    ##--------------------------------------------------------------------------
+
+    FUNCTION getPatchSendBLists(
+#       ifdef ONCE_INPUT
+            bFileList: SHARED BoxList;   # Contains all polygons of bFile.
+#       else
+            bFile:     IN string;        # File to read polygons from.
+#       endif
+        firstW:        IN integer;       # First Worker number.
+        lastW:         IN integer;       # Last Worker number.
+        maxListSize:   IN integer;       # Max number of items per list.
+        bounds1:       SHARED Bounds;    # Left B patch bound per worker.
+        bounds3:       SHARED Bounds;    # Right B patch bound per worker.
+        listQArray:    SHARED ListQArray # Send channel to workers.
+    );
+       box:          Box;                      # To be read and put in a list.
+       bLists:       BoxListArray[0..lastW];
+       sizes:        SizeArray[firstW..lastW]; # Keep track of message-sizes.
+       w:            integer;                  # Counters trough workers.
+
+#      ifdef ONCE_INPUT
+           bFileNode: BoxListNode; # Walks trough the aFileList.
+#      else
+           ignoreResult: boolean; # To ignore results.
+#      endif
+   BEGIN
+#      ifdef ONCE_INPUT
+	   box := bFileList[bFileList.head].box;
+           bFileNode := bFileList[bFileList.head].next;
+#      else
+           IF NOT OpenInputFile(bFile) THEN
+	       WriteLn();
+	       WriteString("ERROR: getPatchSendBLists: Can't open file \"");
+	       WriteString(bFile);
+	       WriteString("\"");
+	       WriteLn();
+
+	       RETURN;
+           FI;
+
+           ignoreResult := readBox(box); # Don't include the outer box
+#      endif
+
+       FOR p IN firstW .. lastW DO
+           sizes[p] := 0; # Initialize all lists (to send) sizes to 0;
+       OD;
+
+       WHILE 
+#          ifdef ONCE_INPUT
+               NOT (bFileNode = NIL)
+#          else
+               readBox(box) 
+#          endif
+       DO
+#          ifdef ONCE_INPUT
+               box := bFileList[bFileNode].box;
+	       bFileNode := bFileList[bFileNode].next;
+#          endif
+
+	   ## Move to first worker that has to get this polygon.
+           w := firstW;
+           WHILE box.corner1.x >= bounds3[w] DO
+	       w +:= 1;
+	   OD;
+
+           WHILE
+                 (w <= lastW)
+#                ifndef MOST_AREA
+		     AND (box.corner3.x > bounds1[w])
+#                endif
+	   DO
+	       IF  (box.corner1.x < bounds3[w])
+#                  ifdef MOST_AREA
+                       AND (box.corner3.x > bounds1[w])
+#                  endif
+	       THEN
+                   IF sizes[w] >= maxListSize THEN
+                       bLists[w].last := false;
+                       listQArray[w]$AddJob(bLists[w]);
+                       bLists[w].list := returnEmptyBoxList();
+                       sizes[w] := 0;
+                   FI;
+
+                   addToBoxList(bLists[w].list, box);
+                   sizes[w] +:= 1;
+		FI;
+
+	       w +:= 1;
+	   OD;
+
+       OD;
+
+       FOR p IN firstW .. lastW DO
+           bLists[p].last := true;
+           listQArray[p]$AddJob(bLists[p]);
+       OD;
+
+#      ifndef ONCE_INPUT
+           CloseInput();
+#      endif
+   END; # getPatchSendBLists()
+#endif
+
+
+END; # Main
+
+ ###                                                                         ###
+ ######  Main.imp                                                         ######
+ ###############################################################################

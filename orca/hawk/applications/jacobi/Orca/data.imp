@@ -1,0 +1,38 @@
+DATA MODULE IMPLEMENTATION data;
+
+  FROM consts	IMPORT	MAX_VALUE, DEFAULT_UPB;
+  FROM args	IMPORT	Argc, Argv;
+  FROM conversions
+		IMPORT	StringToInt;
+
+  FUNCTION mk_tables(n: integer;
+		     a: OUT RealMatrix[1..n, 1..n];
+		     b: OUT RealVector[1..n]);
+	sumrow: real;
+  BEGIN
+	FOR i IN 1..n DO
+		sumrow := 0.0;
+		FOR j IN 1..n DO
+			IF i /= j THEN
+				a[i, j] := FLOAT(i+j-2) / MAX_VALUE;
+				sumrow +:= a[i, j];
+			FI;
+		OD;
+		a[i, i] := sumrow + FLOAT(i-1);
+		b[i] := FLOAT(i+1) / MAX_VALUE;
+	OD;
+  END;
+
+  FUNCTION initialize();
+	n, dummy: integer;
+  BEGIN
+	n := DEFAULT_UPB;
+	IF Argc() > 1 THEN
+		n := StringToInt(Argv(1), dummy);
+	FI;
+	mk_tables(n, a, b);
+  END;
+
+BEGIN
+  initialize();
+END;

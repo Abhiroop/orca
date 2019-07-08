@@ -1,0 +1,520 @@
+ ## ===========================================================================
+ ##
+ ##    File:    main_p.imp
+ ##    Type:    module implementation
+ ##    Date:    August 1995
+ ##  Author:    David S. Bouman. (dsbouma@cs.vu.nl)
+ ##
+ ## ===========================================================================
+
+ MODULE IMPLEMENTATION main_p ;
+
+ ## ===========================================================================
+ ##
+ ##  What's need:
+ ##
+ ## ---------------------------------------------------------------------------
+
+.ifdef TIMING
+
+ FROM Time IMPORT SysMilli, PrintTime;
+
+.endif
+.ifdef MRUNS 
+
+ FROM matrix_m    IMPORT intvecs_m
+		       , intmtx
+		       , intvec
+		       , vector
+		      ;
+
+ TYPE matrix = intmtx ;
+
+.else
+.ifdef CHECK
+
+ FROM matrix_m    IMPORT vectors_m
+		       , vector
+		       , matrix
+		       , intvec
+		       , mv_prod
+		       , getreal
+		      ;
+.else
+
+ FROM matrix_m    IMPORT vector
+		       , matrix
+		       , intvec
+		      ;
+.endif
+.endif
+.ifdef MRUNS
+
+ FROM conversions IMPORT StringToInt ;
+
+.endif
+
+ FROM types_m     IMPORT intvec_dmux
+		       , vec_mux
+		       , intvec_mbin
+		       , real_worm
+		       , twovec_worm
+		      ;
+
+ FROM worker_p    IMPORT worker ;
+
+ FROM Finish      IMPORT Finish ;
+ FROM InOut       IMPORT ReadInt, CloseInput, OpenInputFile;
+ FROM args        IMPORT Argc   , Argv ;
+ FROM barrier     IMPORT barrier, sync ;
+
+	
+ ## ===========================================================================
+ ##
+ ##  Local Functions:
+ ##
+
+.ifdef OUTPUT
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ write_vector
+
+ FUNCTION write_vector ( V : vector );
+
+ BEGIN FOR i IN LB( V ) .. UB( V )
+       DO  WriteLine( V[ i ] );
+       OD  ;
+ END   ;
+
+.endif
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ read_intvec
+
+ FUNCTION read_intvec ( lb,ub:integer ; V:OUT intvec[ lb .. ub ] );
+
+ BEGIN FOR i IN lb .. ub DO
+           ReadInt( V[ i ]);
+       OD  ;
+ END   ;
+
+ 
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ dist_A
+
+ FUNCTION dist_A( A        : SHARED matrix
+		; NWORKS   :        integer
+		; CR_dist  : SHARED intvec_dmux 
+	       );
+
+ cpu : integer   ;
+ s   : integer   ;
+ v   : intvec ;
+
+ BEGIN
+
+.ifdef MRUNS
+       intvecs_m.set_bounds( 1, A.N, A.U );
+       intvecs_m.set_bounds( 1, A.N, A.L );
+.else
+.ifdef CHECK
+       vectors_m.set_bounds( 1, A.N, A.U );
+       vectors_m.set_bounds( 1, A.N, A.L );
+.endif
+.endif
+
+   ##
+   ##  Read Columns.
+   ##
+
+       FOR i IN 1 .. A.N 
+       DO  cpu := ( i - 1 ) % NWORKS + 1 ;
+
+           ReadInt( s ); read_intvec( i - ( s - 1 ), i    , v );
+           CR_dist[ cpu ] $ put ( v );
+
+.ifdef MRUNS
+	   A.U[ i ] := v ;
+.else
+.ifdef CHECK
+	   getreal( v, A.U[ i ]);
+.endif
+.endif
+       OD  ;
+
+   ##
+   ##  Read Rows.
+   ##
+
+       FOR i IN 1 .. A.N
+       DO  cpu := ( i - 1 ) % NWORKS + 1 ;
+	   
+           ReadInt( s ); read_intvec( i -   s      , i - 1, v );
+           CR_dist[ cpu ] $ put ( v );
+
+.ifdef MRUNS 
+           A.L[ i ] := v ;
+.else
+.ifdef CHECK 
+	   getreal( v, A.L[ i ]);
+.endif
+.endif
+       OD  ;
+
+# WriteLine("Columns of_ A: ", A.N);
+# FOR i IN 1 .. A.N DO
+# Write("[", LB(A.U[i]), "..", UB(A.U[i]), "] ");
+# FOR j IN LB(A.U[i]) .. UB(A.U[i]) DO
+# Write(A.U[i][j], " ");
+# OD;
+# WriteLine();
+# OD;
+
+# WriteLine("Rows of_ A: ", A.N);
+# FOR i IN 1 .. A.N DO
+# Write("[", LB(A.L[i]), "..", UB(A.L[i]), "] ");
+# FOR j IN LB(A.L[i]) .. UB(A.L[i]) DO
+# Write(A.L[i][j], " ");
+# OD;
+# WriteLine();
+# OD;
+
+ END   ;
+
+
+.ifdef MRUNS
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ redist_A
+
+ FUNCTION redist_A( A        : SHARED matrix
+		  ; NWORKS   :        integer
+		  ; CR_dist  : SHARED intvec_dmux
+		 );
+
+ BEGIN FOR i IN 1 .. A.N 
+       DO  CR_dist[ ( i - 1 ) % NWORKS + 1 ] $ put ( A.U[ i ]);
+       OD  ;
+
+       FOR i IN 1 .. A.N
+       DO  CR_dist[ ( i - 1 ) % NWORKS + 1 ] $ put ( A.L[ i ]);
+       OD  ;
+ END   ;
+
+.endif
+
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ vv_fsub           - Perform
+ ##
+ ##      from : integer  - over a range
+ ##        to : integer  - of elements: from <= i <= to
+ ##    factor : real     - the subtraction of the multiplication of a factor
+ ##        v1 : vector   - and vector element v1[ i ]
+ ##        v2 : vector   - from vector element v2[ i ]
+ ##
+
+ FUNCTION vv_fsub( factor :        real
+		 ;   from :        integer 
+	         ;     to :        integer
+		 ;     v1 :        vector
+		 ;     v2 : SHARED vector
+	        );
+
+ BEGIN FOR i IN from .. to
+       DO  v2[ i ] -:= v1[ i ] * factor;
+       OD  ;
+ END   ;
+ 
+
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ backward_sub       - Backwards substitution, solving Ux=y.
+ ##                         Calculations are arranged in such a way that they
+ ##                         be performed iterating over the columns of U in 
+ ##                         reverser order.
+ ##
+ ##          N : integer  - Size of the matrix U 
+ ##     NWORKS : integer  - Nr of workers that U is distributed over.
+ ##         xy : vector   - Enter y return x.
+ ##    CR_dist : vec_mux  - Receive vectors from workers.
+ ##
+
+ FUNCTION backward_sub( N       :        integer 
+		      ; NWORKS  :        integer
+		      ; xy      : SHARED vector
+		      ; CR_dist : SHARED vec_mux
+		     );
+ i  : integer ;
+ Uj : vector  ;
+
+ BEGIN i := N ;
+ 
+       WHILE i >= 1
+       DO    CR_dist[ ( i - 1 ) % NWORKS + 1 ] $ get( Uj );
+
+	     xy[i] /:= Uj[i];
+
+             vv_fsub( xy[i], LB( Uj ), i-1, Uj, xy );
+
+             i -:= 1 ;
+       OD    ;
+ END ;
+
+  
+ ## ---------------------------------------------------------------------------
+ ##
+ ##  @ OrcaMain
+ ##
+
+ PROCESS OrcaMain ();
+
+ NWORKS   : integer     ;
+ S_intvec : intvec_mbin ;
+ S_elt    : real_worm   ;
+
+ A        : matrix      ;
+ y        : vector      ;
+ x        : vector      ;
+ b	  : intvec      ;
+
+ U_gather : vec_mux[1.. NCPUS()];   # One bin per worker, used to distribute
+          			      # the input matrix' data.
+
+ CR_dist  : intvec_dmux[1.. NCPUS()]; # One bin per worker, used to distribute
+	  			        # the input matrix' data.
+
+ CRD      : twovec_worm ;
+
+ the_end  : barrier     ;           # wait for all processes to finish before
+                                    # calling Finish(). 
+.ifdef TIMING
+
+ ready    : barrier     ;           # timing.
+ t1,t2,t3 : integer     ;
+ t_total: integer;
+
+.endif
+
+.ifdef MRUNS
+
+ nruns    : integer     ;
+ dummy    : integer     ;
+
+.else
+.ifdef CHECK
+
+ max,d    : real        ;
+
+.endif
+.endif
+
+ arg      : integer;
+ args     : string;
+ myname   : string;
+
+ BEGIN myname := Argv( 0 );
+
+       arg := 1 ;
+
+.ifdef MRUNS
+       nruns := 4 ;
+.endif
+
+       WHILE arg < Argc() 
+       DO 
+             args := Argv( arg ); 
+
+	     IF args = "-input" THEN
+		 arg +:= 1;
+		 IF arg < Argc() THEN
+		     CloseInput();
+		     IF NOT OpenInputFile( Argv(arg)) THEN
+			 WriteLine(myname, ": cannot open input file ",
+				   Argv(arg));
+		     FI;
+		 ELSE
+		     WriteLine(myname,": -input flag requires argument.");
+		 FI;
+	     ELSE
+
+	     IF   args[ 1 ] = '-' 
+	     THEN 
+.ifdef MRUNS
+		  IF   Argv( arg ) = "-runs"
+		  THEN arg +:= 1 ; 
+		       IF   arg < Argc() 
+		       THEN nruns := StringToInt(Argv(arg), dummy);
+		       ELSE WriteLine(myname,": -runs flag requires argument.");
+		       FI   ;
+		  ELSE
+.endif
+		       WriteLine(myname,": ",Argv(arg),", unrecognized flag.");
+.ifdef MRUNS
+		  FI   ; 
+.endif
+	     ELSE WriteLine(myname,": ",Argv(arg),", unrecognized argument.");
+	     FI   ;
+	     FI   ;
+	     arg +:= 1 ;
+       OD    ;   
+
+       NWORKS := NCPUS() ;
+ 
+.ifdef TIMING
+       t1 := SysMilli() ; WriteLine( "Start:      ", t1 ) ; t2:=t1 ;
+       ready   $ init( NWORKS + 1 );
+       t_total := 0;
+.endif
+       the_end $ init( NWORKS + 1 );
+
+   ##  Set up object strategies.
+
+       Strategy( CRD     , 1, 0 ); 
+       Strategy( S_intvec, 1, 0 ); 
+       Strategy( S_elt   , 1, 0 );
+
+       CRD      $ init( NWORKS );
+       S_intvec $ init( NWORKS );
+       S_elt    $ init( NWORKS );
+
+   ##  The vector distribution bins should be kept here.
+
+       FOR cpu IN 1 .. NWORKS
+       DO  Strategy(  CR_dist[ cpu ], 0, 0 );
+           Strategy( U_gather[ cpu ], 0, 0 );
+       OD  ;
+
+   ##  Get Matrix A's and vector b's size:
+
+       ReadInt( A.N );
+
+       FOR cpu IN 1 .. NWORKS
+       DO  FORK worker( A.N, CR_dist[ cpu ]
+                           , S_intvec
+                           , U_gather[ cpu ]
+                           , S_elt
+			   , CRD 
+.ifdef MRUNS
+			   , nruns 
+.endif
+.ifdef TIMING
+                           , ready
+.endif
+                           , the_end        ) ON cpu - 1 + NCPUS() - NWORKS;
+       OD  ;
+
+
+.ifdef TIMING
+       sync(ready); t3:=SysMilli(); WriteLine("Past FORK: ", t3 - t2);
+       t3 := t2;
+.endif
+
+
+   ##  Read the skyline matrix data. First Columns, then Rows. Distribute it
+   ##  over available workers by means of each worker's vector bin that's
+   ##  shared with us. Columns and rows are assigned to workers in round robin
+   ##  fashion.
+
+       dist_A( A, NWORKS, CR_dist );
+
+.ifdef TIMING
+       sync(ready); t3:=SysMilli(); WriteLine("Reading_A:  ",t3-t2 ); t2:=t3;
+.endif
+
+
+   ##  Read the vector (b) data. Give every worker its local copy.
+
+       read_intvec( 1, A.N, b ); S_intvec $ put( b ); 
+
+.ifdef TIMING
+       sync(ready); t3:=SysMilli(); WriteLine("Reading_b:  ",t3-t2 ); t2:=t3;
+.endif
+
+.ifdef MRUNS
+ 
+    FOR r IN 1..nruns DO
+.ifdef TIMING
+        WriteLine( "----------------------" );
+        t1 := SysMilli() ; t2:=t1 ;
+.endif
+        CRD      $ init( NWORKS );
+        S_intvec $ init( NWORKS );
+        S_elt    $ init( NWORKS );
+
+        redist_A( A, NWORKS, CR_dist );
+
+.ifdef TIMING
+        sync(ready); t3:=SysMilli();WriteLine("Distrib_A:   ",t3-t2);t2:=t3;
+.endif
+
+        S_intvec $ put( b ); 
+
+.ifdef TIMING
+        sync(ready); t3:=SysMilli();WriteLine("Distrib_b:   ",t3-t2);t2:=t3;
+.endif
+
+.endif
+
+.ifdef TIMING
+       sync(ready); t3:=SysMilli(); WriteLine("LU_decomp:  ",t3-t2 ); t2:=t3;
+.endif
+
+       U_gather[ 1 ] $ get( y );
+
+.ifdef TIMING
+       sync(ready); t3:=SysMilli(); WriteLine("Forw.Subst: ",t3-t2 ); t2:=t3;
+.endif
+
+       x := y ; backward_sub( A.N, NWORKS, x, U_gather );
+
+.ifdef TIMING
+       sync(ready); t3:=SysMilli(); WriteLine("Bakw.Subst: ",t3-t2 ); t2:=t3; 
+
+       WriteLine("Total:      ",t3-t1 );
+       t_total +:= t3 - t1;
+.endif
+
+.ifdef MRUNS
+    OD ;
+
+.endif
+
+.ifdef TIMING
+	PrintTime("skyline", t_total);
+.endif
+
+.ifdef OUTPUT
+       write_vector( x );
+.endif
+
+
+.ifndef MRUNS
+.ifdef CHECK
+       mv_prod( A, x, y );
+       
+       max :=0.0 ;
+
+       FOR i IN 1 .. A.N
+       DO  d := ABS( y[ i ] - FLOAT( b[ i ] ));
+	   IF   d > max 
+	   THEN max :=d ;
+	   FI   ;
+       OD  ;
+
+       WriteLine( "Maximal_difference: ", max );
+.endif
+.endif
+
+       sync(the_end); Finish();
+ END   ;
+
+ ## ===========================================================================
+
+ END;

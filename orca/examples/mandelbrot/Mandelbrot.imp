@@ -1,0 +1,221 @@
+MODULE IMPLEMENTATION Mandelbrot;
+#
+# Program:	Mandelbrot
+# File:		Mandelbrot.imp
+# Author:	Peter Boncz - Vrije Universiteit Amsterdam - 1994
+# Contains:	An interactive, X11-based, parallel Mandelbrot program.
+#
+
+
+# standard ADT imports
+FROM Time IMPORT SysMilli, Sleep;
+FROM Finish IMPORT Finish;
+FROM InOut IMPORT Eof, Eoln;
+
+# specific imports
+IMPORT Scheduler;
+IMPORT Request;
+IMPORT JobQueue;
+IMPORT Xdisplay;
+FROM Scheduler 	IMPORT	GetWork;
+FROM Job 	IMPORT	request_t, job_t, store_t;
+FROM Request 	IMPORT 	REQUEST_QUIT, REQUEST_RESIZE, REQUEST_ZOOM,
+			REQUEST_DEMO, REQUEST_RESET, REQUEST_DWELL,
+			REQUEST_BACK,  WIDTH, HEIGHT;
+
+
+
+FUNCTION MandelArea(req_data: IN request_t; start, size: IN integer): store_t; 
+	x, y, real_part, imag_part, real_sqr, imag_sqr: real;
+	i, value, iteration: integer;
+	results: store_t[0..size-1];
+BEGIN
+	# start and size are multiples of req_data.width:
+	x := req_data.x_left; 
+	y := req_data.y_up + FLOAT(start/req_data.width)*req_data.scale;
+	i := 0;
+
+	# do for each scanline  
+        FOR h IN 1..size/req_data.width
+	DO
+	    # do for all points on the same horizontal
+	    FOR w IN 1..req_data.width
+	    DO
+		# inline computation of Mandel function
+		real_part := 0.0;
+		imag_part := 0.0;
+		real_sqr  := 0.0;
+		imag_sqr  := 0.0;
+		iteration := 0;
+		value	  := N_RESERVED;
+		REPEAT
+			iteration +:= 1;
+			imag_part := 2.0 * real_part * imag_part + x;
+			real_part := real_sqr - imag_sqr + y;
+			real_sqr := real_part * real_part;
+			imag_sqr := imag_part * imag_part;
+			IF ((real_sqr+imag_sqr) > MANDEL_INFINITY) THEN
+				value +:= iteration % MANDEL_COLORS;
+				iteration := req_data.dwell;
+			FI;
+		UNTIL (iteration >= req_data.dwell);
+
+		results[i] := CHR(value);
+		x +:= req_data.scale;
+		i +:= 1;
+	    OD;
+	    x :=  req_data.x_left;
+	    y +:= req_data.scale;  
+	OD;
+
+	RETURN results;
+END;
+
+
+
+
+PROCESS Worker(	work: SHARED Scheduler;
+		draw_queue: SHARED JobQueue);
+	job: job_t;
+	req_data: request_t;
+BEGIN
+	# do jobs for the same request
+	WHILE (GetWork(work, job, req_data))
+	DO
+		# write the results (exactly the right array size) 
+		job.results := MandelArea(req_data, job.start, job.size);
+
+		# add the job to be drawn 
+		draw_queue$AddJob(job); 
+	OD;
+END;
+
+
+
+PROCESS CreateDisplay(	width, height: IN integer;
+			draw_queue: SHARED JobQueue;
+			request: SHARED Request);
+BEGIN
+	Xdisplay.create(N_COLORS, N_RESERVED, width, height, NCPUS()-1,
+			draw_queue, request);
+END;
+
+
+
+
+FUNCTION DrawCallback(draw_queue: SHARED JobQueue);
+	job: job_t;
+	t: integer;
+BEGIN
+	# this routine is called back one by Xdisplay for each request.
+	WHILE (draw_queue$GetJob(job, t))
+	DO
+		# draw the job.
+		Xdisplay.draw(job.start, job.size, job.results, 1);
+	OD;
+	# re-init the queue for later use.
+	draw_queue$Init();
+
+	# go wait for new request. 
+	Xdisplay.ready(t);
+END;
+
+
+
+
+FUNCTION RequestCallback(request: SHARED Request; 
+			request_type, x, y, w, h: IN integer);
+	c: char;
+BEGIN
+	# the user did a request (quit, reset, zoom, back or resize)
+	CASE request_type OF
+	REQUEST_QUIT	=> request$Quit(); 		|
+	REQUEST_RESET	=> request$Reset();		|
+	REQUEST_RESIZE	=> request$Resize(w, h);	|
+	REQUEST_DWELL	=> request$NewDwell(x);		|
+	REQUEST_ZOOM	=> request$Zoom(x, y, w, h);	|
+	REQUEST_BACK	=> request$Back();		|
+	REQUEST_DEMO	=>
+			   IF Eoln() THEN
+			      Read(c);
+			   FI;
+			   IF Eof() THEN
+			      request$Reset();
+			   ELSE
+			      Read(x, y, w, h);
+			      IF w = 0 THEN
+			         request$Reset();
+			      ELSE
+				 Xdisplay.square(x, y, w, h, 1);
+				 Sleep(1, 0);
+			         request$Zoom(x, y, w, h);
+			      FI;
+			   FI;
+	ELSE
+		WriteLine("ERROR: unknown request ", request_type, ".");
+	ESAC;
+END;
+
+
+
+
+PROCESS OrcaMain();
+	work: Scheduler;
+	draw_queue: JobQueue;
+	request: Request;
+	n_workers,time: integer;
+	req_data: request_t;
+BEGIN
+	# Enforce the non-replication of all objects.
+	# The compiler has no idea, because of the C-code.
+	# It also does not know that CPU 0 has almost nothing else to do.
+
+	Strategy(draw_queue, 0, 0);
+	Strategy(request, 0, 0);
+	Strategy(work, 0, 0);
+
+	# misc inits.
+	n_workers := NCPUS()-1;
+	work$Init(n_workers);
+	draw_queue$Init();
+	request$Reset();
+
+	# fork the display process
+	FORK CreateDisplay(WIDTH, HEIGHT, draw_queue, request) ON 0;
+
+	# fork the workers 
+	FOR i IN 1..n_workers
+	DO
+		FORK Worker(work, draw_queue) ON i; 
+	OD;
+
+
+	# wait till all workers are waiting for work.
+	work$AllIdle();
+
+	# The work starts. For all requests: do this..
+	WHILE (request$Next(req_data))
+	DO
+		# record the current time
+		time := SysMilli();
+
+		# give the workers.. work! 
+		work$GiveWork(req_data);
+
+		# wait for all computation to terminate
+		work$AllIdle();
+
+		# deblock the display process (pass elapsed time)
+		draw_queue$NoMoreJobs(SysMilli()-time);
+
+		# If not already so, all drawing will complete NOW, and THEN 
+		# the user will be able to make a new request or quit. 
+  	OD;
+	
+	# we're ready
+	work$NoMoreWork();
+	Finish();
+END;
+
+
+END;

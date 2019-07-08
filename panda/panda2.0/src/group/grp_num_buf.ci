@@ -1,0 +1,184 @@
+/*
+ * (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+ * For full copyright and restrictions on use see the file COPYRIGHT in the
+ * top level of the Panda distribution.
+ */
+
+/* Numbered message buffer implementation built on top of fifo message buffer.
+ *
+ * Two varieties of many functions:
+ *  1 really implements it
+ *  2 locks the buffer, calls 1, unlocks the buffer
+ */
+
+
+#ifndef __PAN_GRP_NUM_BUF_CI__
+#define __PAN_GRP_NUM_BUF_CI__
+
+
+#include <stdio.h>
+
+#include "pan_sys.h"
+
+#include "grp_global.h"
+#include "grp_num_buf.h"
+
+
+
+
+#define NUM_BUFMOD(h, i)	((i) & ((h)->size - 1))
+#define NUM_BUFBUF(h, i)	((h)->buf[NUM_BUFMOD(h, i)])
+
+
+STATIC_CI boolean
+pan_num_buf_in_range(num_buf_p num_buf, int idx)
+{
+    return (idx >= num_buf->last && idx < num_buf->last + num_buf->size);
+}
+
+
+STATIC_CI int
+pan_num_buf_upb(num_buf_p buf)
+{
+    return buf->last + buf->size;
+}
+
+
+STATIC_CI boolean
+pan_num_buf_in_use(num_buf_p buf, int idx)
+{
+    assert(pan_num_buf_in_range(buf, idx));
+    return (NUM_BUFBUF(buf, idx) != NULL);
+}
+
+
+
+STATIC_CI int
+pan_num_buf_next_accept(num_buf_p buf)
+{
+    return buf->next;
+}
+
+
+
+STATIC_CI pan_fragment_p
+pan_num_buf_last(num_buf_p buf)
+{
+    if (buf->last == buf->next) {	/* Shortcut for most common case */
+	return NULL;
+    }
+    return NUM_BUFBUF(buf, buf->last);
+}
+
+
+STATIC_CI boolean
+pan_num_buf_advance(num_buf_p buf, int seqno)
+{
+    int upb;
+
+    if (seqno != buf->last || seqno != buf->next) {
+	return FALSE;
+    }
+
+    ++buf->last;
+					/* update buf->next */
+    upb = buf->last + buf->size;
+    do {
+	buf->next++;
+    } while (buf->next < upb && NUM_BUFBUF(buf, buf->next) != NULL);
+
+    assert(buf->next >= buf->last);
+
+    return TRUE;
+}
+
+
+STATIC_CI pan_fragment_p
+pan_num_buf_get(num_buf_p num_buf)
+{
+    pan_fragment_p  frag;
+    pan_fragment_p *slot;
+
+    slot = &(NUM_BUFBUF(num_buf, num_buf->last));
+    frag  = *slot;
+    assert(frag != NULL);
+    *slot = NULL;
+    ++num_buf->last;
+
+    assert(num_buf->last <= num_buf->next);
+
+    return frag;
+}
+
+
+
+STATIC_CI void
+pan_num_buf_start(num_buf_p buf, int start)
+{
+    buf->last = start;
+    buf->next = start;
+}
+
+
+STATIC_CI void
+pan_num_buf_accept(num_buf_p buf, pan_fragment_p frag, int idx)
+{
+    int next;
+    int upb;
+
+    assert(pan_num_buf_in_range(buf, idx));
+
+    assert(NUM_BUFBUF(buf, idx) == NULL);
+    NUM_BUFBUF(buf, idx) = frag;
+
+					/* make buf->next consistent */
+    next = buf->next;
+    upb  = buf->last + buf->size;
+    while (next < upb && NUM_BUFBUF(buf, next) != NULL) {
+	next++;
+    }
+    buf->next = next;
+
+    assert(buf->last <= buf->next);
+}
+
+
+STATIC_CI void
+pan_num_buf_init(num_buf_p num_buf, int size)
+{
+    int       i;
+
+    size = pan_grp_upround_twopower(size);
+    num_buf->buf = pan_malloc(size * sizeof(void *));
+
+    num_buf->size = size;
+    for (i = 0; i < size; i++) {
+	num_buf->buf[i]= NULL;
+    }
+    num_buf->last = 0;
+    num_buf->next = 0;
+}
+
+
+
+STATIC_CI int
+pan_num_buf_clear(num_buf_p num_buf)
+{
+    int        i;
+    int        n;
+
+    n = 0;
+    for (i = 0; i < num_buf->size; i++) {
+	if (num_buf->buf[i] != NULL) {
+	    pan_fragment_clear(num_buf->buf[i]);
+	    ++n;
+	}
+    }
+
+    pan_free(num_buf->buf);
+
+    return n;
+}
+
+
+#endif

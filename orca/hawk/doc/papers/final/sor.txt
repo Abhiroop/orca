@@ -1,0 +1,16 @@
+OBJECT IMPLEMENTATION grid[lb1..ub1:integer,lb2..ub2:integer];
+    G: real;
+
+PARALLEL OPERATION[row, col] sor(c:color): REDUCE real WITH max;
+    avg, diff: real;
+BEGIN
+    diff := 0;
+    IF (iscolor(row,col) = c) AND (row > lb1) AND
+       (col > lb2) AND (row < ub1) AND (col < ub2) THEN
+        avg := (G[row-1,col] + G[row+1,col] + G[row,col-1] + G[row,col+1])/4.0;
+        diff := ABS(avg - G[row,col]);
+        G[row,col] := G[row,col] + OMEGA * (avg - G[row,col]);
+    FI;
+    RETURN diff;
+END;
+END;

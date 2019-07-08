@@ -1,0 +1,117 @@
+GENERIC OBJECT IMPLEMENTATION scheduler;
+
+    IMPORT Random;
+
+    TYPE task = NODENAME OF info;
+    TYPE info = GRAPH 
+			ready : task;
+		NODES
+			next : task;
+
+    			e : xpr;
+    			r : rslt;
+    			done : boolean;
+   	 	END;
+    TYPE winfo = ARRAY [integer 0..100] OF integer;
+
+    state : info;		# task structure
+    done : boolean;		# start termination phase?
+    worker : winfo;		# number of idle workers per CPU
+    rand : Random;
+
+
+    OPERATION create( e : xpr) : task;
+    	t : task;
+    BEGIN
+	#WriteLine( "new task: ", e);
+    	t := ADDNODE(state);
+    	state[t].e := e;
+    	state[t].done := false;
+	state[t].next := state.ready; state.ready := t;	# ready$push(t)
+    	RETURN t;
+    END;
+
+
+    OPERATION result( t : task; r : rslt);
+    BEGIN
+	#WriteLine( MYCPU(), ": result ready ", r);
+    	state[t].r := r;
+    	state[t].done := true;
+    END;
+
+
+    OPERATION tryvalue( cpu : integer; t : task; r : OUT rslt) : boolean;
+    BEGIN
+	IF state[t].done THEN
+		r := state[t].r;
+		RETURN true;
+	ELSE
+		worker[cpu] -:= 1;
+		RETURN false;
+	FI;
+    END;
+
+    OPERATION waitvalue( cpu : integer; t : task) : rslt;
+    BEGIN
+	GUARD state[t].done DO
+		worker[cpu] +:= 1;
+		RETURN state[t].r;
+	OD;
+    END;
+
+
+    OPERATION get( w : OUT work) : boolean;
+    BEGIN
+	GUARD state.ready /= NIL DO
+		w.t := state.ready; state.ready := state[w.t].next;
+		w.e := state[w.t].e;
+		RETURN true;
+	OD;
+	GUARD done DO
+		RETURN false;
+	OD;
+    END;
+
+
+    FUNCTION idle_worker( worker : SHARED winfo; rnd: integer; cpu : OUT integer) : boolean;
+	c : integer;
+    BEGIN
+	FOR j IN 1 .. NCPUS() DO
+		c := (rnd + j) % NCPUS();
+		IF worker[c] <= 0 THEN		# initial task is not registered
+			cpu := c;
+			RETURN true;
+		FI;
+	OD;
+	RETURN false;
+    END;
+
+    OPERATION idle( cpu : OUT integer) : boolean;
+    BEGIN
+	GUARD idle_worker( worker, rand$val(), cpu) DO
+		worker[cpu] +:= 1;
+		RETURN true;
+	OD;
+	GUARD done DO
+		RETURN false;
+	OD;
+    END;
+
+
+    OPERATION init();
+    BEGIN;
+	done := false;
+	rand$init(12345);
+	FOR cpu IN 0 .. NCPUS()-1 DO
+		worker[cpu] := 0;
+	OD;
+    END;
+
+
+    OPERATION exit();
+    BEGIN
+	done := true;
+    END;
+
+BEGIN
+END GENERIC;

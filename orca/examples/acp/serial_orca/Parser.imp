@@ -1,0 +1,487 @@
+# ========================================================================
+# == File:      Parser.imp	   					==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  Parser for reading the grammar				==
+# ========================================================================
+
+MODULE IMPLEMENTATION Parser;
+
+FROM InOut      IMPORT WriteString, WriteInt, Ahead, ReadChar,
+		       WriteChar, Eof, Eoln, ReadString;
+FROM Types      IMPORT rule_t, symbol_name_t;
+FROM Const      IMPORT COMMENT, SPACE, TAB;
+FROM Dictionary IMPORT dictionary_t, insert_word_dict;
+FROM Grammar    IMPORT grammar_t, insert_rule_gramm;
+FROM Symbollist IMPORT symbollist_t, insert_elt_sl;
+
+# ========================================================================
+# == Function prototypes						==
+# ========================================================================
+
+FUNCTION add_rule(
+	rule : 		rule_t;
+	grammar : 	SHARED grammar_t;
+	sl : 		SHARED symbollist_t
+) : boolean;
+
+FUNCTION add_terminal(
+	rule : 		rule_t;
+	dictionary : 	SHARED dictionary_t;
+	sl :            SHARED symbollist_t
+) : boolean; 
+
+FUNCTION handle_dict_rule(
+	dictionary : 	SHARED dictionary_t;	
+        line_no : 	integer;
+	sl : 		SHARED symbollist_t
+) : boolean;
+
+FUNCTION handle_grammar_rule(
+	grammar : 	SHARED grammar_t;
+	line_no : 	integer;
+	sl : 		SHARED symbollist_t
+) : boolean;
+
+FUNCTION is_letter(ch : char) : boolean;
+
+FUNCTION next_character() : char;
+		
+FUNCTION skip_comment(
+	line_no :	SHARED integer);
+
+FUNCTION skip_line();
+
+FUNCTION skip_spaces();
+
+FUNCTION read_character(
+	expected :	char;
+	line_no :	integer) : boolean;
+
+FUNCTION read_dict(         
+	dictionary :    SHARED dictionary_t;
+        line_no :       SHARED integer;
+	sl :            SHARED symbollist_t
+) : boolean;
+
+FUNCTION read_eoln() 	: boolean;
+
+FUNCTION read_prod_rules(
+	grammar : 	SHARED grammar_t;
+	line_no : 	SHARED integer;
+	sl :            SHARED symbollist_t
+) : boolean;
+
+FUNCTION read_rule(      
+	rule : 		SHARED rule_t;
+	line_no :	integer) : boolean;
+
+FUNCTION read_symbol(
+	symbol : 	SHARED symbol_name_t;
+	line_no :	integer) : boolean;
+
+
+# ========================================================================
+# == operations								==
+# ========================================================================
+
+#
+# add_rule() : add production rule to the grammar
+#
+
+FUNCTION add_rule(			   # Out: succes or not 
+	rule :    rule_t;                  # In : rule to be added 
+	grammar : SHARED grammar_t;        # Out : the updated grammar
+	sl :      SHARED symbollist_t	   # Out : list of symbols
+) : boolean;
+
+BEGIN
+    	WriteString("adding rule: "); WriteString(rule.new); 
+	WriteString(" <- "); WriteString(rule.right1); 
+	WriteString("  "); WriteString(rule.right2);
+
+	IF NOT insert_rule_gramm(grammar, rule) THEN
+		WriteLine(">>>>Couldn't add to grammar");
+	        RETURN false;
+	ELSE
+        	WriteLine(" added succesfully");
+    	FI;
+
+	ASSERT (insert_elt_sl(sl, rule.new) AND
+                insert_elt_sl(sl, rule.right1) AND
+                insert_elt_sl(sl, rule.right2));
+
+   	RETURN true;
+END;
+
+
+#
+# add_terminal() :  add word to dictionary 
+#
+
+FUNCTION add_terminal(			   # Out: succes or not 
+	rule :       rule_t;               # In : rule to be added
+	dictionary : SHARED dictionary_t;  # Out : the updated dictionary
+	sl :         SHARED symbollist_t  # Out : list of symbols
+) : boolean;
+
+BEGIN
+    	WriteString("adding rule "); WriteString(rule.new);
+    	WriteString(" <- "); WriteString(rule.right1); WriteString(" ...");
+
+    	IF NOT insert_word_dict(dictionary, rule.right1, rule.new) THEN
+		WriteLine (">>>>Couldn't add to dictionary");
+		RETURN false;
+	FI;
+	WriteLine (" added succesfully ");
+
+	ASSERT(insert_elt_sl(sl, rule.right1));
+
+    	RETURN true;
+END;
+
+
+#
+# handle_rule() : read a rule, and put it in the grammar
+#
+
+FUNCTION handle_dict_rule(
+	dictionary : SHARED dictionary_t;
+	line_no    : integer;
+	sl : 	     SHARED symbollist_t
+) : boolean;
+
+	rule : rule_t;
+BEGIN	
+	# extract the rule from input
+	IF read_rule(rule, line_no) THEN
+		IF  NOT add_terminal(rule, dictionary, sl) THEN
+			WriteLine( " can't add rule");
+			RETURN false;
+	    	FI;
+	ELSE
+		RETURN false;
+	FI;
+
+    	RETURN true;
+END;
+
+
+# 
+# handle_grammar_rule()
+#
+
+FUNCTION handle_grammar_rule(
+	grammar : SHARED grammar_t;
+	line_no	: integer;
+	sl :      SHARED symbollist_t
+) : boolean;
+
+	rule : rule_t;
+BEGIN
+	# extract the rule from line 
+	IF (read_rule(rule, line_no)) THEN
+	    	IF NOT add_rule(rule, grammar, sl) THEN
+			WriteLine( " can't add rule");
+			RETURN false;
+	    	FI;
+	ELSE
+		RETURN false;
+	FI;
+	
+	RETURN true;
+END;
+
+# 
+# is_letter() : return if character is a letter
+#
+
+FUNCTION is_letter(ch : char 
+) : boolean;
+
+BEGIN
+	CASE ch OF
+	  | 'a'..'z', 'A'..'Z' => RETURN true;
+          ELSE RETURN false;
+	ESAC;
+END;
+
+
+#
+# next_character() : return next non-blank character 
+#
+
+FUNCTION next_character(		   # Out: the next non-blank character
+) : char;
+
+BEGIN
+    	# skip whitespaces
+    	skip_spaces();
+
+	RETURN Ahead();
+END;       
+
+
+#
+# read_character() : skip blanks, read character and check if it is 
+#                    the character expected
+#
+
+FUNCTION read_character(                  # Out: succesful of not      
+	expected : char;               	  # In : The character expected
+	line_no  : integer                # In : line number
+) : boolean;
+
+	chr : char;
+BEGIN
+
+    	# first skip whitespaces 
+    	skip_spaces();
+
+    	# if next char on input does not equal the char expected,
+    	# print an errormessage 
+    	#
+
+	ReadChar(chr);
+    	IF ( chr /= expected) THEN
+        	WriteString("Error in grammar file, line ");
+		WriteInt(line_no);
+		WriteString(" : '");
+        	WriteChar(expected);
+        	WriteString( "' expected instead of '");
+        	WriteChar(chr);
+        	WriteLine("'");
+        	RETURN false;
+    	FI;
+
+    	RETURN true;
+END;
+
+
+#
+# read_dict() : read dictionary 
+#
+
+FUNCTION read_dict(			   
+	dictionary : 	SHARED dictionary_t;
+        line_no :       SHARED integer;
+        sl :            SHARED symbollist_t  # Out : list of symbols
+) : boolean;				   # Out : can the dictionary be read ?
+
+
+BEGIN
+    	# Read the dictionary, i.e. all terminals in the grammar .
+    	#  Expected input format: {<symbol> <spaces>  '<' '-' <spaces> <terminal>}
+    	#
+
+    	WHILE NOT Eof() DO
+
+		# does the line start with a comment? 
+		IF (next_character() = COMMENT) THEN
+	    		skip_comment(line_no);
+		ELSE	
+			IF NOT (handle_dict_rule(dictionary, line_no, sl)
+				AND read_eoln()) THEN
+				RETURN false;	
+			FI;	
+			line_no +:= 1;
+		FI;
+	OD;
+	RETURN true;
+END;
+
+
+#
+# read_eoln(): check if nextchar is Eoln, and if not, give an error message
+#
+
+FUNCTION read_eoln() : boolean;
+
+BEGIN
+	skip_spaces();
+	IF NOT Eoln() THEN
+		WriteString("<eoln> expected");
+		RETURN false;
+	ELSE	
+		skip_line();
+		RETURN true;
+	FI;
+END;
+
+
+#
+# read_grammar() : read production rules and dictionary
+#
+
+FUNCTION read_grammar(		   	   # Out : can the grammar be read ?  
+	grammar : SHARED grammar_t;    	   # Out : the grammar to be read     
+	dict :    SHARED dictionary_t; 	   # Out : the dictionary to be read  
+        sl :      SHARED symbollist_t     # Out : list of symbols
+) : boolean;
+
+	line_no : integer;
+BEGIN
+    	# Read the grammar. Expected input format:
+    	# <production rules> <eoln> <dictionary> <eof>
+      	#
+    
+	line_no := 1;
+    	RETURN  read_prod_rules(grammar, line_no, sl) AND
+        	read_eoln() AND
+             	read_dict(dict, line_no, sl);
+END;
+
+
+#
+# read_prod_rules() :  read all production rules of the grammar
+#
+
+FUNCTION read_prod_rules(		   # Out : can the grammar be read ?
+	grammar : SHARED grammar_t;  	   # Out : the grammar to be read 
+	line_no : SHARED integer;
+        sl :      SHARED symbollist_t  # Out : list of symbols	
+) : boolean;
+
+BEGIN
+    	# while not end of the grammar part 
+    	WHILE NOT Eoln() DO
+
+		# does the line start with a comment?
+		IF (next_character() = COMMENT) THEN
+	    		skip_comment(line_no);
+		ELSE
+			IF NOT (handle_grammar_rule(grammar, line_no, sl)
+				AND read_eoln()) THEN
+				RETURN false;
+			FI;
+			line_no +:= 1;
+		FI;
+	OD;
+	
+	RETURN true;
+END;
+
+    
+#
+# read_rule : try to read production rule of the grammar
+#
+
+FUNCTION read_rule(			   # Out : can the rule be read ?
+	rule :  	SHARED rule_t;     # Out : the production rule
+	line_no : 	integer     # In  : the line number
+) : boolean;
+
+BEGIN
+    	# read production rule. Expected input format: 
+    	#  <symbol> <spaces> '->' <spaces> <symbol> [<spaces> <symbol>]
+    	#
+
+	IF NOT read_symbol(rule.new, line_no) THEN
+		RETURN false;
+	FI;
+
+	# skip the <spaces> '->' <spaces> part 
+	skip_spaces();
+	IF NOT (read_character('-', line_no) AND read_character ('>', line_no)) THEN
+		RETURN false;
+	FI;
+	skip_spaces();
+
+
+	IF NOT read_symbol(rule.right1, line_no) THEN	
+		RETURN false;
+	FI;
+
+	# check if second part is present. If not, then return, else read
+	skip_spaces();
+	IF Eoln() THEN
+		# second part is not present
+		rule.right2 := "";
+		RETURN true;
+	FI;
+
+	# read second part
+	RETURN read_symbol(rule.right2, line_no);
+END;
+
+#
+# read_symbol() : read a string from input. Check if input is correct
+#
+
+
+FUNCTION read_symbol(                  
+	str :	 	SHARED symbol_name_t;	# Out : the symbol read 
+	line_no : 	integer      		# In : the line number
+) : boolean;
+    
+BEGIN
+	# since a symbol is only a string, use ReadString to read
+	skip_spaces();
+	IF NOT is_letter(Ahead()) THEN
+		WriteLine("Error in grammar file, line ", line_no,
+			  " : character expected");
+		RETURN false;	
+	FI;
+	ReadString(str);
+	RETURN true;
+END;
+	
+
+# 
+# skip_comment() : skip line containing comment sign at the beginning of the line
+#
+
+FUNCTION skip_comment(
+	line_no : SHARED integer);
+
+BEGIN
+    	# while the line begins with a COMMENT sign, skip the line 
+
+    	WHILE next_character() = COMMENT DO
+		line_no +:= 1;
+        	skip_line();
+    	OD;
+END;
+
+
+#
+# skip_line() : skip rest of the line, including newline
+#
+
+FUNCTION skip_line();
+	
+	ch : char;
+BEGIN
+	# while not eoln seen, skip characters. 
+
+	WHILE NOT Eoln() DO
+		ReadChar(ch);
+		IF (ch = ch) THEN FI; # suppress warning
+	OD;
+
+	# read the newline
+	ReadChar(ch);
+	IF (ch = ch) THEN FI; # suppress warning
+END;
+	
+#
+# skip_spaces() : skip blanks from input
+#
+
+FUNCTION skip_spaces();
+
+	ch : char;
+BEGIN
+	WHILE (Ahead() = SPACE) OR (Ahead() = TAB) DO
+		ReadChar(ch);
+		IF (ch = ch) THEN FI; # suppress warning
+	OD;
+END;
+
+END;
+
+
+
+
+
+

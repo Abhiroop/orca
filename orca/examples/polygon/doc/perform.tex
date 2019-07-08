@@ -1,0 +1,366 @@
+\sectionLabel{Performance}
+
+Before testing the overlay algorithms,
+it is necessary to have some maps to overlay.
+Since the problem has deliberately been simplified,
+it is not possible to simply digitize real images.
+Instead, the polygon maps must be generated synthetic.
+The way the map is generated influences properties, like
+the deviation of the average size of polygons in a map.
+This in turn has an effect on the measurements.
+
+In 
+\refSection{Generation of Polygon Maps} the method to generate the
+polygon maps is described.
+Then the performances of the sequential programs
+written in C and Orca are compared followed by the performance figures
+of the parallel programs.
+Finally the usability of Orca is discussed.
+
+
+\subsectionLabel{Generation of Polygon Maps}
+
+The method to generate the polygon maps uses a bitmap.
+First an $n {\times} m$ bitmap is defined which represents the
+surface what is going to be divided among the polygons.
+Then $q$ $1 {\times} 1$ boxes are placed randomly in the
+bitmap.
+Each box is represented as a point in the bitmap, see for
+example
+\refByCapt{random placed boxes}.
+The generation program then repeatedly selects a random box
+and "grows" it.
+This "growing" is done by randomly choosing
+a free side of the selected box,
+i.e. a side where all of the bits in the bitmap
+next to this side are not taken by any other box.
+As there is now a free side selected,
+the box will be enlarged by extending the free side by
+length one.
+For instance in 
+\refByCapt{4 is about to expand}
+box 4 is selected and can only grow to the left,
+as has been done in
+\refByCapt{4 cannot expand any further}.
+Box 4 cannot be selected any more because it is now enclosed by
+all its neighbors.
+The selecting and growing is done until non of the boxes are
+able to grow any further.
+
+At this point the surface of the bitmap may contain holes
+as in
+\refByCapt{there are holes left}.
+In such a case a new $1 {\times} 1$ box is placed in the hole
+and grows until it has filled up the hole.
+To find the holes a scan must be made through the bitmap.
+The map is completed once there are no more holes,
+as in
+\refByCapt{9 and 10 make the map complete}.
+The resulting polygon map is of size $[n+1] {\times} [m+1]$
+and the number of boxes in the map is always greater or
+equal to $q$.
+Note that the boxes may not be put in the map in the order
+they were found,
+because,
+during the filling of the holes,
+the generator produces the boxes in an ordered way.
+This is not allowed as one of the requirements is that a map
+should not be ordered in any way (see
+\refSection{Problem Description}).
+
+\begin{figure}[hbt]
+   \begin{center}
+      \subfigure [random placed boxes] {
+        \epsffile{bitmap_a.eps}
+        \label{random placed boxes}
+      }
+      \hspace*{4ex}
+      \subfigure [4 is about to expand] {
+        \epsffile{bitmap_b.eps}
+        \label{4 is about to expand}
+      }
+      \hspace*{4ex}
+      \subfigure [4 cannot expand any further] {
+        \epsffile{bitmap_c.eps}
+        \label{4 cannot expand any further}
+      } 
+      \subfigure [there are holes left] {
+        \epsffile{bitmap_d.eps}
+        \label{there are holes left}
+      }
+      \hspace*{6ex}
+      \subfigure [9 \& 10 make the map complete] {
+        \epsffile{bitmap_e.eps}
+        \label{9 and 10 make the map complete}
+      }
+   \end{center}
+   \refAndCapt{Creation of a Polygon Map Using a Bitmap}
+\end{figure} 
+
+Apart from the properties which were required in
+\refSection{Problem Description},
+generating the polygon map like described above has four more
+consequences:
+\begin{enumerate}
+  \vspace*{-1ex}
+  \item Most of the boxes will have the average size or a
+    value very close to it because of the uniform distribution
+    of the random generator.
+
+  \item When there is a large amount of polygons in a map, it
+    is unlikely that there is a very long polygon which covers
+    the whole length of a map.
+    Again this is a consequence of the uniform distribution of
+    the random generator.
+
+  \item Usually the distribution of polygons over the map will be
+    fairly equal.
+    Yet again this is due to the uniform distribution of the random
+    generator.
+
+  \item It will almost be impossible to generate a map that has
+    exactly the same number of polygons as wanted.
+    This is because prior to the map generation it is not known how
+    many holes will be created and filled during generation.
+\end{enumerate}
+
+
+
+\subsection{ Sequential Performance (Orca versus C) }
+
+All the measured times presented in this report are without 
+file access times.
+This is done because on the Amoeba system it is unacceptably high at
+the moment.
+For instance, the sequential C program take 2.2 times longer to
+finish for two input maps both containing 40,000 polygons.
+The sequential Orca program needs 3.6 times more time.
+
+Furthermore all the measurements, both sequential and parallel, are done
+for two problem sizes.
+The first problem size consists of two input maps of 40,000 polygons (40K)
+each, and the second problem size consists of input maps of 400,000
+polygons (400K) each.
+
+All the maps are square, this gives the worst kind of columnwise
+distribution.
+
+\begin{table}[hbt]
+  \centering
+  \begin{tabular}{|l|c|c|}
+    \hline
+		& 40K  		& 400K     \\
+    \hline
+    C 		& 25997 ms	& 758824 ms   \\
+    Orca	& 26037 ms 	& 738841 ms   \\
+    \hline
+  \end{tabular}
+  \caption{Orca versus C}
+  \label{Orca versus C}
+\end{table}
+
+Table 
+\ref{Orca versus C} shows that difference in execution time between the
+sequential C program and the Orca program is negligible. 
+Considering that Orca uses C as intermediate code, it must be noted
+that the performance of Orca is good.
+
+\subsection {Parallel Performance}
+
+\refByCapt{Speedup for different problem sizes} shows the speedup
+for two different problem sizes, and for the two Overlay variants.
+In both cases the performance of Patchwised Overlay is better than
+that of Data-Parallel Overlay.
+Relatively the performance difference gets larger as the problem size
+increases.
+This is because in Patchwised Overlay the B map is sorted in
+parallel by the workers; each worker sorts a sub-map.
+This is in contrast to Data-Parallel Overlay, where the B map is mainly
+sorted by the master, and each worker does only merge sorted parts.
+
+\begin{figure}[hbt]
+  \begin{center}
+    \leavevmode
+    \epsfysize=8cm
+    \epsfbox{timeSpeedup.eps}
+    \refAndCapt{Speedup for different problem sizes}
+  \end{center}
+\end{figure}
+
+\begin{figure}[hbt]
+  \begin{center}
+    \leavevmode
+    \epsfysize=8cm
+    \epsfbox{time400.eps}
+    \refAndCapt{Execution times of Patchwised Overlay}
+  \end{center}
+\end{figure}
+
+It can be seen that speedup is poor.
+The reason for this is communication overhead.
+Calculation shows that in the case of overlaying two 400K maps,
+the number of bytes to send to the workers is approximately
+19MB, that is 400K polygons * 2 maps * 6 integers(4 coordinates, 1 surface,
+1 list pointer) * 4 bytes(size of an integer).
+The number of resulting polygons produced by the workers is approximately
+1480K, and have to be sent back to the master.
+So the total amount of data that must be transferred by the network is
+in this case 19 + 36 = 55MB.
+What kind of, quantitative, influence this has on the performance can be
+seen in
+\refByCapt{Execution times of Patchwised Overlay}.
+Note that only Patchwised Overlay is considered as it is the
+fastest of the two methods.
+\refByCapt{Execution times of Patchwised Overlay}  shows next to the total
+execution time also the total time spent in communication, measured at
+the Orca level.
+Note that the amount of time spend in communication increases with the
+number of workers, because the number of border polygons will increase
+relatively to the number of patches.
+The Ethernet has a transfer rate of 10 Mbits/sec,
+which means that it takes 44 seconds to send all the data across the
+network.
+This implies that Orca needs approximately 56 seconds.
+This time is spent in copying of data in and out objects, in and out of
+message buffers and in and out of the Ethernet card.
+
+All in all the poor speedup thus is not surprising.
+To improve the speedup, the following suggestions are given:
+\begin{enumerate}
+  \item Using arrays of polygons instead of lists.
+    This would mean 4 bytes less per polygon-entry.
+  \item Calculating the surfaces of the polygons at the worker side.
+    This would mean 4 bytes less per polygon-entry.
+  \item Using integers of 2 bytes instead of integers of 4 bytes.
+    The only problem is that Orca does not provide these short integers so
+    they have to be implemented by putting two short integers into one
+    Orca-integer.
+    This would reduce the amount of bytes per polygon-entry to a
+    total of 2 bytes.
+\end{enumerate}
+
+So the total speedup time could be increased by a factor 3.
+Furthermore some kind of compression could be applied to decrease the
+message size even more, but this would inevitably introduce a
+sequential factor.
+
+Still these optimizations will not take away the fact that the time
+spent in communication is a sequential aspect and does not decrease
+with the amount of workers used.
+In all the possible solutions the network capacity will be the
+bottleneck, which makes the Polygon Overlay problem a benchmark to
+test the communication performance of parallel program systems.
+
+
+
+\subsection {The Usability of Orca}
+
+The aim of implementing the Polygon Overlay problem is not only to
+see how fast Orca is and how well speedups are, but also to find out
+how easy or hard programming with the language is.
+Below some advantages and disadvantages of the Orca language are
+discussed, which the author encountered during implementation of the
+Polygon Overlay problem.
+
+The Orca language has been found to be very straight forward, what
+made the time to get acquainted with it very short.
+The use of the shared data-object model makes parallel programming
+simple, because its basics are easy to understand, without loss
+of controlling the parallelism.
+Therefore you can concentrate on the main issues instead of worrying
+about communication details.
+The standard libraries have been found very useful, in particular, it
+was not necessary to use guards directly.
+The drawback of the high level of abstraction arises during tuning
+and optimizing, since all of a sudden the programmer needs to know
+how shared objects are implemented in order to be able to make
+improvements, or to explain program behavior.
+For example, implementing the broadcast of map B in the Data
+Parallel algorithm was difficult. 
+The idea was to make an object that is written by the master and
+subsequently read by all workers.
+But as message fragmentation had to be done by hand on the B map, all the
+workers had to read a part of map B before the master replaced it with
+the next part.
+The synchronization between master and workers is accomplished by
+putting a counter in this shared object which counted the number of
+workers which had read the current part.
+The problem now was that the compiler saw that each operation on the
+object was a write operation, because the counter was adjusted by
+each worker.
+The decision of the compiler was therefore not to replicate the
+object on each worker, but only to put it on the master.
+A strategy call on the object, to replicate it on each worker,
+improved performance.
+But now each worker was copying n times the data and each time raising
+the counter, because each worker does the same operations on its
+replicate to keep the object consistent.
+The final solution was that the counter was placed in a separate
+object, so that the compiler took the right decision of replicating
+the buffer object, and that the workers only once did the copying of
+the data, and that they only had to adjust the counter which the compiler
+placed on the master.
+Without knowing what the compiler decides about replicating, and not
+knowing that objects do operation replication, this important optimization
+could never be done.
+
+The example above would have been difficult to detect without a proper
+tracing tool.
+The one provided at the moment is called Upshot.
+Upshot gives graphical information about when and where events happen.
+Important events are when processes block to do RPCs or broadcasts, and
+when user defined events occur.
+Without Upshot the knowledge about the behavior of the programs would
+have been significantly less, and tuning would have taken
+magnitudes of time longer.
+Still you need help of a friend (read someone of the Orca team) to
+point out what could cause certain behavior.
+
+What still is missing is a good debugging tool.
+At the moment it is possible to debug the generated C code, but this
+is no fun, as half of the code, if not all, that passes is meaningless
+to the Orca user.
+
+There are no conditional compilation capabilities.
+C's preprocessor was used instead to maintain a large amount of versions.
+The advantage of this is that only one program has to be maintained
+instead of all the different versions.
+
+At the time of starting this research, it was not wise to use the
+objects in a software engineering way.
+Instead you should only use objects to communicate with other processes.
+In the meantime there have been some changes, and it is not so
+expensive anymore to just use objects locally.
+Still it is questionable because the objects are not fully object
+oriented.
+It is also questionable if this is desired because sequential object
+oriented programming tents to be slow.
+Also is it not possible to do the following:
+object\$foo().data where the operation foo() returns a record.
+
+It was already mentioned that strategy calls had to be done by hand,
+because the compiler sometimes takes the wrong decision.
+It is questionable if this problem will ever be solved,  because
+the programmer knows more about what the program has to do and how he
+wants to use the objects than the compiler ever will.
+
+Although message fragmentation is available it was still necessary to
+do it by hand, because if large messages are sent (i.e. more than a
+few MBs), inevitably the program crashes due to lack of memory.
+
+Many of the problems with Orca that occured during this research have
+been solved already.
+In particular, the lack of message fragmentation and command-line
+arguments have been solved, and the efficiency of nonshared (local)
+objects has been improved.
+Solving the problems has also disadvantages, that the program would have
+looked different if implementation started now.
+Fortunately it would have looked better.
+Though it must be stated that the sorting of the B map, done by master
+and workers, in the Data Parallel implementation would probably not
+have been thought of if message fragmentation had already been
+implemented.
+
+As major problems have already been solved during this research,
+the author does not doubt that most of the other problems mentioned
+above will be solved too.

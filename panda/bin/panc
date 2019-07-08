@@ -1,0 +1,770 @@
+#!/bin/sh
+# (c) copyright 1998 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+
+# Default Panda values
+#
+PANDA_DIR=/usr/proj/panda
+PANDA_VERSION=3
+THREAD_PACKAGE=ot
+PANDA_THREADS=ot
+
+# Default OS/Processor values.
+# These are chosen for SunOS 4
+#
+binsuf=sun4
+PROCESSOR=sparc
+OS=sunos4
+PAN_SYSNAME=sparc
+
+# Default values for Amoeba (cross-)compile
+#
+AMOEBA_HOME=/usr/proj/amwork
+NETW=/usr/proj/orca/Networks
+MYRI_HOME=$NETW/myrinet-4.1
+AMOEBA_PROFLIB=
+AMOEBA_LIB_VERSION=amoeba.mv8
+AMOEBA_USERLIB=none
+AMOEBA_FLAVOUR=unoptimized
+AMOEBA_INCLUDES="-I$AMOEBA_HOME/src/h \
+		 -I$AMOEBA_HOME/src/h/posix \
+		 -I$AMOEBA_HOME/src/h/toolset/gnu-2"
+
+# Default LFC values
+#
+LFC=lfc-1.5
+LFC_HOME=/usr/local/VU
+LFC_FLAVOUR=debug
+ZLIB=/usr/local/VU/zlib-1.0.4
+LIBZ=$ZLIB/libz.a
+
+
+# Defaults for running this script
+#
+MY_LD=
+ACT=
+VERBOSE=
+
+use_qpt="no"
+link="yes"
+
+fortran=0
+if test "`basename $0`" = panf; then
+    fortran=1
+fi
+
+
+# Initialize vars which control compile/link
+#
+PAN_LIB_FLAVOUR=
+PAN_CFLAGS=
+PAN_CPPFLAGS=
+PAN_LDFLAGS=
+PAN_LDLIBS=
+PAN_PGFLAG=
+
+
+# Change defaults when we run on Linux, BSDI or Solaris
+#
+case `uname -r` in
+2*)
+    OS=linux
+    PANDA_DIR=/usr/proj/panda
+    # PANDA_DIR=/usr/local/VU/panda
+    PANDA_VERSION=4
+    PAN_SYSNAME=i386_linux/lfc/ot
+    MYRI_HOME=/usr/local/package/myrinet
+    DASLIB=/usr/local/package/daslib
+    ZLIB=/usr/local/VU/zlib-1.0.4
+    # LIBZ=$ZLIB/libz.a
+    LIBZ=
+    PROCESSOR=i386
+    LFC_HOME=/usr/local/package
+    LFC=lfc
+    binsuf=linux
+    das_binsuf=Linux
+    ;;
+3*)
+    OS=bsdi
+    PANDA_DIR=/usr/home/orca_panda/panda
+    # PANDA_DIR=/usr/local/VU/panda
+    PAN_SYSNAME=intel_BSD.myri/ot
+    MYRI_HOME=/usr/local/package/myrinet
+    DASLIB=/usr/local/VU/daslib
+    ZLIB=/usr/local/VU/zlib-1.0.4
+    LIBZ=$ZLIB/libz.a
+    PROCESSOR=i386
+    binsuf=bsdi
+    das_binsuf=bsdi
+    ;;
+5*)
+    OS=solaris2
+    PAN_SYSNAME=solaris
+    PANDA_THREADS=.
+    binsuf=sol2
+    das_binsuf=sol2
+    ;;
+esac
+
+PANDA_PROJ=$PANDA_DIR
+
+OS_PANDA=$OS
+PROC_BIN=${PROCESSOR}_$binsuf
+DAS_PROC_BIN=${PROCESSOR}_$das_binsuf
+
+# Extract the options which are meaningful to this script.
+# Pass on any unrecognized ones.
+#
+for i
+do
+    case $i in
+
+    # panc control options
+    #
+	-c)
+	    link="no"
+	    ARGS="$ARGS $i"
+	    ;;
+	-n)
+	    ACT=echo
+	    ;;
+	-v)
+	    if test "$VERBOSE" = "yes"
+	    then ARGS="$ARGS $i"
+	    fi
+	    VERBOSE="yes"
+	    ;;
+	-corg*)
+	    MY_LD=`expr $i : '-corg\(.*\)'`
+	    ;;
+	-fortran)
+	    fortran=1
+	    ;;
+	-root=*)
+	    PANDA_PROJ=`expr $i : '-root=\(.*\)'`
+	    ;;
+
+    # Panda version options
+    #
+	-2|-3|-4)
+	    PANDA_VERSION=`expr $i : '-\(.*\)'`
+	    ;;
+
+    # Panda Arch/Network options
+    #
+	-linux-lfc|-lfc)
+	    LFC=lfc
+	    OS_PANDA=linux-lfc
+	    ;;
+	-linux-lfc-[0-9]*.[0-9]*|-lfc-[0-9]*.[0-9]*)
+	    LFC=lfc-`expr $i : '-linux-lfc-\(.*\)'`
+	    OS_PANDA=linux-$LFC
+	    ;;
+	-lfc-[0-9]*.[0-9]*)
+	    LFC=lfc-`expr $i : '-linux-lfc-\(.*\)'`
+	    OS_PANDA=linux-$LFC
+	    ;;
+	-native-cluster|-tcp-cluster|-pkt-cluster|-pkt-cluster-no-fc)
+	    OS_PANDA=linux-`expr $i : '-\(.*\)'`
+	    ;;
+	-linux|-linux-myri|-linux-udp|-linux-atm|-linux-tcp-cluster|-linux-native-cluster|-linux-cluster|-linux-pkt-cluster)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    ;;
+
+	-bsdi-lfc-1.4)
+	    LFC=lfc-1.4
+	    OS_PANDA=bsdi-lfc-1.4
+	    ;;
+	-bsdi-lfc|-bsdi-lfc-1.5)
+	    LFC=lfc-1.5
+	    OS_PANDA=bsdi-lfc-1.5
+	    ;;
+	-bsdi|-bsdi-myri|-bsdi-udp|-bsdi-atm|-bsdi-tcp-cluster|-bsdi-native-cluster|-bsdi-cluster|-bsdi-pkt-cluster)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    ;;
+
+	-myrinet|-fe|-atm)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    THREAD_PACKAGE=ot
+	    AMOEBA_USERLIB=newusched
+	    ;;
+	-myrinet-256)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    THREAD_PACKAGE=frag256/ot
+	    AMOEBA_USERLIB=newusched
+	    ;;
+	-myrinet-pre|-fe-pre|-atm-pre)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    THREAD_PACKAGE=user
+	    PANDA_THREADS=.
+	    AMOEBA_USERLIB=usched
+	    ;;
+	-amoeba|-amoeba-cluster|-myrinet-kernel|-fe-kernel|-atm-kernel)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    PANDA_THREADS=amoeba_threads
+	    THREAD_PACKAGE=default
+	    ;;
+	-solaris|-solaris2)
+	    OS_PANDA=solaris2
+	    PANDA_THREADS=.
+	    ;;
+	-solaris-ot)
+	    OS_PANDA=`expr $i : '-\(.*\)'`
+	    PANDA_THREADS=ot
+	    ;;
+
+	-sparc|-mc68000)
+	    PROCESSOR=`expr $i : '-\(.*\)'`
+	    ;;
+
+	-parix-T800|-T800|-parix)
+	    OS_PANDA=parix-T800
+	    PROCESSOR=T800
+	    ;;
+	-parix-PowerPC|-PowerPC|-PPC)
+	    OS_PANDA=parix-PowerPC
+	    PROCESSOR=PowerPC
+	    OS=parix
+	    ;;
+
+    # Threads package
+    #
+	-kernel|-kernel-threads)
+	    THREAD_PACKAGE=default
+	    PANDA_THREADS=amoeba_threads
+	    ;;
+	-pre|-pre-threads)
+	    THREAD_PACKAGE=user
+	    PANDA_THREADS=.
+	    AMOEBA_USERLIB=usched
+	    ;;
+	-ot|-open-threads)
+	    THREAD_PACKAGE=ot
+	    PANDA_THREADS=ot
+	    AMOEBA_USERLIB=newusched
+	    ;;
+	-not|-no-threads)
+	    PANDA_THREADS=no_threads
+	    ;;
+
+    # Compilation/link specials
+    #
+	-pipe)
+	    ARGS="$ARGS $i"
+	    ;;
+	-p*)
+	    PAN_PGFLAG=$i
+	    PAN_LIB_FLAVOUR=profiling
+	    ARGS="$ARGS $i"
+	    ;;
+	-trc)
+	    PAN_LIB_FLAVOUR=tracing
+	    PAN_CPPFLAGS="$PAN_CPPFLAGS -DTRACING"
+	    ;;
+	-g)
+	    AMOEBA_LIB_VERSION=amoeba.gdb
+	    ARGS="$ARGS $i"
+	    ;;
+	-qpt)
+	    use_qpt="yes"
+	    ;;
+	-O*)
+	    ARGS="$ARGS $i"
+	    AMOEBA_FLAVOUR=optimized
+	    LFC_FLAVOUR=optimized
+	    PAN_LIB_FLAVOUR=optimized
+	    ;;
+	-cc=*)
+	    CC_PREDEF=`expr $i : '-cc=\(.*\)'`
+	    ;;
+	-f77=*)
+	    CC_PREDEF=`expr $i : '-f77=\(.*\)'`
+	    ;;
+	-ld=*)
+	    LD_PREDEF=`expr $i : '-ld=\(.*\)'`
+	    ;;
+
+    # Control LFC path
+    #
+	-lfc-root=*)
+	    LFC_HOME=`expr $i : '-lfc-root=\(.*\)'`
+	    LFC=`basename $LFC_HOME`
+	    LFC_HOME=`dirname $LFC_HOME`
+	    ;;
+	-lfc-special=*)
+	    LFC_FLAVOUR=`expr $i : '-lfc-special=\(.*\)'`
+	    ;;
+
+
+    # Pass unrecognised options on to $CC/$LD
+    #
+	*)	ARGS="$ARGS $i"
+	    ;;
+
+    esac
+done
+
+
+
+# On Linux,BSDI/Panda4.0, the default (and only) Myrinet lib is LFC
+#
+case $PANDA_VERSION in
+4)
+    if test $OS_PANDA = bsdi -o $OS_PANDA = bsdi-myri; then
+	OS_PANDA=bsdi-lfc
+    fi
+    if test $OS_PANDA = linux -o $OS_PANDA = linux-myri; then
+	OS_PANDA=linux-lfc
+    fi
+    PAN_CPPFLAGS="-DPANDA4 $PAN_CPPFLAGS"
+    PAN_LFC=$PROC_BIN/$LFC
+    if test $PAN_SYSNAME = "intel_BSD.myri/$PANDA_THREADS"; then
+	PAN_SYSNAME=$PAN_LFC/$PANDA_THREADS
+    fi
+    ;;
+*)
+    PAN_LFC=$LFC
+    ;;
+esac
+
+
+# Determine OS from OS_PANDA
+#
+case $OS_PANDA in
+    amoeba*|myrinet*|atm*|fe*)
+	OS=amoeba
+	;;
+    linux*)
+	OS=linux
+	;;
+    bsdi*)
+	OS=bsdi
+	;;
+    parix*)
+	OS=parix
+	;;
+esac
+
+
+# Determine the Panda system
+#
+case $OS_PANDA in
+    solaris2|solaris-ot)
+	PAN_SYSNAME=solaris/$PANDA_THREADS
+	;;
+
+    linux-lfc*)
+	PAN_SYSNAME=$PAN_LFC/$PANDA_THREADS
+	;;
+    linux-myri|linux-cluster|linux-udp|linux-atm)
+	network=`expr $OS_PANDA : 'linux-\(.*\)'`
+	if test $PANDA_VERSION = 4; then
+	    PAN_SYSNAME=i386_linux/$network/$PANDA_THREADS
+	else
+	    case $network in
+	    udp|atm)
+	    	PAN_SYSNAME=linux.sockets/$PANDA_THREADS
+		;;
+	    *)
+	    	PAN_SYSNAME=linux.myrinet/$PANDA_THREADS
+		;;
+	    esac
+	fi
+	;;
+    linux-pkt-cluster)
+	PAN_SYSNAME=$PAN_LFC/cluster/native/pkt/$PANDA_THREADS
+	;;
+    linux-pkt-cluster-no-fc)
+	PAN_SYSNAME=$PAN_LFC/cluster/native/pkt/no_fc/$PANDA_THREADS
+	;;
+    linux-native-cluster)
+	PAN_SYSNAME=$PAN_LFC/cluster/native/msg/$PANDA_THREADS
+	;;
+    linux-*-cluster)
+	PAN_SYSNAME=$PAN_LFC/cluster/`expr $OS_PANDA : 'linux-\(.*\)-cluster'`/$PANDA_THREADS
+	;;
+
+    bsdi-lfc*)
+	PAN_SYSNAME=$PAN_LFC/$PANDA_THREADS
+	;;
+    bsdi-myri|bsdi-cluster|bsdi-udp|bsdi-atm)
+	network=`expr $OS_PANDA : 'bsdi-\(.*\)'`
+	if test $PANDA_VERSION = 4; then
+	    PAN_SYSNAME=i386_bsdi/$network/$PANDA_THREADS
+	else
+	    PAN_SYSNAME=intel_BSD.$network/$PANDA_THREADS
+	fi
+	;;
+    bsdi-pkt-cluster)
+	PAN_SYSNAME=$PAN_LFC/cluster/native/pkt/$PANDA_THREADS
+	;;
+    bsdi-pkt-cluster-no-fc)
+	PAN_SYSNAME=$PAN_LFC/cluster/native/pkt/no_fc/$PANDA_THREADS
+	;;
+    bsdi-native-cluster)
+	PAN_SYSNAME=$PAN_LFC/cluster/native/msg/$PANDA_THREADS
+	;;
+    bsdi-*-cluster)
+	PAN_SYSNAME=$PAN_LFC/cluster/`expr $OS_PANDA : 'bsdi-\(.*\)-cluster'`/$PANDA_THREADS
+	;;
+
+    amoeba-cluster)
+	PAN_SYSNAME=amoeba/cluster
+	;;
+    amoeba*)
+	PAN_SYSNAME=$OS_PANDA
+	;;
+    myrinet*)
+	case $PANDA_VERSION in
+	    2)
+		case $OS_PANDA in
+		    myrinet-kernel)
+			PAN_SYSNAME=myrinet/reliable
+			;;
+		    myrinet*)
+			PAN_SYSNAME=myrinet/preemptive_threads/reliable
+			;;
+		esac
+		;;
+	    *)
+		PAN_SYSNAME=myrinet/$PANDA_THREADS
+		;;
+	esac
+	;;
+    atm*)
+	PAN_SYSNAME=atm/$PANDA_THREADS
+	;;
+    fe*)
+	PAN_SYSNAME=fast_ethernet/$PANDA_THREADS
+	;;
+
+    parix-T800|T800|parix)
+	OS_PANDA=parix
+	PROCESSOR=T800
+	PAN_SYSNAME=$OS_PANDA-$PROCESSOR
+	;;
+    parix-PowerPC|PowerPC|PPC)
+	OS_PANDA=parix
+	PROCESSOR=PowerPC
+	PAN_SYSNAME=$OS_PANDA-$PROCESSOR
+	;;
+esac
+
+
+# Myrinet needs extra libs -- on Amoeba different ones from BSDI
+#
+case $OS_PANDA in
+    myrinet*)
+	LCP_LIB=$MYRI_HOME/myrinet/lib/sparc_amoeba
+	FM_BINUTIL=$MYRI_HOME/conf.am/lanai-binutils-2.5.2
+	MYRINET_LIBS="$LCP_LIB/libDpi.a \
+		      $LCP_LIB/libLanaiDevice.a \
+		      $FM_BINUTIL/bfd/libbfd.a \
+		      $FM_BINUTIL/libiberty/libiberty.a"
+	;;
+
+    linux|linux-myri*|linux-lfc*|linux-*cluster*)
+	LCP_LIB=$MYRI_HOME/lib/intel_linux
+	FM_BINUTIL=$MYRI_HOME/lib/intel_linux
+	MYRINET_LIBS="$LCP_LIB/libDpi.a \
+		      $LCP_LIB/libLanaiDevice.a \
+		      $FM_BINUTIL/libbfd.a \
+		      $FM_BINUTIL/libiberty.a"
+	;;
+
+    bsdi|bsdi-myri*|bsdi-lfc*|bsdi-*cluster*)
+	LCP_LIB=$MYRI_HOME/lib/intel_BSD
+	FM_BINUTIL=$MYRI_HOME/lib/intel_BSD
+	MYRINET_LIBS="$LCP_LIB/libDpi.a \
+		      $LCP_LIB/libLanaiDevice.a \
+		      $FM_BINUTIL/libbfd.a \
+		      $FM_BINUTIL/libiberty.a"
+	;;
+
+esac
+
+case $PROCESSOR in
+sparc)
+	PAN_CFLAGS="$PAN_CFLAGS -mv8"
+	;;
+i386)
+	PAN_CFLAGS="$PAN_CFLAGS -malign-double"
+	;;
+esac
+
+
+PANDA_PROJ=$PANDA_PROJ/panda$PANDA_VERSION.0
+PAN_CPPFLAGS="-I$PANDA_PROJ/include $PAN_CPPFLAGS"
+
+PAN_LIB=$PANDA_PROJ/lib/$PAN_SYSNAME/$PAN_LIB_FLAVOUR
+PAN_LDLIBS="$PAN_LDLIBS $PAN_LIB/libpanda.a -lm"
+
+THR_LIB=$THREAD_PACKAGE.$AMOEBA_FLAVOUR
+PAN_THR_LIB=panda$PANDA_VERSION/$THREAD_PACKAGE.$AMOEBA_FLAVOUR
+
+
+# Some architectures need extra libs besides the Panda lib
+#
+
+case $OS_PANDA in
+    fe|fe-*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $NETW/FastEthernet/lib/$PAN_THR_LIB/libFM.a"
+	;;
+    myrinet*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $MYRI_HOME/FM-1.1-am/lib.am/$PAN_THR_LIB/libFM.a \
+		    $MYRINET_LIBS"
+	;;
+    linux-cluster)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $PAN_LIB/libFM.a \
+		    $MYRINET_LIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a \
+		    $LIBZ"
+	;;
+    linux|linux-myri|linux-ndynamic)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $PAN_LIB/libFM.a \
+		    $MYRINET_LIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+	;;
+    linux-atm)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $PAN_LIB/libFM.a \
+		    $PAN_LIB/libFORE.a \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+	;;
+    linux-lfc*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $LFC_HOME/$LFC/lib/$LFC_FLAVOUR/liblfc.a \
+		    $MYRINET_LIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+	;;
+    bsdi-cluster)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $PAN_LIB/libFM.a \
+		    $MYRINET_LIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a \
+		    $LIBZ"
+	;;
+    bsdi|bsdi-myri|bsdi-ndynamic)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $PAN_LIB/libFM.a \
+		    $MYRINET_LIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+	;;
+    bsdi-atm)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $PAN_LIB/libFM.a \
+		    $PAN_LIB/libFORE.a \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+	;;
+    bsdi-lfc*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $LFC_HOME/$LFC/lib/$LFC_FLAVOUR/liblfc.a \
+		    $MYRINET_LIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+	;;
+    atm*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $NETW/ATM/lib.am/$PAN_THR_LIB/libFM.a \
+		    $NETW/ATM/lib.am/i960/toolib.a"
+	;;
+    linux-*-cluster*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $LFC_HOME/$LFC/lib/$LFC_FLAVOUR/liblfc.a \
+		    $MYRINET_LIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a \
+		    $LIBZ"
+	;;
+    linux-udp)
+	case $PANDA_VERSION in
+	4)
+		PAN_LDLIBS="$PAN_LDLIBS \
+		    	$DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+		;;
+	esac
+	;;
+    linux-*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+	;;
+    bsdi-*-cluster*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $LFC_HOME/$LFC/lib/$LFC_FLAVOUR/liblfc.a \
+		    $MYRINET_LIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a \
+		    $LIBZ"
+	;;
+    bsdi-udp)
+	case $PANDA_VERSION in
+	4)
+		PAN_LDLIBS="$PAN_LDLIBS \
+		    	$DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+		;;
+	esac
+	;;
+    bsdi-*)
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $DASLIB/lib/$DAS_PROC_BIN/libdas.a"
+	;;
+    *)
+	;;
+esac
+
+
+AMOEBA_CONF=$AMOEBA_HOME/conf/amoeba/$PROCESSOR.gnu-2
+
+# QPT stuff
+qpt_dir=/home/koen/warts/amoeba
+AM_OC_STARTOFF="$AMOEBA_CONF/lib/head/head.o"
+
+case $AMOEBA_USERLIB in
+    none)
+	AMOEBA_LIB=$AMOEBA_CONF/lib/$AMOEBA_LIB_VERSION/libamoeba.a
+	;;
+    *)
+	AMOEBA_LIB="$AMOEBA_CONF/lib/amoeba.$AMOEBA_USERLIB/libamoeba.a \
+		    $AMOEBA_CONF/lib/$AMOEBA_LIB_VERSION/libamoeba.a"
+	;;
+esac
+
+case $PAN_PGFLAG in
+    -p*)
+	AMOEBA_PROFLIB=$AMOEBA_CONF/lib/gprof/libgprof.a
+	;;
+    *)
+	;;
+esac
+
+
+if test $use_qpt = "yes"; then
+    case $OS_PANDA in
+	amoeba|myrinet-kernel|fe-kernel)
+	    # AM_OC_STARTOFF="$qpt_dir/head.o $qpt_dir/sys_nthread.o $qpt_dir/pan_threads.o"
+	    AM_OC_STARTOFF="$qpt_dir/head.o $qpt_dir/sys_nthread.o \
+			    $PANDA_PROJ/lib/$PAN_SYSNAME/$PAN_LIB_FLAVOUR/pan_threads_qpt.o"
+	    ;;
+	myrinet|myrinet-256|fe|atm)
+	    AM_OC_STARTOFF="$qpt_dir/head.o $qpt_dir/sys_nthread.o $MYRI_HOME/FM-1.1-am/lib.am/signals.o"
+	    ;;
+	myrinet-pre|fe-pre|atm-pre)
+	    AM_OC_STARTOFF="$qpt_dir/head.o $qpt_dir/sys_nthread.o $MYRI_HOME/FM-1.1-am/lib.am/signals.o"
+	    ;;
+	*)
+	    echo No QPT support for OS $OS_PANDA
+	    exit 4
+	    ;;
+    esac
+fi
+
+case $OS_PANDA in
+    sunos4)
+	if test $fortran = 1; then
+	    CC=g77
+	    LD=g77
+	else
+	    CC=gcc
+	    LD=gcc
+	fi;
+	;;
+    linux*)
+	if test $fortran = 1; then
+	    CC=g77
+	    LD=g77
+	else
+	    CC=gcc
+	    LD=gcc
+	fi
+	;;
+    bsdi*)
+	if test $fortran = 1; then
+	    CC=/usr/local/bin/g77
+	    LD=/usr/local/bin/g77
+	else
+	    CC=/usr/local/bin/gcc
+	    LD=/usr/local/bin/gcc
+	fi
+	;;
+    solaris*)
+	PAN_CPPFLAGS="$PAN_CPPFLAGS -D_REENTRANT"
+	if test "$PANDA_THREADS" = "ot"; then
+	    PAN_LDLIBS="$PAN_LDLIBS -lsocket -lnsl -lm -lposix4 -ldl"
+	else
+	    PAN_LDLIBS="$PAN_LDLIBS -lthread -lsocket -lnsl -lm -lposix4 -ldl"
+	fi
+	if test $fortran = 1; then
+	    CC=g77
+	    LD=g77
+	else
+	    CC=gcc
+	    LD=gcc
+	fi
+	;;
+    amoeba*|myrinet*|fe*|atm*)
+	PAN_CPPFLAGS="$PAN_CPPFLAGS -D$PROCESSOR -DAMOEBA"
+	PAN_CFLAGS="$PAN_CFLAGS -G $AMOEBA_HOME/bin.$binsuf/gnu \
+		    -mam_$PROCESSOR"
+	if test "$link" = "yes"
+	then
+	    PAN_CFLAGS=`echo $PAN_CFLAGS | sed 's/-mv8//g'`
+	    PAN_CPPFLAGS=`echo $PAN_CPPFLAGS | sed 's/-[DI][^ \t]*//g'`
+	else
+	    PAN_CPPFLAGS="$PAN_CPPFLAGS $AMOEBA_INCLUDES"
+	fi
+	if test $fortran = 1; then
+	    CC="$AMOEBA_CONF/toolset/do_g77"
+	    LD="$AMOEBA_CONF/toolset/do_ld"
+	else
+	    CC="$AMOEBA_CONF/toolset/do_gcc"
+	    LD="$AMOEBA_CONF/toolset/do_ld"
+	fi
+	PAN_LDLIBS="$PAN_LDLIBS $AM_OC_STARTOFF"
+	case $PROCESSOR in
+	sparc)
+		GCC2LIB=$AMOEBA_HOME/bin.sun4/gnu/$PROCESSOR/libgcc2.a
+		;;
+	*)
+		;;
+	esac
+	PAN_LDLIBS="$PAN_LDLIBS \
+		    $AMOEBA_PROFLIB $GCC2LIB \
+		    $AMOEBA_CONF/lib/ajax/libajax.a \
+		    $AMOEBA_CONF/lib/math.mv8/libmath.a \
+		    $AMOEBA_LIB"
+	;;
+    parix)
+	if test "$PROCESSOR" = T800
+	then PAN_CFPPLAGS="-Tp$OC_HOME/bin/ancpp-T800 $PAN_CPPFLAGS"
+	fi
+	if test $fortran = 1; then
+	    CC="px anfc"
+	    LD="px anfc"
+	else
+	    CC="px ancc"
+	    LD="px ancc"
+	fi
+	;;
+esac
+
+if test "x$CC_PREDEF" != x; then
+    CC="$CC_PREDEF"
+    if test "x$LD_PREDEF" = x; then
+	LD="$CC"
+    fi
+fi
+
+if test $link = "yes"; then
+    if test "$VERBOSE" = "yes" -a x"$ACT" = "x"
+    then echo $MY_LD $LD $PAN_CFLAGS $PAN_CPPFLAGS $PAN_LDFLAGS $ARGS $PAN_LDLIBS
+    fi
+    $ACT $MY_LD $LD $PAN_CFLAGS $PAN_CPPFLAGS $PAN_LDFLAGS $ARGS $PAN_LDLIBS
+else
+    if test "$VERBOSE" = "yes" -a x"$ACT" = "x"
+    then echo $CC $PAN_CFLAGS $PAN_CPPFLAGS $ARGS
+    fi
+    $ACT $CC $PAN_CFLAGS $PAN_CPPFLAGS $ARGS
+fi

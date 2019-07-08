@@ -1,0 +1,12 @@
+OBJECT SPECIFICATION TransTable;
+
+FROM Types IMPORT EvalType;
+
+	OPERATION InitTTable();
+	OPERATION Retrieve(key : integer; color : integer; depth : integer;
+			   val : OUT EvalType; type : OUT integer) : boolean;
+	OPERATION Store(key : integer; color : integer; depth : integer;
+			value : EvalType; type : integer);
+
+END;
+

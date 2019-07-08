@@ -1,0 +1,814 @@
+\documentclass{article}
+\title{Extensions to Orca for data-parallel programming}
+\author{Saniya Ben Hassen \\ and \\ the Orca Group \\ DRAFT }
+
+\textwidth 6.5in
+\oddsidemargin -0.3in
+\textheight 9in
+\topmargin 0in
+
+\newenvironment{example}
+  {\begin{quote} ~\hrulefill }
+  {~\hrulefill \end{quote} }
+
+\usepackage{graphicx}
+\usepackage{saniya} 
+\usepackage{html}
+
+\pagestyle{empty}
+
+\markboth{}{Extended Orca Programmer's Manual}
+\pagestyle{myheadings}
+
+
+\begin{document}
+
+\begin{htmlonly}
+\renewcommand{\rightarrow}{->}
+\renewcommand{\Rightarrow}{=>}
+\end{htmlonly}
+
+\pagenumbering{roman}
+
+\maketitle
+\tableofcontents
+
+\newpage
+
+\pagenumbering{arabic}
+
+This document describes extensions to Orca~\cite{bal89} to support
+partitioned objects~\cite{ics96}. A partitioned object is a shared
+object which state can be partitioned and distributed over multiple
+processors. The partitioning and distribution strategies are defined
+by the programmer. 
+
+With this new model added to the conventional shared object model,
+Orca integrates mixed task- and data-parallel programming. It is
+possible to write applications that use shared objects and/or
+partitioned objects.
+
+\section{Object State}
+\label{ObjectState}
+
+The state of a partitioned object is composed of elements. This set of
+elements can be grouped into partitions which can be mapped onto
+multiple processors (see Section~\ref{partitioning}).
+
+\subsection{Object Declaration}
+
+The state of a partitioned object must be a multidimensional
+array. The headers of the object's specification and implementation
+provide the name of the object type, and the ``shape'' of the object,
+i.e., the number of dimensions and the variables or constants defining
+the bounds of the object. The shape is given between square brackets
+(\verb+[]+), just like in an array definition:
+
+\begin{example}
+\begin{verbatim}
+OBJECT SPECIFICATION 
+       ObjectName[index_type1,...,index_typen];
+OBJECT IMPLEMENTATION 
+       ObjectName[index_type1 LB1..UB1,...,index_typen LBn..UBn];
+\end{verbatim} 
+\end{example}
+
+In the headers above, the object has \verb+n+ dimensions. The object
+bounds \verb+LBi+ and \verb+UBi+ are implicitly declared identifiers
+that are initialized at instantiation time. Their types
+\verb+index_typei+ must be discrete types.
+
+\subsection{Elements Declaration}
+
+The state of a partitioned object is an array of
+\emph{elements}. These elements can be of any fixed size type such as
+\verb+integer+, \verb+record+, etc. Below, we illustrate the
+declaration of the state of a partitioned object with some
+examples. The following one defines a two dimensional grid, in which
+each element is a real number:
+
+\begin{example} \begin{verbatim}
+OBJECT IMPLEMENTATION grid[integer n..N, integer m..M]; 
+   G: real; 
+\end{verbatim} 
+\end{example} 
+
+The shape of each fields of the elements is the same as the one
+specified in the object implementation header. They are indexed like
+arrays are indexed.
+
+Currently, an element of a partitioned object must have a static type,
+so graphs, arrays, sets, bags, and object types are prohibited.
+
+\subsection{Instantiation}
+
+A partitioned object is instantiated the same way a conventional
+shared object is instantiated but the user must give the actual bounds
+of the object as in the following example:
+
+\begin{example} \begin{verbatim}
+O: grid[LBV1..UBV1,LBV2..UBV2];
+\end{verbatim} 
+\end{example}
+
+where \verb+LBVi+ and \verb+UBVi+ are either constants or assigned
+variables.
+ 
+Like conventional Orca objects, a partitioned object can be assigned
+the value of another partitioned object. One can write:
+
+\begin{example} \begin{verbatim}
+O1: grid[1..100,1..100];
+O2: grid[1..100,1..100];    # The bounds of this object 
+                            # must be defined.
+O1 := O2;
+\end{verbatim} 
+\end{example}
+
+With this assignment, \verb+O1+ is assigned the value of the state of
+\verb+O2+. Also, \verb+O1+ inherits the partitioning and distribution
+of \verb+O2+. Consequently, such an assignment statement requires one
+or more collective operations and is time-consuming.
+
+The bounds of the source object (on the right-hand side of the
+assignment statement) must be defined. If the bounds of the
+destination object have not been defined, the assignment sets the
+object's bounds as being the same as the ones of \verb+O2+. The bounds
+of the object are thus defined by assigning it the value of another
+object for which the bounds have been defined, as in the following
+example:
+
+\begin{example} \begin{verbatim}
+O: grid[1..100,1..100];
+O1: grid;
+...
+O1 := O; # Object O1 is a 100x100 array and has
+         # the same distribution as O.
+\end{verbatim} 
+\end{example}
+
+\section{Operations}
+\label{operations}
+
+Operations on a partitioned object can be applied sequentially or in
+parallel to the elements of the object. Operations are atomic and the
+system guarantees that the execution of multiple concurrent
+operations is equivalent to some serial execution of these operations.
+
+\subsection{Sequential Operations}
+
+A sequential operation accesses the elements of an object
+sequentially.  Sequential operations are defined using the current
+Orca syntax. They are written in the same way conventional Orca
+operations are written, except that the object state is now structured
+as an array. The following sequential operation defined on a
+\verb+grid+ object prints the values of the grid sequentially.
+
+\begin{example} \begin{verbatim}
+OPERATION PrintGrid(); 
+BEGIN 
+  FOR  row IN n TO N DO 
+     FOR col IN m .. M DO write(G[row,col], " "); OD; 
+     WriteLine;
+  OD; 
+END; 
+\end{verbatim} 
+\end{example}
+
+\subsection{Parallel Operations}
+
+A parallel operation is applied to all elements of a partitioned
+object in parallel. It models an SIMD style of programming. The
+elements can be identified within an operation by
+indices. Conceptually, there is one thread of control per
+element. Within such a thread of control, only the corresponding
+element can be updated. Arbitrary elements may be read; their values
+are the ones before the execution of the parallel operation started.
+
+Parallel operations are defined by using the new keyword
+\verb+PARALLEL+, as follows:
+
+\begin{example} \begin{verbatim}
+PARALLEL OPERATION[ind1,...,indn] 
+    OperationName(Arguments): REDUCE ReturnType WITH ReductionFunction;
+PARALLEL OPERATION[ind1,...,indn] 
+    OperationName(Arguments): GATHER ReturnType;
+\end{verbatim} 
+\end{example}
+
+The indices \verb+ind1+,\verb+ind2+,...,\verb+indn+ are {\em operation
+indices} and are used to refer to individual elements of the
+object. The number and type of operation indices must be the same as
+the number and type of dimensions in the shape of the partitioned
+object. Each operation index is a constant (i.e., it may not be
+modified). It cannot be assigned within the operation and cannot be
+passed to a function as an OUT or INOUT parameter.
+
+\subsubsection*{Return Values and OUT Arguments}
+
+The return value and all out arguments of a parallel operation must be
+declared with the GATHER or REDUCE clause. For example, the following
+header declares an OUT argument that is reduced through the
+\verb+max()+ function and is equivalent to the header of the
+\verb+UpdateGrid()+ operation shown in the example above:
+
+\begin{example}
+\begin{verbatim}
+PARALLEL OPERATION[row,col]
+         UpdateGrid(c: color, m: OUT REDUCE real WITH max);
+
+If there are multiple OUT arguments, each one is declared with a
+GATHER or REDUCE clause independently from the others.
+\end{verbatim}
+\end{example}
+
+\subsection{Reduction}
+\label{reduction}
+
+With a REDUCE clause, the set of values returned for each element in
+the operation must be reduces to one value using a {\em reduction
+function}. The reduction function is applied pair-wise to the
+elements. For example, the following function defines the reduction
+function \verb+max()+. The returned value of operation
+\verb+UpdateGrid()+ is thus the maximum of the values returned for
+individual elements.
+
+\begin{example} \begin{verbatim}
+OBJECT IMPLEMENTATION grid[n..N,m..M];
+  G: real; 
+
+FUNCTION max(v1, v2: real): real;
+BEGIN 
+  IF (v2 > v1) 
+    THEN v1 := v2;
+  FI;
+END; 
+  ...
+END; 
+\end{verbatim} \end{example}
+
+The reduction function must be associative and commutative, so the
+operation can be applied to the arguments in an arbitrary order and
+can be optimized. 
+
+More generally, if a \verb+REDUCE+ clause reduces element of type
+\verb+ValueType+, the reduction function must be defined as follows:
+
+\begin{example} \begin{verbatim}
+FUNCTION ReductionFunctionName(e1, e2: ValueType): ValueType
+\end{verbatim} \end{example}
+
+A compile-time error is generated if the type of the variables reduced
+is not compatible with the reduction function declaration.
+
+
+In the case of gathered OUT arguments, the caller of the operation is
+responsible for combining the arguments after the execution of the
+operation ends. In this case, the declaration of the operation would
+look like this:
+
+\begin{example} \begin{verbatim}
+TYPE real_array = ARRAY[integer, integer] OF real;
+...
+PARALLEL OPERATION[row,col] 
+   UpdateGrid(c: color): OUT GATHER real_array;
+  diff: real;
+BEGIN
+   diff := 0.0; 
+   IF row > n AND col > m AND row < N AND col < M AND WhichColor(row, col) = c 
+      THEN
+           avg :=  (G[row-1,col] + G[row+1,col] + G[row,col-1] + G[row,col+1])/4.0; 
+           diff := ABS(avg - G[row,col]); 
+           G[row,col] := G[row,col] + OMEGA * (avg - G[row,col]);
+   FI;
+   RETURN diff;
+END; 
+\end{verbatim} \end{example}
+
+\section{Nesting}
+\label{nesting}
+
+For the moment, a shared object or another partitioned object cannot
+be accessed within a partitioned object. Also, it cannot be a field of
+a partitioned object. The use of \verb+SELF+ is allowed only within
+sequential operations and a parallel operation can be called from
+within a sequential operation, but cannot be called from within
+another parallel operation.
+
+\section{Partitioning and distribution}
+\label{partitioning} 
+
+The system provides directives for partitioning an object and for
+mapping (or distributing) its partitions onto a set of
+processors. There are three things tightly related in partitioning and
+distribution: data prefetching, data dependencies, and workload
+distribution.
+
+\subsection{Partitioning} 
+
+Partitioning tells the system which elements of an object must be
+fetched or prefetched together. During the execution of an operation,
+if an element is fetched from a remote location, the entire partition
+it belongs to is fetched with it. Therefore, there must be data access
+locality among the elements of a partition. Partitioning may also used
+to balance the load between processors. When a parallel operation is
+executed, each processor executes the code on the partitions it
+owns. It is possible to have a finer or coarser grained workload
+distribution by changing the size of the partitions.
+
+The partitioning of an object may be defined using several predefined
+routines that are called like any other operation on the object,
+except that the directive's name is preceded by \verb+$$+ instead of
+\verb+$+\remark{$}. The partitioning directives currently available
+are described below.
+
+\begin{enumerate}
+\item
+The most general partitioning directive is \verb+$partition()+
+\remark{$}. It is given the number of partitions along each dimension
+as arguments. The system divides the object into partitions of
+approximately equal size accordingly. In the following example, the
+grid \verb+g1+ has 100~partitions along the first dimension and one
+partition along the second dimension. Therefore, \verb+g1+ is
+partitioned row-wise. For \verb+g2+, each partition consists of about
+half a row of the \verb+grid+. Because the partitioning does not fit
+exactly the shape of the object, half of the partitions will hold the
+first 50 elements of each row. The other partitions will hold the 49
+remaining elements of each row.
+
+\begin{example} 
+\begin{verbatim}
+  g1: grid[1..100,1..100];
+  g2: grid[1..100,1..99];
+  g1$$partition(100,1);
+  g2$$partition(100,2);
+\end{verbatim} 
+\end{example}
+
+\item
+Row-wise and column-wise partitionings are common for two-dimensional
+objects and can be defined using two predefined directives
+\verb+rowwise_partitioning()+ and \verb+columnwise_partitioning()+, as
+shown in the example below. The directives take no arguments.
+
+\begin{example} 
+\begin{verbatim}
+  g1, g2: grid[1..100,1..100];
+  g1$$rowwise_partitioning();       # Each row of g1 is one partition.
+  g2$$columnwise_partitioning();    # Each column of g2 is one partition.
+\end{verbatim} 
+\end{example}
+
+\end{enumerate}
+
+\subsection{Distribution}
+
+Once an object is partitioned, its partitions must be distributed over
+the processors. The best distribution of an object is generally
+determined by the locality of accesses of its elements in the
+operation that is called most often. For example, if the update of a
+partition frequently requires the access of the neighboring partition,
+then these two should be mapped onto the same processor, if
+possible. Not only does the distribution of an object determines the
+communication patterns between the processors, it also affects their
+workload. The load of a processor can be alleviated by transfering the
+ownership of one or more of its partitions to other processors.
+
+As for partitioning, there are also several distribution directives: a
+low-level one, that allows an arbitrary distribution, and higher-level
+routines for commonly used distributions.
+
+\begin{enumerate}
+
+\item
+The most general distribution strategy is specified by filling an
+array of predefined type \verb+DistributionType+. Each entry in the
+array corresponds to a partition number and maps it to a processor
+number (assuming a one-dimensional processor shape). When the object
+has a multidimensional shape, there is a predefined ordering of the
+partitions. All partitions along the first dimensions are given
+consecutive numbers starting from~0. Then, partitions along the
+subsequent dimensions are given the subsequent numbers. In the example
+below, a grid of \verb+12x12+ elements is partitioned block-wise. The
+partitioning directive specifies that there should be 4 partitions
+along the first dimension and four partitions along the second
+dimension. Therefore, there is a total of 16 partitions numbered from
+0~to 15, from top to bottom and from left to right. The numbers on the
+grid represent partition numbers. The code on the left-hand size is
+used to distribute the grid onto two processors: partitions~0 to~7 are
+mapped to processor~0 and partitions~8 to~15 are mapped onto
+processor~1.
+
+
+\begin{example} 
+
+\begin{minipage}{3.5in}
+\begin{verbatim}
+TYPE DistributionType = array[integer] of integer;
+
+g: grid[1..12,1..12];
+dist: DistributionType;
+
+g$$partition(4,4);
+FOR i IN 0..7 DO dist[i] := 0; OD;
+FOR i IN 8..15 DO dist[i] := 1; OD;
+g$$distribute(dist);
+\end{verbatim} 
+\end{minipage} \ \
+\begin{minipage}{2.5in}
+\includegraphics{distribution.eps}
+\end{minipage}
+
+\end{example}
+
+
+When the distribution directive is called, the system checks that the
+processor numbers are within the range of the actual number of
+processors. A processor number out of range generates a runtime error.
+
+\item
+Because filling this structure can be cumbersome, the language
+provides predefined directives for the most common distributions:
+block and cyclic. 
+
+The first predefined directive, \verb+distribute_on_n()+, is given,
+for each dimension, the number of processors \verb+n+ to be used
+(numbered from~0 to \verb+n-1+) and the type of distribution along
+that dimension: BLOCK or CYCLIC. A CYCLIC distribution ensures that
+consecutive partitions along one dimension will be mapped onto
+different processors. A BLOCK distribution ensures that these
+partitions will be mapped onto the same processor. For example, the
+cyclic distribution over processors~0 and~1 of the rows of a grid
+object \verb+g+ with a row-wise partitioning can simply be written as
+follows:
+
+\begin{example}
+
+\begin{minipage}{3.5in}
+\begin{verbatim}
+g: grid[500,500];
+g$$partition(5,1);   
+g$$distribute_on_n(2,CYCLIC,1,BLOCK); 
+# The last two arguments are irrelevant 
+# since there is only one partition
+# along the second dimension
+\end{verbatim} 
+\end{minipage} \ \
+\begin{minipage}{2.5in}
+\includegraphics{cyclic.eps}
+\end{minipage}
+
+\end{example}
+
+Below, we give some example of cyclic and block distributions for a
+two-dimensional partitioned object. The partitioning is illustrated on
+the right hand side of the example where each number represent the
+processor where the corresponding partition resides. The code that
+generates the partitioning and distribution lies on the left hand side
+of the example. The exact arithmetics used by the system to perform
+the mapping are desribed in Appendix~\ref{app:arithmetics}.
+
+\begin{example}
+
+\begin{minipage}{3.5in}
+\begin{verbatim}
+## BLOCK, BLOCK
+
+g: grid[300,300];
+g$$partition(9,9);
+g$distribute_on_n(3,BLOCK,3,BLOCK);
+\end{verbatim}
+\end{minipage} \ \
+\begin{minipage}{2.5in}
+\begin{verbatim}
+  0   0   0   3   3   3   6   6   6 
+  0   0   0   3   3   3   6   6   6 
+  0   0   0   3   3   3   6   6   6 
+  1   1   1   4   4   4   7   7   7 
+  1   1   1   4   4   4   7   7   7 
+  1   1   1   4   4   4   7   7   7 
+  2   2   2   5   5   5   8   8   8 
+  2   2   2   5   5   5   8   8   8 
+  2   2   2   5   5   5   8   8   8 
+\end{verbatim}
+\end{minipage}
+
+\end{example}
+
+\begin{example}
+
+\begin{minipage}{3.5in}
+\begin{verbatim}
+## CYCLIC, BLOCK
+
+g: grid[300,300];
+g$$partition(9,9);
+g$distribute_on_n(3,CYCLIC,3,BLOCK);
+\end{verbatim}
+\end{minipage} \ \
+\begin{minipage}{2.5in}
+\begin{verbatim}
+  0   0   0   3   3   3   6   6   6 
+  1   1   1   4   4   4   7   7   7 
+  2   2   2   5   5   5   8   8   8 
+  0   0   0   3   3   3   6   6   6 
+  1   1   1   4   4   4   7   7   7 
+  2   2   2   5   5   5   8   8   8 
+  0   0   0   3   3   3   6   6   6 
+  1   1   1   4   4   4   7   7   7 
+  2   2   2   5   5   5   8   8   8 
+\end{verbatim}
+\end{minipage}
+
+\end{example}
+
+\begin{example}
+
+\begin{minipage}{3.5in}
+\begin{verbatim}
+## BLOCK, CYCLIC
+
+g: grid[300,300];
+g$$partition(9,9);
+g$distribute_on_n(3,BLOCK,3,CYCLIC);
+\end{verbatim}
+\end{minipage} \ \
+\begin{minipage}{2.5in}
+\begin{verbatim}
+  0   3   6   0   3   6   0   3   6 
+  0   3   6   0   3   6   0   3   6 
+  0   3   6   0   3   6   0   3   6 
+  1   4   7   1   4   7   1   4   7 
+  1   4   7   1   4   7   1   4   7 
+  1   4   7   1   4   7   1   4   7 
+  2   5   8   2   5   8   2   5   8 
+  2   5   8   2   5   8   2   5   8 
+  2   5   8   2   5   8   2   5   8 
+\end{verbatim}
+\end{minipage}
+
+\end{example}
+
+\begin{example}
+
+\begin{minipage}{3.5in}
+\begin{verbatim}
+## CYCLIC, CYCLIC 
+
+g: grid[300,300];
+g$$partition(9,9);
+g$distribute_on_n(3,CYCLIC,3,CYCLIC);
+\end{verbatim}
+\end{minipage} \ \
+\begin{minipage}{2.5in}
+\begin{verbatim}
+  0   3   6   0   3   6   0   3   6 
+  1   4   7   1   4   7   1   4   7 
+  2   5   8   2   5   8   2   5   8 
+  0   3   6   0   3   6   0   3   6 
+  1   4   7   1   4   7   1   4   7 
+  2   5   8   2   5   8   2   5   8 
+  0   3   6   0   3   6   0   3   6 
+  1   4   7   1   4   7   1   4   7 
+  2   5   8   2   5   8   2   5   8 
+\end{verbatim}
+\end{minipage}
+
+\end{example}
+\remark{$}
+
+\item
+The second predefined directive, \verb+distribute_on_list()+, maps
+objects onto a list of processors. It is similar to the directive
+\verb+distribute_on_n()+ but instead of mapping partitions to
+processors numbered from~0 to~\verb+n-1+, the system uses the list
+given as the first argument of the directive. The system first
+determines the distribution with the same arithmetics as
+\verb+distribute_on_n()+ (See Apendix~\ref{app:arithmetics}). If
+\verb+CPUList+ is the list of processors given to
+\verb+distribute_on_list()+, processor \verb+CPUList[i]+ will own all
+partitions owned by processor~\verb+i+ in the initial
+distribution. The partitions may be mapped in blocks or cyclically on
+the processor list. In the following example, the partitions of a
+vector are mapped cyclically onto even-numbered processors:
+
+
+\begin{example} 
+\begin{verbatim}
+TYPE CPUListType = array[integer] of integer;
+
+g: vector[500];
+g$$partition(5);
+g$$distribute_on_list(CPUListType: [0,2,4,6,8], 5, CYCLIC);
+\end{verbatim} 
+\end{example}
+
+\end{enumerate}
+
+There is no default partitioning and distribution for an object. A
+partitioned object cannot be invoked before it has been partitioned
+and distributed. 
+
+If the operations on a partitioned object require different
+partitioning and/or distribution schemes, it is possible to
+re-partition and/or re-distribute the object. An object must be
+re-distributed every time it is re-partitioned. Partitioning and
+distribution are expensive operations and should be redefined only if
+necessary.
+
+\section{Resolving Dependencies}
+
+A dependency specifies that the execution of a particular parallel
+operation on one element of an object requires the access (in reading)
+of some other element of the object. Consider the following example:
+
+\begin{example}
+\begin{verbatim}
+object implementation vector[integer: N..M];
+    v: real;
+
+parallel operation[i] LeftShift();
+  begin
+  IF (i<M) THEN v[i] := v[i+1]; FI;
+  end;
+\end{verbatim}
+\end{example}
+
+During the execution of \verb+LeftShift()+, every element, except
+\verb+v[M]+, depends on its right neighbor. The system must determine
+these dependencies in order to guarantee that all data accessed are
+consistent.
+
+The compiler analyzes the access patterns of each one of an object
+operations. If the compiler detects that access patterns are static
+(i.e., the operation accesses the same data during different
+executions of the operation), it gives information to the runtime
+system about the dependencies. If the access patterns are not static,
+it will resort to a default strategy (total replication of the state
+of the object), which may thus not be optimal. Because this may result
+in inefficient code, the user may give some hints about
+dependencies. Only if no hints are provided will the system use the
+default strategy.
+
+The user may specify the dependencies between elements of an object
+using three procedures: \verb+ClearDependencies()+,
+\verb+AddDependency()+, \verb+RemoveDependency()+, and
+\verb+SetDependencies()+. A call to
+\verb+ClearDependencies(operation)+ clears the dependencies
+within the given operation of an object and
+\verb+SetDependecies(operation)+ commits all modifications to
+the dependencies since the previous commit. The procedure
+\verb+AddDependency()+ is given as arguments an object, a parallel operation
+\verb+op()+, and two sets of indices $i_1,\ldots,i_n$ and
+$j_1,\ldots,j_m$. It tells the system that the execution of
+\verb+op()+ on element indexed by $i_1,\ldots,i_n$ requires the access
+(in reading) of element indexed by $j_1,\ldots,j_m$.
+
+For example, to specify the dependencies for the \verb+LeftShift()+
+operation on an instance \verb+v+, first, all previously specified
+dependencies are cleared. This is done through a call to
+\verb+ClearDependencies()+. Then, the dependency between each element
+and its neighbor are specified using the routine
+\verb+AddDependencies()+. Finally, \verb+SetDependencies()+
+commits the additions of all dependencies.
+
+\begin{example}
+\begin{verbatim}
+v: vector[1..100];
+v$$ClearDependencies(LeftShift);
+FOR i IN 1..99 DO v$$AddDependency(LeftShift,i,i+1); OD;
+v$$SetDependencies(LeftShift);
+\end{verbatim}
+\end{example}
+\remark{$$}
+
+The user may tell the system that a dependency between two elements is
+no longer valid within an operation using
+\verb+RemoveDependency()+. This procedure takes the same arguments as
+\verb+AddDependency()+.
+
+\section{Synchronization}
+
+Guards are not allowed in operations on a partitioned object.
+
+\newpage
+\appendix
+
+\section{Example Application: SOR}
+\label{examples}
+
+This example shows the complete Orca program for the \verb+grid+
+object.
+
+\begin{verbatim}
+OBJECT SPECIFICATION grid[integer, integer];
+
+TYPE color = (red, black);
+
+   OPERATION init(); 
+   OPERATION UpdateGrid(c: color): real; 
+   OPERATION PrintGrid();
+
+END; 
+
+OBJECT IMPLEMENTATION grid[integer n..N, integer m..M]; 
+   G: real; 
+
+OPERATION PrintGrid(); 
+BEGIN 
+  FOR  row IN n TO N DO 
+     FOR col IN m .. M DO write(G[row,col]); OD; 
+     WriteLine;
+  OD; 
+END; 
+
+FUNCTION max(v1, v2: SHARED real);
+BEGIN
+   IF v2 > v2
+      THEN v1 := v2;
+   FI;
+END;
+
+PARALLEL OPERATION[row,col] UpdateGrid(c: color): REDUCE real WITH max; 
+  diff: real; 
+BEGIN
+   diff := 0.0; 
+   IF row > n AND col > m AND row < N AND col < M AND WhichColor(row, col) = c 
+      THEN
+           avg :=  (G[row-1,col] + G[row+1,col] + G[row,col-1] + G[row,col+1])/4.0; 
+           diff := ABS(avg - G[row,col]); 
+           G[row,col] := G[row,col] + OMEGA * (avg - G[row,col]);
+   FI;
+   RETURN diff;
+END; 
+
+END; 
+
+PROCESS OrcaMain();
+  g: grid[1..100,1..100]; 
+  RedMaxDiff, BlackMaxDiff: real; 
+  dist: DistributionType;
+
+BEGIN 
+   g$$partition(1,100);                     # Partition the matrix row-wise
+   g$$distribution(block(100,NCPUS());   # distribute blockwise
+   g$init(); 
+   REPEAT 
+      RedMaxDiff := grid$UpdateGrid(red); 
+      BlackMaxDiff := grid$UpdateGrid(black); 
+   UNTIL max(RedMaxDiff,BlackMaxDiff) < EPSILON;
+   grid$PrintGrid();
+END. 
+\end{verbatim} 
+
+\newpage
+\section{Mapping Arithmetics}
+\label{app:arithmetics}
+
+The system uses the following arithmetics to determine on which CPU a
+partition should be mapped. Let ($p_0,\ldots,p_n$) be the index of a
+partition, let ($P_0,\ldots,P_n$) be the number of partitions along
+each dimenson, and let ($C_0,\ldots,C_n$) be the number of CPUs along
+each dimension. For example, if an object is declared, partitioned,
+and distributed using the following code:
+
+\begin{quote}
+\begin{verbatim}
+g: grid[1..500,1..500];
+g$$partition(5,5);
+g$$distribute_on_n(2,BLOCK,2,BLOCK);
+\end{verbatim}
+\end{quote}
+
+Then, the number of partitions and the number of CPUs are:
+
+\begin{quote}
+\begin{tabbing}
+($P_0,\ldots,P_n$) \= = (5,5) \\
+($C_0,\ldots,C_n$) \> = (2,2).
+\end{tabbing}
+\end{quote}
+
+Along dimension $i$, partition ($p_0,\ldots,p_n$) is mapped onto CPU
+($c_0,\ldots,c_n$) using the following formulas:
+
+\begin{quote}
+(BLOCK):~ $c_i = p_i~mod~\lceil C_i / P_i  \rceil$ 
+
+(CYCLIC): $c_i = p_i~mod~C_i$ 
+\end{quote}
+
+Since the system provides only a one dimensional processor shape, the
+CPU indices are converted into a CPU number $c$ within
+the interval 0 .. $\prod_{i=0}^{n-1}C_i$ using formulas similar
+to array element address calculations:
+
+\[c = c_{n-1}~+~\sum_{j=n-2}^{0}~c_j~\times~\prod_{i=j}^{n-2}C_i\]
+
+\newpage
+\bibliographystyle{plain}
+\bibliography{/home/saniya/bibliography/biblio,/home/saniya/bibliography/myreferences,/home/saniya/bibliography/publications}
+
+
+\end{document}
+

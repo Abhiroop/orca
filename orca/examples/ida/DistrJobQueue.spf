@@ -1,0 +1,22 @@
+# (c) copyright 1995 by the Vrije Universiteit, Amsterdam, The Netherlands.
+# For full copyright and restrictions on use see the file COPYRIGHT in the
+# top level of the Orca distribution.
+
+GENERIC (TYPE T)
+MODULE SPECIFICATION DistrJobQueue;
+
+    OBJECT Q = NEW JobQueue(T);
+
+    TYPE queue = ARRAY [integer 0 .. NCPUS()] OF Q;
+
+
+    FUNCTION AddJob(q : SHARED queue; job : T);
+	# Add a job to 'my' local queue.
+
+    FUNCTION GetJob(q : SHARED queue; job : OUT T) : boolean;
+	# First try to fetch a job from the local queue (in LIFO order).
+	# Next search other queues and steal work (FIFO order).
+	# This function blocks until either work has been found, or all
+	# jobs have been processed.
+
+END GENERIC;

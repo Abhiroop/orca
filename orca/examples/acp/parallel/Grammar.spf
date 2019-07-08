@@ -1,0 +1,72 @@
+# ========================================================================
+# == File:      Grammar.spf   						==
+# == Program:   Active Chart Parser					==
+# == Author:    Anil Sukul - Vrije Universiteit Amsterdam - 1994    	==
+# == Contains:  data structure for a grammar				==
+# ========================================================================
+MODULE SPECIFICATION Grammar;
+
+FROM Types IMPORT rule_t, symbol_name_t;
+FROM Comblist IMPORT comblist_t;
+
+# ========================================================================
+# == types								==
+# ========================================================================
+
+TYPE    grammar_node_t 	= NODENAME OF grammar_t;
+TYPE    grammar_t    =
+                GRAPH
+                        head, tail : grammar_node_t;	# head and tail of the list
+                        nr_elts    : integer;		# nr of elements in the list
+                NODES
+                        from_symbol: symbol_name_t;	# left part of righthandside 
+							# of a production rule
+			comb_list :  comblist_t;	# list of combinations
+                        next :       grammar_node_t;	# pointer to next element
+                END;
+
+# ========================================================================
+# == functions								==
+# ========================================================================
+
+FUNCTION create_gramm(
+	gramm	    : SHARED grammar_t
+) : boolean;					# succes?
+
+
+FUNCTION delete_gramm(
+	gramm       : SHARED grammar_t
+);
+
+
+FUNCTION insert_rule_gramm(
+	gramm 	    : SHARED grammar_t;
+	rule        : rule_t			# rule to be inserted
+) : boolean;
+
+
+FUNCTION num_elts_gramm(
+	gramm       : grammar_t
+) : integer;					# nr of production rules
+
+
+FUNCTION give_ith_elt_gramm(
+	gramm 	    : grammar_t;
+	index       : integer; 			# index in list
+	from_symbol : SHARED symbol_name_t; 	# left part of right hand side
+	comb_list   : SHARED grammar_node_t	# list combinations that can be
+						# made with from_symbol
+) : boolean;			
+
+
+FUNCTION is_in_gramm(
+	gramm       : grammar_t;
+	from_symbol : symbol_name_t; 		# check if there is a rule in the 
+						# grammar with from_symbol as the
+						# left part of the right hand side
+	index       : OUT integer		# position in the list, if present
+) : boolean;					# was it in the grammar?
+
+END;
+
+
